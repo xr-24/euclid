@@ -15,12 +15,13 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Exact registered behavior ID" },
+        "target_entity": { "type": "string", "description": "Exact door ID for a door behavior, or an empty string" },
         "settings": { "type": "array", "items": {
           "type": "object", "properties": { "key": { "type": "string" }, "value": { "type": "number" } },
           "required": ["key", "value"], "additionalProperties": false
         }, "description": "Numeric settings from the catalog. Empty uses defaults." }
       },
-      "required": ["id", "settings"],
+      "required": ["id", "settings", "target_entity"],
       "additionalProperties": false
     },
     "clip": {

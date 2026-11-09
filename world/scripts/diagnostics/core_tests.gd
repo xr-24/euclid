@@ -90,6 +90,7 @@ func _run() -> void:
 	_check_world_tools(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
+	_check_linked_plugin(path)
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -155,6 +156,56 @@ func _check_live_behaviors(path: String) -> void:
 	other.free()
 	_check(tools.execute("set_behavior", {"id": spawned.id, "behavior": null}).ok and not entity.has_node("BehaviorHost")
 		and tools.execute("undo").ok and entity.has_node("BehaviorHost"), "removing and undoing behavior reuse the entity")
+	zone.free()
+	DirAccess.remove_absolute(path)
+
+func _check_linked_plugin(path: String) -> void:
+	var zone := Node3D.new()
+	var observer := Node3D.new()
+	root.add_child(zone)
+	zone.add_child(observer)
+	var runtime := BehaviorRuntime.new(observer)
+	var library := PrefabLibrary.new("")
+	var tools := WorldTools.new(path, library, runtime)
+	tools.attach(zone)
+	var plate := tools.execute("spawn", {"type": "pressure_plate", "position": [0.0, 0.0, 0.0]})
+	var door := tools.execute("spawn", {"type": "sliding_door", "position": [0.0, 0.0, -2.0]})
+	var plate_node := zone.get_node("WorkshopEntities/Entity_" + plate.id)
+	var door_node := zone.get_node("WorkshopEntities/Entity_" + door.id)
+	var leaf := door_node.get_node("DoorLeaf") as AnimatableBody3D
+	var collider := leaf.get_child(0) as CollisionShape3D
+	var controller := door_node.get_node("DoorActuator")
+	var source := "extends RefCounted\nconst API_VERSION := 1\nfunc sample(_time: float, distance: float, settings: Dictionary) -> float:\n\treturn 1.0 if distance < float(settings.radius) else 0.0\n"
+	var definition := {"id": "test_plate", "name": "Test plate", "entity_type": "pressure_plate", "output": "door_open", "settings": {
+		"radius": {"label": "Radius", "minimum": 0.4, "maximum": 3.0, "default": 0.65},
+		"speed": {"label": "Speed", "minimum": 0.2, "maximum": 8.0, "default": 2.0}}}
+	var candidate := {"plugin": "test_plate", "draft": "test-package", "source": source, "digest": source.sha256_text(), "definition": definition}
+	var binding := {"id": "test_plate", "settings": {}, "target": door.id}
+	_check(runtime.preview(candidate).ok and not tools.preview_behavior("test-package", plate.id,
+		{"id": "test_plate", "settings": {}, "target": plate.id}).ok and tools.preview_behavior("test-package", plate.id, binding).ok,
+		"a new plugin package registers only in preview and requires a compatible target")
+	plate_node.get_node("BehaviorHost")._process(0.0)
+	controller._physics_process(2.0)
+	_check(leaf.position.y > 2.4 and collider.global_position.y > 3.4, "a linked plate moves the existing door and its collision")
+	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	_check(on_disk.entities.all(func(item: Dictionary) -> bool: return not item.has("behavior")), "a live test link never enters the save before commit")
+	runtime.finish("test-package", false)
+	tools.finish_behavior_preview("test-package", false)
+	controller._physics_process(2.0)
+	_check(not plate_node.has_node("BehaviorHost") and is_zero_approx(leaf.position.y) and runtime.available("pressure_plate").is_empty(),
+		"discard unregisters the plugin, removes its request, and closes the door")
+	_check(runtime.preview(candidate).ok and tools.preview_behavior("test-package", plate.id, binding).ok
+		and runtime.finish("test-package", true) and tools.finish_behavior_preview("test-package", true).ok, "commit keeps the registered plugin and saves its link")
+	var configured := tools.execute("inspect", {"id": plate.id})
+	var saved := tools.execute("save_prefab", {"id": plate.id, "name": "Reusable plate"})
+	var instance := tools.execute("spawn_prefab", {"prefab_id": saved.get("prefab_id", ""), "position": [2.0, 0.0, 0.0]})
+	_check(configured.entity.behavior.target == door.id and instance.entity.behavior.id == "test_plate" and not instance.entity.behavior.has("target"),
+		"prefabs reuse the plugin and settings without carrying a link to another space")
+	var reopened := WorldTools.new(path, library, runtime)
+	var other := Node3D.new()
+	reopened.attach(other)
+	_check(reopened.execute("inspect", {"id": plate.id}).entity.behavior.target == door.id, "reload the committed link by stable entity ID")
+	other.free()
 	zone.free()
 	DirAccess.remove_absolute(path)
 

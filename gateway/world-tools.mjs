@@ -80,6 +80,8 @@ export function validWorldPlan(plan) {
 function validBehavior(behavior) {
   if (behavior === null) return true;
   if (typeof behavior?.id !== 'string' || !behaviorId.test(behavior.id) || !Array.isArray(behavior.settings) || behavior.settings.length > 6) return false;
+  if (behavior.target_entity !== undefined && behavior.target_entity !== '' &&
+      (typeof behavior.target_entity !== 'string' || !sessionPattern.test(behavior.target_entity))) return false;
   const keys = new Set();
   for (const setting of behavior.settings) {
     if (typeof setting?.key !== 'string' || !behaviorId.test(setting.key) || keys.has(setting.key) ||

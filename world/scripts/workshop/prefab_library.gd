@@ -54,6 +54,9 @@ func save(title: Variant, entity: Dictionary) -> Dictionary:
 	for key in PROPERTIES:
 		if entity.has(key):
 			properties[key] = entity[key]
+	if properties.has("behavior"):
+		properties.behavior = properties.behavior.duplicate(true)
+		properties.behavior.erase("target")
 	if not EntityTypes.valid_properties(properties):
 		return _error("This entity cannot be saved as a prefab.")
 	var id := Crypto.new().generate_random_bytes(16).hex_encode()

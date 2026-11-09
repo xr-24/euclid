@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "supported": {"type": "boolean"},
+    "id": {"type": "string", "description": "New lower-case identifier"},
+    "name": {"type": "string", "description": "Short plugin display name"},
+    "entity_type": {"type": "string", "enum": ["pressure_plate", "traffic_cone"]},
+    "output": {"type": "string", "enum": ["door_open", "emission"]},
+    "settings": {"type": "array", "items": {"type": "object", "properties": {
+      "key": {"type": "string"}, "label": {"type": "string"}, "minimum": {"type": "number"},
+      "maximum": {"type": "number"}, "default": {"type": "number"}
+    }, "required": ["key", "label", "minimum", "maximum", "default"], "additionalProperties": false}},
+    "source_entity": {"type": "string", "description": "Exact ID of the entity hosting the preview behavior"},
+    "target_entity": {"type": "string", "description": "Exact door ID for door_open, otherwise empty"},
+    "source": {"type": "string", "description": "Complete standalone GDScript source with tabs for indentation"}
+  },
+  "required": ["summary", "supported", "id", "name", "entity_type", "output", "settings", "source_entity", "target_entity", "source"],
+  "additionalProperties": false
+}

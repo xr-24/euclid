@@ -15,8 +15,15 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const name = 'world/scripts/example.gd';
   const other = 'world/scripts/other.gd';
   const plugin = 'world/scripts/plugins/proximity_pulse.gd';
-  const file = path.join(root, name);
+  const plate = '1'.repeat(32);
+  const door = '2'.repeat(32);
   const original = 'extends Node\nconst VALUE := 1\n';
+  const proposedPackage = {
+    supported: true, id: 'door_plate', name: 'Door plate', entity_type: 'pressure_plate', output: 'door_open',
+    settings: [{ key: 'radius', label: 'Radius', minimum: 0.4, maximum: 3, default: 0.65 }],
+    source_entity: plate, target_entity: door, source: original, summary: 'Create a door plate.',
+  };
+  const file = path.join(root, name);
   const otherOriginal = 'extends Node\nconst LABEL := "Old"\n';
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }).trim();
   await mkdir(path.dirname(file), { recursive: true });
@@ -55,7 +62,7 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   });
   async function start() {
     const gateway = await createGateway({ dataDir, workbenchRoot: root, workbenchOptions: {
-      runner, propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
+      runner, author: async () => proposedPackage, propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
         { file: name, original: 'VALUE := 1', replacement: 'VALUE := 2' },
         { file: other, original: '"Old"', replacement: '"New"' },
       ] }),
@@ -146,4 +153,16 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.deepEqual(live, { draft: liveDraft.id, plugin: 'proximity_pulse', source: files[0].text, digest: fingerprint(files[0].text) });
   assert.equal(await readFile(path.join(root, plugin), 'utf8'), original);
   assert.equal((await call('discard', { id: liveDraft.id })).body.draft, null);
+
+  const context = { zone: 'construct', entities: [{ id: plate, type: 'pressure_plate' }, { id: door, type: 'sliding_door' }] };
+  assert.equal((await call('author', { prompt: 'Make the plate open the door', context: { ...context, entities: context.entities.slice(0, 1) } })).code, 400);
+  const authored = await call('author', { prompt: 'Make the plate open the door', context });
+  assert.equal(authored.code, 200, JSON.stringify(authored.body));
+  assert.deepEqual(authored.body.draft.files, ['world/data/behavior_plugins/door_plate.json', 'world/scripts/plugins/door_plate.gd']);
+  assert.equal(authored.body.draft.live, true);
+  assert.match(authored.body.draft.diff, /new file mode/);
+  const packageDraft = (await call('live', { id: authored.body.draft.id })).body.live;
+  assert.equal(packageDraft.definition.output, 'door_open');
+  assert.deepEqual(packageDraft.binding, { zone: 'construct', source: plate, target: door });
+  assert.equal((await call('discard', { id: authored.body.draft.id })).body.draft, null);
 });

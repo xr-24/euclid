@@ -110,9 +110,24 @@ from 1.0 to 2.0**. Choose **Review diff**, then **Preview live**. Close the
 panel and approach the cone. **Discard** restores the previous code, and
 **Run checks → Commit** keeps the previewed version and records it in Git.
 
-A live draft edits one registered behavior script. The preview compiles and
-probes the replacement before activating it. The developer-mode plugin runs
-inside Euclid with your local account's permissions.
+### Create a pressure-plate plugin
+
+Place a **Spawn plate** and **Spawn door** from **B** in the same Grid space.
+Leave a little room between them. In **F4**, enter **Make this pressure plate
+open the sliding door while I stand on it** and click **Create plugin**. Codex
+uses the scene's entity IDs and drafts both the GDScript and its manifest.
+
+Review the diff and choose **Preview live**. Step onto the plate, then step off.
+Select the plate with **B** to adjust its trigger radius or door speed during the
+preview. **Discard** removes the new registration and test link. **Run checks →
+Commit** keeps the plugin and saves the link in this Grid space. For reuse, save
+the plate as a prefab or attach the new behavior to another plate and pick a door
+in its inspector. Prefabs carry the behavior settings and let you choose a local
+target after placement.
+
+Live preview accepts one registered behavior edit or one new plugin package.
+The preview compiles and probes the code before activating it. The developer-mode
+plugin runs inside Euclid with your local account's permissions.
 
 ## Live animation
 

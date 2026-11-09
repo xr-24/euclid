@@ -15,28 +15,45 @@ func _init(player: Node3D) -> void:
 	reload_committed()
 
 func reload_committed() -> void:
+	registry = Registry.new()
+	var loaded := {}
 	for plugin in registry.list():
 		var path := registry.script_path(plugin.id)
 		var source := FileAccess.get_file_as_string(path)
 		var compiled := _compile(plugin.id, source)
 		if compiled.ok:
-			_active[plugin.id] = compiled.code
+			loaded[plugin.id] = compiled.code
+		elif _active.has(plugin.id):
+			loaded[plugin.id] = _active[plugin.id]
+	_active = loaded
 
 func available(entity_type := "") -> Array[Dictionary]:
-	return registry.list(entity_type).filter(func(item: Dictionary) -> bool: return _active.has(item.id))
+	return registry.list(entity_type).filter(func(item: Dictionary) -> bool:
+		return _active.has(item.id) or (_draft.get("plugin") == item.id and not _draft.failed))
+
+func is_provisional(id: String) -> bool:
+	return _draft.get("plugin") == id and _draft.get("new", false)
 
 func preview(candidate: Dictionary) -> Dictionary:
 	var id: String = candidate.get("plugin", "")
 	var draft_id: String = candidate.get("draft", "")
 	var source: String = candidate.get("source", "")
-	if draft_id.is_empty() or not _active.has(id) or source.sha256_text() != candidate.get("digest"):
+	if draft_id.is_empty() or source.sha256_text() != candidate.get("digest"):
 		return _error("The reviewed behavior revision is unavailable or mismatched.")
 	if not _draft.is_empty() and _draft.id != draft_id:
 		return _error("Finish the current live preview before replacing it.")
+	var is_new: bool = candidate.has("definition")
+	if is_new:
+		if not candidate.definition is Dictionary or candidate.definition.get("id") != id or not registry.register(candidate.definition):
+			return _error("The plugin manifest is invalid or already registered.")
+	elif not _active.has(id):
+		return _error("The reviewed behavior is unavailable.")
 	var compiled := _compile(id, source)
 	if not compiled.ok:
+		if is_new:
+			registry.remove(id)
 		return compiled
-	_draft = {"id": draft_id, "plugin": id, "code": compiled.code, "failed": false}
+	_draft = {"id": draft_id, "plugin": id, "code": compiled.code, "failed": false, "new": is_new}
 	return {"ok": true, "message": "Live preview active. Approach an entity with this behavior to try it."}
 
 func finish(draft_id: String, keep: bool) -> bool:
@@ -45,6 +62,8 @@ func finish(draft_id: String, keep: bool) -> bool:
 	var active: bool = not _draft.failed
 	if keep and active:
 		_active[_draft.plugin] = _draft.code
+	elif _draft.new:
+		registry.remove(_draft.plugin)
 	_draft = {}
 	return active
 
@@ -63,7 +82,8 @@ func evaluate(behavior: Dictionary, seconds: float, distance: float) -> float:
 	if not _valid_output(value) and previewing:
 		# A candidate can pass the probe and still fail for a particular entity.
 		_draft.failed = true
-		value = _active[id].call("sample", seconds, distance, behavior.settings)
+		var previous: RefCounted = _active.get(id)
+		value = previous.call("sample", seconds, distance, behavior.settings) if previous else 0.0
 	return float(value) if _valid_output(value) else 0.0
 
 func _compile(id: String, source: String) -> Dictionary:

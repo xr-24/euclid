@@ -92,21 +92,29 @@ the existing gateway.
 
 ## Live behavior plugins
 
-`world/data/behavior_plugins.json` registers behavior IDs, eligible entity
-types, and numeric settings. The Grid inspector and agent tools read this same
-catalog. Entity and prefab records store only a behavior ID and settings. A
+`world/data/behavior_plugins.json` registers built-in behaviors. Authored
+packages add `world/data/behavior_plugins/<id>.json` with the behavior ID,
+eligible entity type, numeric settings, and an output. The Grid inspector and
+agent tools read the same registry. Entity records store the behavior ID,
+settings, and an optional linked entity ID. Prefabs retain the behavior and
+settings and rebind links in their destination space. A
 trusted behavior implementation lives at `scripts/plugins/<id>.gd` and returns a
 finite intensity from zero to one through `sample(seconds, distance, settings)`.
 The version 1 contract uses a pure `RefCounted` evaluator. Each entity's host owns
 its clock and material instance, and the evaluator receives read-only settings.
 
-The privileged Workbench endpoint serves the exact source of a single registered
-behavior from its reviewed Git draft. The coordinator activates it on the main
-thread after compilation and sample probes. Existing hosts read the active
-evaluator without replacing their entity nodes. Discard restores the committed
-evaluator, and a successful commit retains the active one. A preview that returns
-an invalid value falls back to the previous evaluator. This lifecycle separates
-state and cleanup. Trusted in-process GDScript retains the app's privileges.
+The privileged Workbench authoring command gives Codex a scoped scene catalog.
+It stages a new manifest and script together in a Git worktree. The test link is
+separate draft metadata. The live endpoint serves the exact reviewed package and
+the coordinator validates the target space and entity IDs before attaching it.
+Preview bindings are held in memory. Commit promotes the registration and saves
+the binding. Discard unregisters the package and releases its link.
+
+Workshop-local `DoorLinks` keeps output requests by source and target IDs.
+`DoorActuator` owns the physical leaf and moves its mesh and collision together.
+Freeing a behavior host releases its request. A plugin evaluator receives
+read-only settings and returns a normalized signal. Trusted in-process GDScript
+retains the app's privileges.
 
 ## Ownership and threading
 

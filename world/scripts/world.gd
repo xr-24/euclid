@@ -334,7 +334,8 @@ func _open_workbench() -> void:
 	overlay.add_theme_stylebox_override("panel", frame)
 	_workbench_panel = WorkbenchPanel.new()
 	overlay_content.add_child(_workbench_panel)
-	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_behavior, _finish_live_behavior, behavior_runtime.preview_status)
+	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_behavior,
+		_finish_live_behavior, behavior_runtime.preview_status, _workbench_plugin_context)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
 
@@ -342,13 +343,35 @@ func _preview_live_behavior(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
 	if shifting or building:
 		return {"ok": false, "message": "Wait for the environment to finish loading before swapping a behavior."}
-	return behavior_runtime.preview(candidate)
+	var binding: Dictionary = candidate.get("binding", {})
+	if not binding.is_empty() and (not _is_workshop(zone_id) or binding.get("zone") != zone_id):
+		return {"ok": false, "message": "Return to the Grid space used to author this plugin."}
+	var result := behavior_runtime.preview(candidate)
+	if not result.ok or binding.is_empty():
+		return result
+	var request := {"id": candidate.plugin, "settings": {}}
+	if not str(binding.get("target", "")).is_empty():
+		request["target"] = binding.target
+	var linked: Dictionary = world_tools.preview_behavior(candidate.draft, binding.get("source", ""), request)
+	if not linked.ok:
+		behavior_runtime.finish(candidate.draft, false)
+		return {"ok": false, "message": linked.error}
+	return {"ok": true, "message": "Plugin and test link active. Try the interaction in The Grid."}
 
-func _finish_live_behavior(action: String, draft_id: String) -> bool:
+func _finish_live_behavior(action: String, draft_id: String) -> Dictionary:
 	if action == "restore":
 		behavior_runtime.reload_committed()
-		return false
-	return behavior_runtime.finish(draft_id, action == "apply")
+		return {"live": false}
+	var keep := action == "apply"
+	var was_live := behavior_runtime.finish(draft_id, keep)
+	var result: Dictionary = world_tools.finish_behavior_preview(draft_id, keep and was_live) if _is_workshop(zone_id) else {"ok": true}
+	return {"live": was_live, "warning": result.get("error", "")}
+
+func _workbench_plugin_context() -> Dictionary:
+	if not _is_workshop(zone_id) or shifting:
+		return {}
+	var entities: Array = world_tools.execute("list_entities").get("entities", [])
+	return {"zone": zone_id, "entities": entities.slice(maxi(0, entities.size() - 64))}
 
 func _restart_workbench() -> void:
 	if smoke_mode or shifting or _workbench_capability.is_empty():
@@ -588,10 +611,13 @@ func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 	var target: String = plan.get("target", "")
 	var behavior: Variant = plan.get("behavior")
 	if behavior is Dictionary:
+		var target_entity: String = behavior.get("target_entity", "")
 		var settings := {}
 		for setting in behavior.settings:
 			settings[setting.key] = setting.value
 		behavior = {"id": behavior.id, "settings": settings}
+		if not target_entity.is_empty():
+			behavior["target"] = target_entity
 	var result: Dictionary = world_tools.execute(plan.tool, {"id": target, "prefab_id": target,
 		"name": plan.get("name"), "position": _workshop_spawn_position(), "behavior": behavior})
 	if not result.ok:
@@ -603,7 +629,8 @@ func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 		"spawn_prefab":
 			result["message"] = "Placed the prefab. You can edit it or undo the placement."
 		"set_behavior":
-			result["message"] = "Removed the entity’s behavior." if behavior == null else "Saved the entity’s behavior."
+			result["message"] = "Removed the entity’s behavior." if behavior == null else \
+				("Updated the live test link." if result.get("preview", false) else "Saved the entity’s behavior.")
 		"list_entities", "list_prefabs", "list_behaviors":
 			var names := PackedStringArray()
 			for item in result.get("prefabs", result.get("entities", result.get("behaviors", []))):

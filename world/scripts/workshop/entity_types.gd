@@ -5,6 +5,8 @@ const Assets = preload("res://scripts/assets/runtime_assets.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const BehaviorRegistry = preload("res://scripts/plugins/behavior_registry.gd")
 const TYPES := {"traffic_cone": {"label": "Traffic cone", "color": "ff681d"},
+	"pressure_plate": {"label": "Pressure plate", "color": "2d8394"},
+	"sliding_door": {"label": "Sliding door", "color": "475567"},
 	"imported_model": {"label": "Imported model", "color": "ffffff"}}
 
 static func valid_properties(record: Dictionary) -> bool:
@@ -38,6 +40,15 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 	match record.type:
 		"traffic_cone":
 			_cone(body, Color.html(record.color), size)
+		"pressure_plate":
+			_box_body(body, Vector3(1.2, 0.09, 1.2) * size, Color.html(record.color)).name = "SignalSurface"
+		"sliding_door":
+			var leaf := AnimatableBody3D.new()
+			leaf.name = "DoorLeaf"
+			leaf.sync_to_physics = false
+			leaf.set_meta("entity_id", record.id)
+			_box_body(leaf, Vector3(1.55, 2.35, 0.18) * size, Color.html(record.color))
+			body.add_child(leaf)
 		"imported_model":
 			var packed := Assets.scene(record.get("asset_id", ""))
 			if packed:
@@ -74,6 +85,17 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 			else:
 				body.set_meta("asset_unavailable", true)
 	return body
+
+static func _box_body(body: StaticBody3D, size: Vector3, color: Color) -> MeshInstance3D:
+	var shape := BoxShape3D.new()
+	shape.size = size
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position.y = size.y * 0.5
+	body.add_child(collider)
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	return _mesh(body, mesh, size.y * 0.5, color, 0.48)
 
 static func _cone(body: StaticBody3D, color: Color, size: float) -> void:
 	var base := BoxMesh.new()

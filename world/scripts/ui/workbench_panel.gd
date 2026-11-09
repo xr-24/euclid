@@ -23,11 +23,14 @@ var _state := {}
 var _preview_behavior: Callable
 var _finish_behavior: Callable
 var _behavior_status: Callable
+var _plugin_context: Callable
 
-func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable, behavior_status: Callable) -> void:
+func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
+		behavior_status: Callable, plugin_context: Callable) -> void:
 	_preview_behavior = preview_behavior
 	_finish_behavior = finish_behavior
 	_behavior_status = behavior_status
+	_plugin_context = plugin_context
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
@@ -78,13 +81,15 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	var prompt_row := HBoxContainer.new()
 	add_child(prompt_row)
 	_request = LineEdit.new()
-	_request.placeholder_text = "Describe an edit to the open files"
+	_request.placeholder_text = "Describe a plugin or an edit to the open files"
 	_request.max_length = 600
 	_request.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_request.text_changed.connect(func(_text: String) -> void: _sync_controls())
 	_request.text_submitted.connect(func(_text: String) -> void: _propose())
 	prompt_row.add_child(_request)
 	_buttons["propose"] = _button(prompt_row, "Ask Codex", _propose)
+	_buttons["author"] = _button(prompt_row, "Create plugin", _author)
+	_buttons.author.tooltip_text = "Draft a new behavior for entities in this Grid space"
 	_buttons.propose.tooltip_text = "Codex can edit up to six open files. Use the file picker to open each one first."
 	_buttons["stage"] = _button(prompt_row, "Review diff", _stage)
 
@@ -226,6 +231,16 @@ func _stage() -> void:
 		return
 	await _command("stage", {"files": _changed_files()})
 
+func _author() -> void:
+	if _buttons.author.disabled:
+		return
+	var context: Dictionary = _plugin_context.call()
+	if context.is_empty():
+		show_error("Enter a Grid space to author a plugin.")
+		return
+	_status.text = "Codex is drafting a plugin…"
+	await _command("author", {"context": context, "prompt": _request.text.strip_edges()})
+
 func _command(action: String, arguments := {}) -> void:
 	if _busy:
 		return
@@ -249,7 +264,7 @@ func _command(action: String, arguments := {}) -> void:
 		return
 	_show_state(result)
 	match action:
-		"stage":
+		"stage", "author":
 			_tabs.current_tab = 1
 		"live":
 			_busy = true
@@ -261,7 +276,7 @@ func _command(action: String, arguments := {}) -> void:
 		"check":
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
-			var was_live: bool = _finish_behavior.call(action, arguments.get("id", ""))
+			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
 			_buffers.clear()
 			_message.clear()
 			if not _source.is_empty():
@@ -270,12 +285,30 @@ func _command(action: String, arguments := {}) -> void:
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
-				"apply": ("Committed %s. The behavior stays active." if was_live else "Committed %s. Restart Euclid to load it here.") % short,
+				"apply": ("Committed %s. The behavior stays active." if finished.live else "Committed %s. Restart Euclid to load it here.") % short,
 				"restore": "Created revert %s. Restart Euclid for changes outside live behaviors." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
 				_status.text += " " + result.warning
+			if not finished.get("warning", "").is_empty():
+				_status.text += " " + finished.warning
+			if action != "discard":
+				await _refresh_catalog()
 			_sync_controls()
+
+func _refresh_catalog() -> void:
+	_busy = true
+	_sync_controls()
+	var result := await _client.send("catalog")
+	_busy = false
+	if result.has("error"):
+		return
+	_files.clear()
+	_files.add_item("Choose a source file")
+	for file in result.get("files", []):
+		_files.add_item(file)
+		if file == _source:
+			_files.select(_files.item_count - 1)
 
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree():
@@ -306,6 +339,8 @@ func _show_state(result: Dictionary) -> void:
 		var messages := {"staged": "Review the Git diff before running the edited code.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
 		_status.text = "%s  ·  %s" % [draft.name, draft.error if draft.status == "failed" else messages[draft.status]]
+		if draft.status == "staged" and not draft.get("summary", "").is_empty():
+			_status.text = draft.summary + " Review the diff before previewing."
 		if result.get("playing", false):
 			_status.text = "The preview is open in a separate Euclid window."
 		elif _live_status() == "failed":
@@ -337,8 +372,9 @@ func _sync_controls() -> void:
 	_buttons.reload.disabled = not editing
 	_buttons.close_file.disabled = not editing
 	_editor.editable = editing
-	_request.editable = editing
+	_request.editable = not blocked and not staged
 	_buttons.propose.disabled = not editing or _request.text.strip_edges().is_empty()
+	_buttons.author.disabled = blocked or staged or _request.text.strip_edges().is_empty() or not _changed_files().is_empty()
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
 	_buttons.check.disabled = blocked or not staged or playing
 	var live := _live_status()

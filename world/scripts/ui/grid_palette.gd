@@ -30,7 +30,11 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String) -> void:
 	_spawn_at = [spawn_at.x, spawn_at.y, spawn_at.z]
 	_selected = selected
 	add_theme_constant_override("separation", 10)
-	_button(self, "Spawn orange cone", _spawn)
+	var spawn_row := HBoxContainer.new()
+	add_child(spawn_row)
+	_button(spawn_row, "Spawn orange cone", _spawn.bind("traffic_cone"))
+	_button(spawn_row, "Spawn plate", _spawn.bind("pressure_plate"))
+	_button(spawn_row, "Spawn door", _spawn.bind("sliding_door"))
 	_entities = OptionButton.new()
 	add_child(_entities)
 	_entities.item_selected.connect(_select)
@@ -130,8 +134,8 @@ func _button(parent: Control, text: String, action: Callable) -> Button:
 	parent.add_child(button)
 	return button
 
-func _spawn() -> void:
-	_run("spawn", {"type": "traffic_cone", "position": _spawn_at})
+func _spawn(type := "traffic_cone") -> void:
+	_run("spawn", {"type": type, "position": _spawn_at})
 
 func _save_selected_prefab() -> void:
 	var result: Dictionary = _tools.execute("save_prefab", {"id": _selected, "name": _prefab_name.text})
@@ -198,7 +202,7 @@ func _run(tool: String, args: Dictionary) -> void:
 	_refresh()
 	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.",
 		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
-	_status.text = messages[tool]
+	_status.text = "Behavior preview updated." if result.get("preview", false) else messages[tool]
 
 func _refresh() -> void:
 	_entities.clear()
@@ -233,7 +237,10 @@ func _select(index: int) -> void:
 		_behaviors.show_entity([], {})
 		return
 	var record: Dictionary = result.entity
-	_behaviors.show_entity(_tools.execute("list_behaviors", {"id": _selected}).get("behaviors", []), record.get("behavior", {}))
+	var doors: Array = []
+	if record.type == "pressure_plate":
+		doors = _tools.execute("list_entities").get("entities", []).filter(func(item: Dictionary) -> bool: return item.type == "sliding_door")
+	_behaviors.show_entity(_tools.execute("list_behaviors", {"id": _selected}).get("behaviors", []), record.get("behavior", {}), doors)
 	_fields.X.value = record.position[0]
 	_fields.Y.value = record.position[1]
 	_fields.Z.value = record.position[2]

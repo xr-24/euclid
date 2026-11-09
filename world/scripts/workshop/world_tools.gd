@@ -9,6 +9,8 @@ const PropMotion = preload("res://scripts/animation/prop_motion.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const BehaviorHost = preload("res://scripts/plugins/behavior_host.gd")
+const DoorLinks = preload("res://scripts/plugins/door_links.gd")
+const DoorActuator = preload("res://scripts/plugins/door_actuator.gd")
 const MAX_ENTITIES := 256
 const MAX_UNDO := 64
 const MAX_SAVE_BYTES := 9 * 1024 * 1024
@@ -17,6 +19,8 @@ const EDITABLE := ["position", "yaw", "scale", "color", "animation"]
 var _path := ""
 var _prefabs: PrefabLibrary
 var _behaviors: BehaviorRuntime
+var _links: DoorLinks
+var _preview := {}
 var _entities := {}
 var _nodes := {}
 var _history: Array[Dictionary] = []
@@ -51,8 +55,10 @@ func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime
 func attach(zone: Node3D) -> void:
 	_nodes.clear()
 	_root = null
+	_preview = {}
 	if zone == null:
 		return
+	_links = DoorLinks.new()
 	_root = Node3D.new()
 	_root.name = "WorkshopEntities"
 	zone.add_child(_root)
@@ -73,7 +79,7 @@ func execute(tool: String, args := {}) -> Dictionary:
 			var entities: Array[Dictionary] = []
 			for item in _entities.values():
 				entities.append({"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
-					"behavior": item.get("behavior", {}).get("id", "")})
+					"position": item.position.duplicate(), "behavior": _effective(item).get("behavior", {}).get("id", "")})
 			return {"ok": true, "entities": entities}
 		"list_behaviors":
 			if id != null and id != "" and record.is_empty():
@@ -84,7 +90,7 @@ func execute(tool: String, args := {}) -> Dictionary:
 				return _error("Select an entity first.")
 			return _set_behavior(id, record, args.get("behavior"))
 		"inspect":
-			return {"ok": true, "entity": record.duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
+			return {"ok": true, "entity": _effective(record).duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
 		"list_prefabs", "save_prefab", "spawn_prefab":
 			return _prefab_command(tool, args, record)
 		"spawn":
@@ -103,6 +109,8 @@ func execute(tool: String, args := {}) -> Dictionary:
 			if args.has("animation"):
 				proposed["animation"] = args.animation
 			if args.has("behavior"):
+				if _behaviors and args.behavior is Dictionary and _behaviors.is_provisional(str(args.behavior.get("id", ""))):
+					return _error("Commit the plugin before duplicating its preview.")
 				proposed["behavior"] = args.behavior
 			return _edit(id, {}, proposed)
 		"edit":
@@ -134,15 +142,69 @@ func execute(tool: String, args := {}) -> Dictionary:
 func _set_behavior(id: String, record: Dictionary, request: Variant) -> Dictionary:
 	var proposed := record.duplicate()
 	if request == null:
+		if _preview.get("entity") == id:
+			finish_behavior_preview(_preview.draft, false)
+			return {"ok": true, "id": id, "entity": record.duplicate(true)}
 		proposed.erase("behavior")
 	else:
 		if not _behaviors:
 			return _error("The behavior registry is unavailable.")
-		var configured := _behaviors.registry.configure(record.type, request)
-		if configured.is_empty() or not _behaviors.available(record.type).any(func(item: Dictionary) -> bool: return item.id == configured.id):
-			return _error("Choose a supported behavior with settings in range.")
+		var configured := _configure_behavior(record, request)
+		if configured.is_empty():
+			return _error("Choose a supported behavior, settings in range, and a compatible target in this space.")
+		if _behaviors.is_provisional(configured.id):
+			return _error("Commit the plugin in Workbench before attaching it elsewhere.") if _preview.get("entity") != id \
+				else preview_behavior(_preview.draft, id, configured)
+		if _preview.get("entity") == id:
+			finish_behavior_preview(_preview.draft, false)
 		proposed["behavior"] = configured
 	return _edit(id, record, proposed)
+
+func _configure_behavior(record: Dictionary, request: Variant) -> Dictionary:
+	var configured := _behaviors.registry.configure(record.type, request)
+	if configured.is_empty() or not _behaviors.available(record.type).any(func(item: Dictionary) -> bool: return item.id == configured.id):
+		return {}
+	if _behaviors.registry.definition(configured.id).output == "door_open" \
+			and _entities.get(configured.get("target", ""), {}).get("type") != "sliding_door":
+		return {}
+	return configured
+
+func preview_behavior(draft_id: String, id: String, request: Dictionary) -> Dictionary:
+	var record: Dictionary = _entities.get(id, {})
+	if record.is_empty() or not is_instance_valid(_nodes.get(id)):
+		return _error("The source entity is unavailable in this Grid space.")
+	var configured := _configure_behavior(record, request)
+	if configured.is_empty():
+		return _error("The plugin requires a compatible source and target in this Grid space.")
+	if not _preview.is_empty() and (_preview.draft != draft_id or _preview.entity != id):
+		return _error("Finish the current behavior binding preview first.")
+	_preview = {"draft": draft_id, "entity": id, "behavior": configured}
+	_sync_behavior(_nodes[id], _effective(record))
+	return {"ok": true, "id": id, "entity": _effective(record).duplicate(true), "preview": true}
+
+func finish_behavior_preview(draft_id: String, keep: bool) -> Dictionary:
+	if _preview.is_empty() or _preview.draft != draft_id:
+		return {"ok": true}
+	var pending := _preview
+	_preview = {}
+	var record: Dictionary = _entities.get(pending.entity, {})
+	if record.is_empty() or not is_instance_valid(_nodes.get(pending.entity)):
+		return {"ok": true}
+	if keep and not _configure_behavior(record, pending.behavior).is_empty():
+		var proposed := record.duplicate()
+		proposed.behavior = pending.behavior
+		var result := _edit(pending.entity, record, proposed)
+		if result.ok:
+			return result
+	_sync_behavior(_nodes[pending.entity], record)
+	return _error("The plugin was committed, but its test link could not be saved.") if keep else {"ok": true}
+
+func _effective(record: Dictionary) -> Dictionary:
+	if not _preview.is_empty() and _preview.entity == record.id:
+		var effective := record.duplicate()
+		effective.behavior = _preview.behavior
+		return effective
+	return record
 
 func _prefab_command(tool: String, args: Dictionary, record: Dictionary) -> Dictionary:
 	if not _prefabs:
@@ -186,6 +248,8 @@ func _apply(id: String, record: Dictionary) -> bool:
 	if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "entities": next.values()}) != OK:
 		return false
 	_entities = next
+	if record.is_empty() and _preview.get("entity") == id:
+		_preview = {}
 	if _nodes.has(id):
 		if not record.is_empty() and _same_placement(previous, record):
 			var player := animation_player(id)
@@ -194,7 +258,7 @@ func _apply(id: String, record: Dictionary) -> bool:
 				if previous.get("animation", {}) != clip and player.clip != clip:
 					player.set_clip(clip)
 				if previous.get("behavior") != record.get("behavior"):
-					_sync_behavior(_nodes[id], record)
+					_sync_behavior(_nodes[id], _effective(record))
 				return true
 		_nodes[id].free()
 		_nodes.erase(id)
@@ -215,7 +279,14 @@ func _show(record: Dictionary) -> void:
 	motion.name = "PropMotion"
 	motion.clip = record.get("animation", {})
 	entity.add_child(motion)
-	_sync_behavior(entity, record)
+	if record.type == "sliding_door":
+		var door := DoorActuator.new()
+		door.name = "DoorActuator"
+		door.links = _links
+		door.entity_id = record.id
+		door.travel = 2.5 * record.scale
+		entity.add_child(door)
+	_sync_behavior(entity, _effective(record))
 	_root.add_child(entity)
 	_nodes[record.id] = entity
 
@@ -232,6 +303,9 @@ func _sync_behavior(entity: Node3D, record: Dictionary) -> void:
 		host.name = "BehaviorHost"
 		host.runtime = _behaviors
 		host.behavior = configured
+		host.links = _links
+		host.entity_id = record.id
+		host.output = _behaviors.registry.definition(configured.id).output
 		entity.add_child(host)
 
 func animation_targets() -> Array[Dictionary]:

@@ -2,8 +2,12 @@ extends Node
 ## One per configured entity. Owns the clock and a private material override.
 
 const Runtime = preload("res://scripts/plugins/behavior_runtime.gd")
+const DoorLinks = preload("res://scripts/plugins/door_links.gd")
 var runtime: Runtime
 var behavior: Dictionary
+var links: DoorLinks
+var entity_id: String
+var output: String
 var _seconds := 0.0
 var _surface: MeshInstance3D
 var _original: ShaderMaterial
@@ -30,7 +34,11 @@ func _process(delta: float) -> void:
 	if not is_equal_approx(value, _value):
 		_value = value
 		_material.set_shader_parameter("emission_energy", _base + 1.65 * value)
+		if output == "door_open" and behavior.has("target"):
+			links.drive(entity_id, behavior.target, value, clampf(float(behavior.settings.get("speed", 2.0)), 0.2, 8.0))
 
 func _exit_tree() -> void:
+	if links and behavior.has("target"):
+		links.release(entity_id, behavior.target)
 	if is_instance_valid(_surface) and _material and _surface.material_override == _material:
 		_surface.material_override = _original

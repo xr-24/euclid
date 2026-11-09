@@ -53,6 +53,7 @@ export function createWorkbenchGit(root) {
     assertPrimary,
     review,
     add: (worktree, base) => git(root, 'worktree', 'add', '--detach', worktree, base),
+    intent: (worktree, names) => git(worktree, 'add', '--intent-to-add', '--', ...names),
     remove: (worktree) => git(root, 'worktree', 'remove', '--force', worktree),
     async headRevision() {
       try {

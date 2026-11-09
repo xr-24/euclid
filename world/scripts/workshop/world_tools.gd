@@ -182,6 +182,9 @@ func preview_behavior(draft_id: String, id: String, request: Dictionary) -> Dict
 	_sync_behavior(_nodes[id], _effective(record))
 	return {"ok": true, "id": id, "entity": _effective(record).duplicate(true), "preview": true}
 
+func behavior_preview_id() -> String:
+	return _preview.get("draft", "")
+
 func finish_behavior_preview(draft_id: String, keep: bool) -> Dictionary:
 	if _preview.is_empty() or _preview.draft != draft_id:
 		return {"ok": true}

@@ -1,4 +1,5 @@
 import { spawn, execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { cp, lstat, mkdir, mkdtemp, readFile, statfs, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,9 @@ export async function launch({ root, binary, args, directory, timeout = 90_000, 
   const log = path.join(directory, 'godot.log');
   const childEnv = { ...env, EUCLID_BOOT_READY: ready, EUCLID_BOOT_NODE: track ? process.execPath : '' };
   const revision = track ? cleanRevision(root) : '';
-  const child = spawn(binary, ['--log-file', log, ...args],
+  // Godot's Windows console wrapper forwards to the sibling executable in another process.
+  const application = binary.replace(/_console\.exe$/i, '.exe');
+  const child = spawn(existsSync(application) ? application : binary, ['--log-file', log, ...args],
     { cwd: root, env: childEnv, stdio: 'ignore', detached: true });
   const exited = new Promise(resolve => {
     child.once('error', error => resolve({ error: error.message }));

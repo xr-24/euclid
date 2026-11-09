@@ -548,7 +548,8 @@ func _codex_development_action(action: String) -> void:
 		return
 	if action == "review":
 		_open_workbench()
-		_workbench_panel.show_review()
+		if is_instance_valid(_workbench_panel):
+			_workbench_panel.show_review()
 		return
 	var id: String = _development.draft.id
 	_development_action_busy = true
@@ -897,6 +898,10 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	zone_root = built.root
 	_grid_scenery.attach(zone_root)
 	if world_tools != null:
+		var linked_preview: String = world_tools.behavior_preview_id()
+		if not linked_preview.is_empty():
+			behavior_runtime.finish(linked_preview, false)
+			world_tools.finish_behavior_preview(linked_preview, false)
 		world_tools.attach(null)
 		if not workshops.has("construct"):
 			workshops["construct"] = world_tools

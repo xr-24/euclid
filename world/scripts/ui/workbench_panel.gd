@@ -277,6 +277,8 @@ func _command(action: String, arguments := {}) -> void:
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
+			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior"}
+			var live_subject: String = subjects.get(draft.get("subject"), "preview") if draft is Dictionary else "preview"
 			_buffers.clear()
 			_message.clear()
 			if not _source.is_empty():
@@ -285,7 +287,7 @@ func _command(action: String, arguments := {}) -> void:
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
-				"apply": "Committed %s. The preview stays active." % short if finished.live else "Committed %s. Restart Euclid to load it here." % short,
+				"apply": "Committed %s. The %s stays active." % [short, live_subject] if finished.live else "Committed %s. Restart Euclid to load it here." % short,
 				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():

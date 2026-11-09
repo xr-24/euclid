@@ -61,7 +61,7 @@ export async function structuredCodex(input, schema, signal) {
   const binary = await resolveCodexBinary();
   const env = { ...process.env };
   for (const key of ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN',
-    'CODEX_OPENAI_BASE_URL', 'CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'SKETCHFAB_API_TOKEN']) {
+    'CODEX_OPENAI_BASE_URL', 'CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'EUCLID_WORKBENCH_TOKEN', 'SKETCHFAB_API_TOKEN']) {
     delete env[key];
   }
   let login;

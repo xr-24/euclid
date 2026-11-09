@@ -111,10 +111,16 @@ func _check_live_behaviors(path: String) -> void:
 	tools.attach(zone)
 	var spawned := tools.execute("spawn", {"type": "traffic_cone", "position": [1.0, 0.0, 0.0]})
 	var entity := zone.get_node("WorkshopEntities").get_child(0)
+	var animation := {"name": "Draft motion", "duration": 4.0, "interpolation": "linear", "keyframes": [
+		{"time": 0.0, "offset": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0], "pose": [0.0, 0.0]},
+		{"time": 4.0, "offset": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0], "pose": [0.0, 0.0]},
+	]}
+	tools.animation_player(spawned.id).set_clip(animation)
 	var behavior := {"id": "proximity_pulse", "settings": {"radius": 3.5}}
 	var configured := tools.execute("set_behavior", {"id": spawned.id, "behavior": behavior})
 	_check(configured.ok and entity == zone.get_node("WorkshopEntities").get_child(0) and entity.has_node("BehaviorHost"),
 		"attach a registered behavior without replacing the entity")
+	_check(tools.animation_player(spawned.id).clip == animation, "behavior edits preserve a running animation preview")
 	_check(not tools.execute("set_behavior", {"id": spawned.id, "behavior": {"id": "proximity_pulse", "settings": {"radius": 30.0}}}).ok,
 		"reject a behavior setting outside its declared range")
 	var original := runtime.evaluate(behavior, 0.25, 0.0)

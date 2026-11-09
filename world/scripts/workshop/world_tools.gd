@@ -191,7 +191,7 @@ func _apply(id: String, record: Dictionary) -> bool:
 			var player := animation_player(id)
 			if player:
 				var clip: Dictionary = record.get("animation", {})
-				if player.clip != clip:
+				if previous.get("animation", {}) != clip and player.clip != clip:
 					player.set_clip(clip)
 				if previous.get("behavior") != record.get("behavior"):
 					_sync_behavior(_nodes[id], record)

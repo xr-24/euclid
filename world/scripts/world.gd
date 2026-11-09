@@ -342,6 +342,17 @@ func _restart_workbench() -> void:
 		_workbench_panel.show_error("Euclid could not save your place. Restart cancelled.")
 		return
 	var arguments := OS.get_cmdline_args()
+	if DisplayServer.get_name() == "headless":
+		arguments.append("--headless")
+	else:
+		var window := get_window()
+		if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
+			arguments.append("--fullscreen")
+		elif window.mode == Window.MODE_MAXIMIZED:
+			arguments.append("--maximized")
+		else:
+			arguments.append_array(PackedStringArray(["--windowed", "--resolution", "%dx%d" % [window.size.x, window.size.y]]))
+		arguments.append_array(PackedStringArray(["--rendering-method", RenderingServer.get_current_rendering_method()]))
 	arguments.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "--"]))
 	arguments.append_array(OS.get_cmdline_user_args())
 	OS.set_environment("EUCLID_WORKBENCH_TOKEN", _workbench_capability)

@@ -11,3 +11,5 @@
 *.cmd text eol=crlf
 *.glb binary
 *.blend binary
+# The GPU import cache keys on the original bytes of these shaders.
+*.glsl -text

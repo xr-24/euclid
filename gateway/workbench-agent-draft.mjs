@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { isAgentSourcePath, normalizeEdit, sourceLimit } from './workbench-source.mjs';
+import { isAgentSourcePath, normalizeEdit } from './workbench-source.mjs';
 
 export const sourceDraftLimit = 24;
 const workspaceLimit = 32 * 1024 * 1024;
+const agentFileLimit = 256 * 1024;
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 async function inventory(root, signal) {
@@ -35,7 +36,7 @@ async function inventory(root, signal) {
 
 async function readText(file) {
   const bytes = await readFile(file);
-  if (bytes.length > sourceLimit) throw new Error('Each edited source file must fit within 64 KiB.');
+  if (bytes.length > agentFileLimit) throw new Error('Each agent-edited source file must fit within 256 KiB.');
   return decoder.decode(bytes);
 }
 
@@ -61,7 +62,7 @@ export async function writeAgentDraft({ worktree, request, author, onProgress, s
       const destination = path.join(worktree, name);
       if (after.has(name)) {
         const original = before.has(name) ? await readText(destination) : '';
-        const text = normalizeEdit(original, await readText(path.join(workspace, name)));
+        const text = normalizeEdit(original, await readText(path.join(workspace, name)), agentFileLimit);
         if (before.has(name) && text === original) continue;
         await mkdir(path.dirname(destination), { recursive: true });
         await writeFile(destination, text, { flag: before.has(name) ? 'w' : 'wx' });
@@ -73,7 +74,7 @@ export async function writeAgentDraft({ worktree, request, author, onProgress, s
     }
     if (!names.length) throw new Error('Codex returned without a source change.');
     if (added.length) await intent(added);
-    return { names, summary: typeof summary === 'string' ? summary.slice(0, 640) : '' };
+    return { names, summary: typeof summary === 'string' ? summary.slice(0, 320) : '' };
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

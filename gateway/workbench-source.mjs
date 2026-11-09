@@ -34,10 +34,10 @@ export async function readSource(root, name) {
   return { file, text, hash: fingerprint(text) };
 }
 
-export function normalizeEdit(original, text) {
+export function normalizeEdit(original, text, limit = sourceLimit) {
   if (typeof text !== 'string' || text.includes('\0')) throw new Error('An edit must be UTF-8 text.');
   const normalized = text.replace(/\r\n/g, '\n');
   const formatted = original.includes('\r\n') ? normalized.replace(/\n/g, '\r\n') : normalized;
-  if (Buffer.byteLength(formatted) > sourceLimit) throw new Error('An edit must fit within 64 KiB.');
+  if (Buffer.byteLength(formatted) > limit) throw new Error(`An edit must fit within ${limit / 1024} KiB.`);
   return formatted;
 }

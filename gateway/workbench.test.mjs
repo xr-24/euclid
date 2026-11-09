@@ -268,8 +268,9 @@ test('source agent stages isolated changes, requires checks, and can cancel', as
   const script = 'world/scripts/example.gd';
   const removed = 'world/scripts/old.gd';
   const testFile = 'world/scripts/diagnostics/example_test.gd';
+  const original = 'extends Node\n' + '# Fixture source padding.\n'.repeat(2800);
   await mkdir(path.join(root, 'world/scripts'), { recursive: true });
-  await writeFile(path.join(root, script), 'extends Node\n');
+  await writeFile(path.join(root, script), original);
   await writeFile(path.join(root, removed), 'extends Node\n');
   await writeFile(path.join(root, '.gitignore'), '.local/\n');
   await mkdir(path.join(root, '.local'));
@@ -297,13 +298,13 @@ test('source agent stages isolated changes, requires checks, and can cancel', as
   const editSource = async ({ workspace, request, signal, onProgress }) => {
     await assert.rejects(readFile(path.join(workspace, '.git')), { code: 'ENOENT' });
     await assert.rejects(readFile(path.join(workspace, '.local/fixture')), { code: 'ENOENT' });
-    assert.equal(await readFile(path.join(workspace, script), 'utf8'), 'extends Node\n');
+    assert.equal(await readFile(path.join(workspace, script), 'utf8'), original);
     if (request === 'Cancel') await sleep(10000, undefined, { signal });
     if (request === 'Outside scope') return writeFile(path.join(workspace, 'world/project.godot'), 'Bad change');
     onProgress('Reading source and adding a test.\n');
     await mkdir(path.dirname(path.join(workspace, testFile)), { recursive: true });
     await writeFile(path.join(workspace, testFile), 'extends SceneTree\nconst FIXTURE := true\n');
-    await writeFile(path.join(workspace, script), 'extends Node\nconst NEW := true\n');
+    await writeFile(path.join(workspace, script), original + 'const NEW := true\n');
     await rm(path.join(workspace, removed));
     return 'Updated the script and test.';
   };

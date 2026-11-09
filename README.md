@@ -124,23 +124,31 @@ separate rigged asset ID for `spawn_entity`.
 
 ## Develop from inside Euclid
 
-Launch **Start Euclid Workbench.cmd** and press **F4**. Choose a Godot script,
-shader, scene, or project data file. Type directly in the editor or ask Codex
-for an edit. For example, open `world/scripts/workshop/entity_types.gd` and
-ask to change the default traffic cone color to `00a8cc`.
+Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot
+scripts, shaders, the main scene, or project data files. Open each file you want
+Codex to see. For example, open `world/scripts/workshop/entity_types.gd` and
+`world/scripts/ui/grid_palette.gd`, then ask Codex to make the default traffic
+cone teal and update the spawn button to match. You can also edit either file
+directly and switch between open buffers.
 
-**Review diff** stages one file. **Run checks** executes the reviewed code in
-a disposable project and shows its logs in the Checks tab. Keep roughly 2.5 GiB
-of free disk space for that copy. After passing checks, **Play preview** opens
-a separate Euclid window with its own saves. **Apply** writes the reviewed file
-if its original still matches. **Discard** removes the draft, and **Restore
-last** recovers an applied file if it still matches the workbench edit. Reopen
-Euclid after applying or restoring source to load it in the main world.
+**Review diff** creates a separate Git worktree for the draft. **Run checks**
+tests it in a disposable project and shows its logs. Keep about 2.5 GiB free for
+the preview copy. **Play preview** opens that build with separate saves. Enter a
+message and choose **Commit** to add the reviewed changes to the local branch.
+The main checkout must be clean and still on the draft's starting commit. If
+it moved, the draft stays available. **Discard** removes the draft. **Revert
+last** adds a revert commit when the last Workbench commit is at the branch tip.
 
-The workbench supports one existing project text file at a time, up to 64 KiB.
-Preview projects have separate files and saves and run with your local account's
-permissions. Source rollback uses local file revisions and works before the repo
-has an initial Git commit.
+**Restart Euclid** saves your current environment, position, and view, then
+relaunches Euclid from the updated source. The window briefly closes during the
+restart. Live scene tools such as prefab placement and animation previews apply
+while the world is running.
+
+Drafts support up to six existing text files, 64 KiB per file and 128 KiB total.
+The local baseline tracks source, build tools, and asset metadata. Large binary
+art under `world/assets`, Blender sources, and the standalone experiments are
+local inputs. Keep those files with a checkout you want to run. Preview projects
+copy the local runtime art and run with your local account's permissions.
 
 ## Try the agent event bridge
 

@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 signal close_requested
+signal restart_requested
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
 const Console = preload("res://scripts/ui/codex_console.gd")
@@ -15,8 +16,8 @@ var _request: LineEdit
 var _status: Label
 var _buttons := {}
 var _source := ""
-var _hash := ""
-var _original := ""
+var _buffers := {}
+var _message: LineEdit
 var _busy := false
 var _state := {}
 
@@ -52,6 +53,8 @@ func setup(url: String, token: String, capability: String) -> void:
 	files_row.add_child(_files)
 	_buttons["reload"] = _button(files_row, "Reload", func() -> void: _open_file(_source))
 	_buttons.reload.tooltip_text = "Reload the selected file from disk and reset the editor buffer"
+	_buttons["close_file"] = _button(files_row, "Close file", _close_file)
+	_buttons.close_file.tooltip_text = "Close the selected file and discard its unreviewed edits"
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -69,21 +72,28 @@ func setup(url: String, token: String, capability: String) -> void:
 	var prompt_row := HBoxContainer.new()
 	add_child(prompt_row)
 	_request = LineEdit.new()
-	_request.placeholder_text = "Describe an edit to this file"
+	_request.placeholder_text = "Describe an edit to the open files"
 	_request.max_length = 600
 	_request.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_request.text_changed.connect(func(_text: String) -> void: _sync_controls())
 	_request.text_submitted.connect(func(_text: String) -> void: _propose())
 	prompt_row.add_child(_request)
 	_buttons["propose"] = _button(prompt_row, "Ask Codex", _propose)
+	_buttons.propose.tooltip_text = "Codex can edit up to six open files. Use the file picker to open each one first."
 	_buttons["stage"] = _button(prompt_row, "Review diff", _stage)
 
 	var controls := HBoxContainer.new()
 	add_child(controls)
-	var labels := ["Run checks", "Play preview", "Stop preview", "Apply", "Discard", "Restore last"]
+	var labels := ["Run checks", "Play preview", "Stop preview", "Commit", "Discard", "Revert last"]
 	for index in PREVIEW_ACTIONS.size():
 		var action: String = PREVIEW_ACTIONS[index]
 		_buttons[action] = _button(controls, labels[index], _command.bind(action))
+	_buttons["restart"] = _button(controls, "Restart Euclid", func() -> void: restart_requested.emit())
+	_message = LineEdit.new()
+	_message.placeholder_text = "Commit message"
+	_message.max_length = 100
+	_message.text_changed.connect(func(_text: String) -> void: _sync_controls())
+	add_child(_message)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.modulate = Console.INK
@@ -129,14 +139,12 @@ func _load_catalog() -> void:
 func _select_file(index: int) -> void:
 	if _busy or index < 1:
 		return
-	if not _source.is_empty() and _editor.text != _original:
-		for row in range(1, _files.item_count):
-			if _files.get_item_text(row) == _source:
-				_files.select(row)
-				break
-		_status.text = "Review the current edit or undo it before switching files."
-		return
-	await _open_file(_files.get_item_text(index))
+	_remember_buffer()
+	var file := _files.get_item_text(index)
+	if _buffers.has(file):
+		_show_file(file, _buffers[file])
+	else:
+		await _open_file(file)
 
 func _open_file(file: String) -> void:
 	_busy = true
@@ -144,24 +152,55 @@ func _open_file(file: String) -> void:
 	var result := await _client.send("read", {"name": file})
 	_busy = false
 	if not result.has("error"):
-		_source = file
-		_hash = result.hash
-		_original = result.text.replace("\r\n", "\n")
-		_editor.text = _original
-		_tabs.current_tab = 0
-		_status.text = "Edit the source or ask Codex for a draft."
+		var original: String = result.text.replace("\r\n", "\n")
+		_buffers[file] = {"hash": result.hash, "original": original, "text": original}
+		_show_file(file, _buffers[file])
 	else:
 		_status.text = result.error
 	_sync_controls()
 
-func _source_args() -> Dictionary:
-	return {"name": _source, "hash": _hash, "text": _editor.text}
+func _show_file(file: String, buffer: Dictionary) -> void:
+	_source = file
+	_editor.text = buffer.text
+	_tabs.current_tab = 0
+	_status.text = "%d open file(s) · %d edited" % [_buffers.size(), _changed_files().size()]
+	_sync_controls()
+
+func _close_file() -> void:
+	_buffers.erase(_source)
+	_source = ""
+	_files.select(0)
+	_editor.clear()
+	_status.text = "%d open file(s) · %d edited" % [_buffers.size(), _changed_files().size()]
+	_sync_controls()
+
+func show_error(message: String) -> void:
+	_status.text = message
+
+func _remember_buffer() -> void:
+	if not _source.is_empty():
+		_buffers[_source].text = _editor.text
+
+func _changed_files() -> Array:
+	var files := []
+	for name in _buffers:
+		var buffer: Dictionary = _buffers[name]
+		var text: String = _editor.text if name == _source else buffer.text
+		if text != buffer.original:
+			files.append({"name": name, "hash": buffer.hash, "text": text})
+	return files
 
 func _propose() -> void:
 	if _buttons.propose.disabled:
 		return
-	var arguments := _source_args()
-	arguments["prompt"] = _request.text.strip_edges()
+	_remember_buffer()
+	var files := []
+	for name in _buffers:
+		files.append({"name": name, "hash": _buffers[name].hash, "text": _buffers[name].text})
+	if files.size() > 6:
+		_status.text = "Codex can use six files per request. Close extra files before asking."
+		return
+	var arguments := {"files": files, "prompt": _request.text.strip_edges()}
 	_busy = true
 	_status.text = "Codex is preparing an edit…"
 	_sync_controls()
@@ -170,15 +209,16 @@ func _propose() -> void:
 	if result.has("error"):
 		_status.text = result.error
 	else:
-		_editor.text = result.text.replace("\r\n", "\n")
-		_tabs.current_tab = 0
+		for item in result.files:
+			_buffers[item.name].text = item.text.replace("\r\n", "\n")
+		_show_file(_source, _buffers[_source])
 		_status.text = result.summary
 	_sync_controls()
 
 func _stage() -> void:
 	if _buttons.stage.disabled:
 		return
-	await _command("stage", _source_args())
+	await _command("stage", {"files": _changed_files()})
 
 func _command(action: String, arguments := {}) -> void:
 	if _busy:
@@ -186,6 +226,10 @@ func _command(action: String, arguments := {}) -> void:
 	var draft: Variant = _state.get("draft")
 	if draft is Dictionary:
 		arguments["id"] = draft.id
+	if action == "apply":
+		arguments["message"] = _message.text.strip_edges()
+	elif action == "restore":
+		arguments["revision"] = _state.get("revision", "")
 	_busy = true
 	_sync_controls()
 	var result := await _client.send(action, arguments)
@@ -201,12 +245,20 @@ func _command(action: String, arguments := {}) -> void:
 		"check":
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
+			_buffers.clear()
+			_message.clear()
 			if not _source.is_empty():
-				await _open_file(_source)
-			var messages := {"discard": "Discarded the staged edit.",
-				"apply": "Applied to the project. Reopen Euclid to load the updated source.",
-				"restore": "Restored the previous file. Reopen Euclid to load it."}
+				var previous := _source
+				_source = ""
+				await _open_file(previous)
+			var short: String = result.get("commit", "").left(7)
+			var messages := {"discard": "Discarded the Git draft.",
+				"apply": "Committed %s. Restart Euclid to load it here." % short,
+				"restore": "Created revert %s. Restart Euclid to load it here." % short}
 			_status.text = messages[action]
+			if not result.get("warning", "").is_empty():
+				_status.text += " " + result.warning
+			_sync_controls()
 
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree() or (not force and not _state.get("playing", false) and _state.get("operation", "") != "checking"):
@@ -229,8 +281,8 @@ func _show_state(result: Dictionary) -> void:
 		if _log.text != draft.log:
 			_log.text = draft.log
 			_log.set_caret_line(_log.get_line_count() - 1)
-		var messages := {"staged": "Review the diff before running the edited code in a disposable project.",
-			"checking": "Checking the disposable project…", "passed": "Checks passed. You can play the preview or apply the edit."}
+		var messages := {"staged": "Review the Git diff before running the edited code.",
+			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
 		_status.text = "%s  ·  %s" % [draft.name, draft.error if draft.status == "failed" else messages[draft.status]]
 		if result.get("playing", false):
 			_status.text = "The preview is open in a separate Euclid window."
@@ -257,15 +309,19 @@ func _sync_controls() -> void:
 	var editing := not blocked and not staged and not _source.is_empty()
 	_files.disabled = blocked or staged
 	_buttons.reload.disabled = not editing
+	_buttons.close_file.disabled = not editing
 	_editor.editable = editing
 	_request.editable = editing
 	_buttons.propose.disabled = not editing or _request.text.strip_edges().is_empty()
-	_buttons.stage.disabled = not editing or _editor.text == _original
+	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
 	_buttons.check.disabled = blocked or not staged or playing
 	var passed: bool = staged and draft.status == "passed"
 	_buttons.play.disabled = blocked or not passed or playing
 	_buttons.stop.disabled = blocked or not playing
-	_buttons.apply.disabled = blocked or not passed
+	_message.visible = passed
+	_message.editable = not blocked
+	_buttons.apply.disabled = blocked or not passed or _message.text.strip_edges().is_empty()
 	_buttons.discard.disabled = _busy or not staged or (blocked and _state.get("operation") != "checking")
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
+	_buttons.restart.disabled = blocked or staged

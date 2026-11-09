@@ -1,10 +1,18 @@
 {
   "type": "object",
   "properties": {
-    "summary": {"type": "string", "description": "One short sentence about the proposed change or why the request needs a different file"},
-    "original": {"type": "string", "description": "An exact, unique contiguous excerpt from the source to replace. Empty when the request is unsupported in this file."},
-    "replacement": {"type": "string", "description": "Complete replacement for that excerpt, with matching indentation and newlines"}
+    "summary": {"type": "string", "description": "A short sentence about the proposal or what other files are needed"},
+    "edits": {"type": "array", "description": "One exact replacement per changed file. Empty if unsupported.", "items": {
+      "type": "object",
+      "properties": {
+        "file": {"type": "string", "description": "Exact path supplied with the file"},
+        "original": {"type": "string", "description": "Exact, unique excerpt to replace"},
+        "replacement": {"type": "string", "description": "Replacement text with matching indentation and newlines"}
+      },
+      "required": ["file", "original", "replacement"],
+      "additionalProperties": false
+    }}
   },
-  "required": ["summary", "original", "replacement"],
+  "required": ["summary", "edits"],
   "additionalProperties": false
 }

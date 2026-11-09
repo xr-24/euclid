@@ -64,22 +64,31 @@ The environment library persists new Grid-template entries under stable IDs. The
 
 ## Source workbench
 
-`ui/workbench_panel.gd` holds the editor buffer and review views. Its transport
-uses a launch-scoped workbench credential over the local gateway. The native
+`ui/workbench_panel.gd` holds the editor buffers and review views. Its transport
+uses a separate credential supplied by the Workbench launcher. The native
 world MCP catalog exposes live scene tools. Workbench source operations use a
 separate endpoint and are driven from the developer panel.
 
-`gateway/workbench.mjs` coordinates a single staged edit. The Codex adapter
-proposes an exact text replacement. The source module limits eligible paths,
-produces a diff, and checks the live file's fingerprint before applying or
-restoring it. Draft metadata and prior revisions live under `.local/workbench`.
-A restarted gateway recovers a staged diff and requires fresh checks.
+`gateway/workbench.mjs` coordinates a multi-file draft. The Codex adapter
+proposes exact text replacements in open files. The source module limits
+eligible paths and fingerprints editor buffers. `workbench-git.mjs` creates a
+detached worktree, verifies the full reviewed patch, commits it, and fast-forwards
+the primary branch only if its checkout is clean and its tip still matches the
+draft base. The worktree and its metadata live under `.local/workbench`.
+A restarted gateway recovers the draft and requires fresh checks. Rollback adds a
+revert commit when a Workbench commit is at the branch tip.
 
-`gateway/workbench-runner.mjs` owns the copied project, Godot import and project
-checks, and preview process. The copy gets its own Godot user-data directory and
+`gateway/workbench-runner.mjs` owns the preview snapshot, Godot import and
+project checks, and preview process. It copies the reviewed worktree and fills in
+local runtime art and import caches from the primary checkout. The snapshot gets
+its own Godot user-data directory and
 starts without the live gateway credentials. A failed check leaves the original
 source and live world saves untouched. Project and save isolation are filesystem
 boundaries. Reviewed code runs with the developer's local account permissions.
+
+The world coordinator writes player state before requesting Godot's desktop
+restart. The restarted process restores the usual saved state and reconnects to
+the existing gateway.
 
 ## Ownership and threading
 

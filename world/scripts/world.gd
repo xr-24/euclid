@@ -16,6 +16,7 @@ const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
+const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
 var manifest: Dictionary
 var asset_client: Node
 var zone_id := "construct"
@@ -332,6 +333,20 @@ func _open_workbench() -> void:
 	overlay_content.add_child(_workbench_panel)
 	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability)
 	_workbench_panel.close_requested.connect(_close_panel)
+	_workbench_panel.restart_requested.connect(_restart_workbench)
+
+func _restart_workbench() -> void:
+	if smoke_mode or shifting or _workbench_capability.is_empty():
+		return
+	if _write_state(SAVE_PATH) != OK:
+		_workbench_panel.show_error("Euclid could not save your place. Restart cancelled.")
+		return
+	var arguments := OS.get_cmdline_args()
+	arguments.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "--"]))
+	arguments.append_array(OS.get_cmdline_user_args())
+	OS.set_environment("EUCLID_WORKBENCH_TOKEN", _workbench_capability)
+	OS.set_restart_on_exit(true, arguments)
+	get_tree().quit()
 
 func _request_grid_palette() -> void:
 	grid_palette_requested = true
@@ -996,12 +1011,8 @@ func _save() -> void:
 		return
 	_write_state(SAVE_PATH)
 
-func _write_state(save_path: String) -> void:
-	var file := FileAccess.open(save_path + ".tmp", FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify({"schema_version":1,"zone":zone_id,"position":[player.position.x,player.position.y,player.position.z],"yaw":player.rotation.y,"pitch":pitch}))
-		file.close()
-		DirAccess.rename_absolute(save_path + ".tmp", save_path)
+func _write_state(save_path: String) -> Error:
+	return WorldStateStore.write(save_path, zone_id, player.position, player.rotation.y, pitch)
 
 func _restore() -> void:
 	_read_state(SAVE_PATH)

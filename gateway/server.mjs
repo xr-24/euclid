@@ -67,7 +67,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 8 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 9 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
@@ -77,7 +77,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
         if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Launch Euclid in Workbench mode.' });
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
-        const body = await readJson(req, res, 256 * 1024);
+        const body = await readJson(req, res, 512 * 1024);
         if (body === undefined) return;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
         const controller = new AbortController();

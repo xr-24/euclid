@@ -1,11 +1,8 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
 export const sourceLimit = 64 * 1024;
-const execute = promisify(execFile);
 const editable = /^world\/(?:scripts\/(?!diagnostics\/)(?:[\w-]+\/)*[\w.-]+\.gd|shaders\/(?:[\w-]+\/)*[\w.-]+\.gdshader(?:inc)?|data\/(?:[\w-]+\/)*[\w.-]+\.json|main\.tscn)$/;
 const decode = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const fingerprint = text => createHash('sha256').update(text).digest('hex');
@@ -41,33 +38,4 @@ export function normalizeEdit(original, text) {
   const formatted = original.includes('\r\n') ? normalized.replace(/\n/g, '\r\n') : normalized;
   if (Buffer.byteLength(formatted) > sourceLimit) throw new Error('An edit must fit within 64 KiB.');
   return formatted;
-}
-
-export async function reviewDiff(directory, name, before, after) {
-  const left = path.join(directory, 'before', name);
-  const right = path.join(directory, 'after', name);
-  await mkdir(path.dirname(left), { recursive: true });
-  await mkdir(path.dirname(right), { recursive: true });
-  await Promise.all([writeFile(left, before), writeFile(right, after)]);
-  try {
-    const { stdout } = await execute('git', ['-c', 'core.autocrlf=false', 'diff', '--no-index', '--no-ext-diff', '--no-textconv', '--no-color', '--', `before/${name}`, `after/${name}`],
-      { cwd: directory, windowsHide: true, timeout: 5000, maxBuffer: 256 * 1024 });
-    return stdout;
-  } catch (error) {
-    if (error.code === 1 && error.stdout) return error.stdout;
-    throw new Error('Git could not produce the review diff.');
-  }
-}
-
-export async function replaceSource(root, name, expected, text) {
-  const current = await readSource(root, name);
-  if (current.hash !== expected) throw new Error('The source changed on disk. Reopen it before applying or restoring.');
-  const temporary = `${current.file}.${randomUUID()}.tmp`;
-  await writeFile(temporary, text, { flag: 'wx' });
-  try {
-    if ((await readSource(root, name)).hash !== expected) throw new Error('The source changed on disk. Reopen it before applying or restoring.');
-    await rename(temporary, current.file);
-  } finally {
-    await rm(temporary, { force: true });
-  }
 }

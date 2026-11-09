@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "supported": {"type": "boolean"},
+    "id": {"type": "string"},
+    "label": {"type": "string"},
+    "description": {"type": "string"},
+    "summary": {"type": "string"},
+    "targets": {"type": "array", "items": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "fields": {"type": "array", "items": {"type": "string", "enum": ["position", "yaw", "scale", "color"]}},
+        "close_door": {"type": "boolean"}
+      },
+      "required": ["id", "fields", "close_door"],
+      "additionalProperties": false
+    }}
+  },
+  "required": ["supported", "id", "label", "description", "summary", "targets"],
+  "additionalProperties": false
+}

@@ -19,6 +19,7 @@ const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
+const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
 var manifest: Dictionary
@@ -83,6 +84,7 @@ var _workbench_panel: Control
 var _development: WorldDevelopment
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
+var _workshop_actions := WorkshopToolRegistry.new()
 var _development_action_busy := false
 
 func _ready() -> void:
@@ -375,6 +377,8 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 		return _shoreline.preview(candidate)
 	if candidate.has("grid"):
 		return _grid_scenery.preview(candidate)
+	if candidate.has("workshop_tool"):
+		return _workshop_actions.preview(candidate, zone_id, world_tools if _is_workshop(zone_id) else null)
 	var binding: Dictionary = candidate.get("binding", {})
 	if not binding.is_empty() and (not _is_workshop(zone_id) or binding.get("zone") != zone_id):
 		return {"ok": false, "message": "Return to the Grid space used to author this plugin."}
@@ -391,6 +395,9 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	return {"ok": true, "message": "Plugin and test link active. Try the interaction in The Grid."}
 
 func _live_change_status(draft_id: String) -> String:
+	var action_status := _workshop_actions.status(draft_id)
+	if not action_status.is_empty():
+		return action_status
 	var shore_status := _shoreline.status(draft_id)
 	if not shore_status.is_empty():
 		return shore_status
@@ -398,6 +405,8 @@ func _live_change_status(draft_id: String) -> String:
 	return grid_status if not grid_status.is_empty() else behavior_runtime.preview_status(draft_id)
 
 func _finish_live_change(action: String, draft_id: String) -> Dictionary:
+	if action in ["apply", "restore"]:
+		_workshop_actions.reload_committed()
 	if action == "restore":
 		behavior_runtime.reload_committed()
 		_shoreline.reload_committed()
@@ -406,7 +415,7 @@ func _finish_live_change(action: String, draft_id: String) -> Dictionary:
 	var keep := action == "apply"
 	if _development:
 		_development.forget(draft_id)
-	if _shoreline.finish(draft_id, keep) or _grid_scenery.finish(draft_id, keep):
+	if _shoreline.finish(draft_id, keep) or _grid_scenery.finish(draft_id, keep) or _workshop_actions.finish(draft_id, keep):
 		return {"live": true}
 	var was_live := behavior_runtime.finish(draft_id, keep)
 	var result: Dictionary = world_tools.finish_behavior_preview(draft_id, keep and was_live) if _is_workshop(zone_id) else {"ok": true}
@@ -477,7 +486,7 @@ func _show_grid_palette() -> void:
 	overlay.offset_bottom = -100
 	var palette := GridPalette.new()
 	overlay_content.add_child(palette)
-	palette.setup(world_tools, at, selected)
+	palette.setup(world_tools, at, selected, _workshop_action_catalog, _run_palette_action)
 	palette.agent_requested.connect(_run_grid_agent.bind(palette))
 	_button("Back to The Grid  [Esc]", _close_panel)
 
@@ -531,7 +540,7 @@ func _refresh_development_actions() -> void:
 		match draft.get("subject", ""):
 			"shoreline": available = _shoreline.available()
 			"grid": available = _grid_scenery.available()
-			"behavior": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
+			"behavior", "workshop_tool": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
 		codex_console.update_development(draft, available and not shifting and not _development_action_busy,
 			_live_change_status(draft.get("id", "")) == "active")
 
@@ -609,7 +618,18 @@ func _world_context() -> Dictionary:
 	var environments := []
 	for zone in manifest.zones:
 		environments.append({"id": zone.id, "name": zone.name, "description": zone.get("description", zone.get("subtitle", ""))})
-	return {"current": zone_id, "environments": environments}
+	return {"current": zone_id, "environments": environments, "workshop_tools": _workshop_action_catalog()}
+
+func _workshop_action_catalog() -> Array[Dictionary]:
+	return _workshop_actions.catalog(zone_id) if not shifting and _is_workshop(zone_id) else []
+
+func _run_palette_action(entry: Dictionary) -> Dictionary:
+	return _run_registered_action({"target": entry.name, "revision": entry.revision, "zone": zone_id})
+
+func _run_registered_action(plan: Dictionary) -> Dictionary:
+	if shifting or plan.get("zone") != zone_id or not _is_workshop(zone_id):
+		return {"ok": false, "message": "Return to the Grid space where this action was listed."}
+	return _workshop_actions.execute(zone_id, plan.target, plan.get("revision", ""), world_tools)
 
 func _setup_world_bridge() -> void:
 	world_bridge = WorldToolBridge.new()
@@ -638,8 +658,15 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice(str(response.error))
 		return
 	console_busy = true
-	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior"]:
+	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool"]:
 		await _request_development_draft(response.plan.tool, prompt, requested_zone)
+	elif response.plan.tool == "run_workshop_tool":
+		for entry in context.workshop_tools:
+			if entry.name == response.plan.target:
+				response.plan["zone"] = context.current
+				response.plan["revision"] = entry.revision
+				break
+		await _call_world_tool(response.plan)
 	else:
 		await _call_world_tool(response.plan)
 	console_busy = false
@@ -655,7 +682,16 @@ func _request_development_draft(tool: String, prompt: String, requested_zone: in
 		_console_notice("Enter the beach with simulated surf to draft a shoreline change." if tool == "draft_shoreline"
 			else "Enter a Grid space to draft this change.")
 		return
-	var result := await _development.request(tool, prompt, _workbench_plugin_context() if tool == "draft_behavior" else {})
+	var context := {}
+	if tool == "draft_behavior":
+		context = _workbench_plugin_context()
+	elif tool == "draft_workshop_tool":
+		var entities: Array = world_tools.execute("list").get("entities", [])
+		context = {"zone": zone_id, "entities": []}
+		for entity in entities.slice(maxi(0, entities.size() - 64)):
+			context.entities.append({"id": entity.id, "type": entity.type, "position": entity.position,
+				"yaw": entity.yaw, "scale": entity.scale, "color": entity.color})
+	var result := await _development.request(tool, prompt, context)
 	if result.has("error"):
 		_console_notice(result.error)
 	else:
@@ -677,6 +713,14 @@ func _call_world_tool(plan: Dictionary) -> Dictionary:
 func _execute_world_tool(plan: Dictionary) -> Dictionary:
 	var target: String = str(plan.get("target", ""))
 	match plan.get("tool", ""):
+		"run_workshop_tool":
+			return _run_registered_action(plan)
+		"list_workshop_tools":
+			var catalog := _workshop_action_catalog()
+			var labels := PackedStringArray()
+			for entry in catalog:
+				labels.append(entry.label)
+			return {"ok": true, "message": ", ".join(labels) if not labels.is_empty() else "Enter a Grid space to find workshop actions.", "tools": catalog}
 		"list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior":
 			return _execute_workshop_tool(plan)
 		"inspect_animation", "preview_animation", "save_animation", "discard_animation":

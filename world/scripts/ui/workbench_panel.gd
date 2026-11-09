@@ -277,7 +277,7 @@ func _command(action: String, arguments := {}) -> void:
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
-			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior"}
+			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior", "workshop_tool": "workshop action"}
 			var live_subject: String = subjects.get(draft.get("subject"), "preview") if draft is Dictionary else "preview"
 			_buffers.clear()
 			_message.clear()
@@ -386,6 +386,8 @@ func _sync_controls() -> void:
 	_buttons.check.disabled = blocked or not staged or playing
 	var live := _live_status()
 	_buttons.live.text = "Preview Grid reload" if staged and draft.get("activation") == "reload_grid" else "Preview live"
+	if staged and draft.get("subject") == "workshop_tool":
+		_buttons.live.text = "Preview tool"
 	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active" \
 		or (draft.get("checked_preview", false) and draft.status != "passed")
 	var passed: bool = staged and draft.status == "passed"

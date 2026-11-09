@@ -133,11 +133,65 @@ func execute(tool: String, args := {}) -> Dictionary:
 			if _history.is_empty():
 				return _error("There are no edits to undo.")
 			var edit: Dictionary = _history.back()
-			if not _apply(edit.id, edit.previous):
+			if not _apply_records(edit.previous):
 				return _error("The Grid save could not be written.")
+			_restore_door_heights(edit.get("doors", {}))
 			_history.pop_back()
-			return {"ok": true, "id": edit.id, "entity": edit.previous.duplicate(true)}
+			var previous: Dictionary = edit.previous.get(edit.id, {})
+			return {"ok": true, "id": edit.id, "entity": previous.duplicate(true)}
 	return _error("Unknown world tool.")
+
+func validate_action(targets: Array) -> Dictionary:
+	return _prepare_action(targets)
+
+func run_action(targets: Array) -> Dictionary:
+	var edit := _prepare_action(targets)
+	if not edit.ok:
+		return edit
+	if edit.next.is_empty() and edit.doors == edit.openings:
+		return {"ok": true}
+	if not _apply_records(edit.next):
+		return _error("The Grid save could not be written.")
+	_restore_door_heights(edit.openings)
+	_remember({"id": "", "previous": edit.previous, "doors": edit.doors})
+	return {"ok": true}
+
+func _prepare_action(targets: Array) -> Dictionary:
+	if not is_instance_valid(_root) or not _load_error.is_empty():
+		return _error("The Grid is unavailable for workshop edits.")
+	var previous := {}
+	var next := {}
+	var doors := {}
+	var openings := {}
+	for target in targets:
+		var id: String = target.id
+		var record: Dictionary = _entities.get(id, {})
+		if record.is_empty() or not is_instance_valid(_nodes.get(id)):
+			return _error("A workshop action target is missing. Restore it before running this action.")
+		var proposed := record.duplicate(true)
+		proposed.merge(target.changes, true)
+		if not _valid_record(proposed):
+			return _error("The workshop action contains invalid entity properties.")
+		if proposed != record:
+			previous[id] = record
+			next[id] = proposed
+		if target.close_door or (record.type == "sliding_door" and proposed != record):
+			var door := _door(id)
+			if door == null:
+				return _error("A workshop action door target is unavailable.")
+			doors[id] = door.opening_height()
+			openings[id] = 0.0 if target.close_door else doors[id]
+	return {"ok": true, "previous": previous, "next": next, "doors": doors, "openings": openings}
+
+func _door(id: String) -> DoorActuator:
+	var node := _nodes.get(id) as Node3D
+	return node.get_node_or_null("DoorActuator") as DoorActuator if is_instance_valid(node) else null
+
+func _restore_door_heights(doors: Dictionary) -> void:
+	for id in doors:
+		var door := _door(id)
+		if door:
+			door.set_opening_height(doors[id])
 
 func _set_behavior(id: String, record: Dictionary, request: Variant) -> Dictionary:
 	var proposed := record.duplicate()
@@ -234,23 +288,34 @@ func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary
 	if proposed == previous:
 		return {"ok": true, "id": id, "entity": previous.duplicate(true)}
 	var next := proposed.duplicate(true)
-	if not _apply(id, next):
+	if not _apply_records({id: next}):
 		return _error("The Grid save could not be written.")
-	_history.append({"id": id, "previous": previous})
-	if _history.size() > MAX_UNDO:
-		_history.pop_front()
+	_remember({"id": id, "previous": {id: previous}})
 	return {"ok": true, "id": id, "entity": next.duplicate(true)}
 
-func _apply(id: String, record: Dictionary) -> bool:
-	var previous: Dictionary = _entities.get(id, {})
+func _remember(edit: Dictionary) -> void:
+	_history.append(edit)
+	if _history.size() > MAX_UNDO:
+		_history.pop_front()
+
+func _apply_records(records: Dictionary) -> bool:
+	if records.is_empty():
+		return true
+	var previous := _entities
 	var next := _entities.duplicate()
-	if record.is_empty():
-		next.erase(id)
-	else:
-		next[id] = record
+	for id in records:
+		if records[id].is_empty():
+			next.erase(id)
+		else:
+			next[id] = records[id]
 	if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "entities": next.values()}) != OK:
 		return false
 	_entities = next
+	for id in records:
+		_sync_record(id, previous.get(id, {}), records[id])
+	return true
+
+func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
 	if record.is_empty() and _preview.get("entity") == id:
 		_preview = {}
 	if _nodes.has(id):
@@ -262,12 +327,11 @@ func _apply(id: String, record: Dictionary) -> bool:
 					player.set_clip(clip)
 				if previous.get("behavior") != record.get("behavior"):
 					_sync_behavior(_nodes[id], _effective(record))
-				return true
+				return
 		_nodes[id].free()
 		_nodes.erase(id)
 	if not record.is_empty():
 		_show(record)
-	return true
 
 static func _same_placement(a: Dictionary, b: Dictionary) -> bool:
 	for key in ["type", "asset_id", "position", "yaw", "scale", "color"]:

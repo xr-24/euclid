@@ -18,3 +18,10 @@ func _physics_process(delta: float) -> void:
 	_height = move_toward(_height, travel * requested.x, _speed * delta)
 	if not is_equal_approx(_leaf.position.y, _height):
 		_leaf.position.y = _height
+
+func opening_height() -> float:
+	return _height
+
+func set_opening_height(height: float) -> void:
+	_height = clampf(height, 0.0, travel)
+	_leaf.position.y = _height

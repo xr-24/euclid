@@ -1,8 +1,8 @@
 {
   "type": "object",
   "properties": {
-    "tool": { "type": "string", "enum": ["list_environments", "travel", "create_environment", "follow", "stay", "spawn_asset", "list_assets", "list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior", "inspect_animation", "preview_animation", "save_animation", "discard_animation", "draft_shoreline", "draft_grid", "draft_behavior", "unsupported"] },
-    "target": { "type": "string", "description": "Exact environment ID for travel, name for create_environment, search phrase or asset ID for spawn_asset, exact entity ID for save_prefab, exact prefab ID for spawn_prefab, animation target ID, or an empty string" },
+    "tool": { "type": "string", "enum": ["list_environments", "travel", "create_environment", "follow", "stay", "spawn_asset", "list_assets", "list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior", "inspect_animation", "preview_animation", "save_animation", "discard_animation", "draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "list_workshop_tools", "run_workshop_tool", "unsupported"] },
+    "target": { "type": "string", "description": "Exact environment ID for travel, name for create_environment, search phrase or asset ID for spawn_asset, exact entity ID for save_prefab, exact prefab ID for spawn_prefab, animation target ID, exact registered name for run_workshop_tool, or an empty string" },
     "name": { "type": "string", "description": "Prefab name of 1 to 48 characters for save_prefab, empty for other tools" },
     "preserve_rig": { "type": "boolean", "description": "True only for spawn_asset when the user requests a rigged model" },
     "clip": { "anyOf": [{ "$ref": "#/$defs/clip" }, { "type": "null" }], "description": "New clip for preview_animation, null for other tools" },

@@ -114,6 +114,23 @@ It hands the zone builder a profile snapshot and swaps only the floor visual
 and backdrop on the main thread. The collision, anchors, entity nodes, player,
 and agent bridge retain their identity during a scenery reload.
 
+## Workshop actions
+
+The Workbench tool authoring route produces a versioned definition under
+`world/data/workshop_tools`. It captures approved placement and color fields
+from the supplied scene records and binds them to stable entity IDs in one Grid
+space. Definitions can also close a sliding door. `workshop/tool_registry.gd`
+publishes the same checked preview and committed definitions to the palette,
+F2, and the native world bridge. The planner selects a catalog name through a
+generic invocation. The bridge verifies the advertised revision and active
+space before the world applies it. Long-running CLI sessions can rediscover
+actions through the stable list and run tools.
+
+The workshop validates every target before writing a single save update and
+recording a single undo entry. Door opening is included in that runtime undo
+entry. Installed behaviors continue to drive doors after a reset. Running an
+action is a separate operation from registering, committing, or discarding it.
+
 ## Live behavior plugins
 
 `world/data/behavior_plugins.json` registers built-in behaviors. Authored

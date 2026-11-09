@@ -24,11 +24,17 @@ var _save_prefab: Button
 var _place_prefab: Button
 var _agent_input: LineEdit
 var _agent_button: Button
+var _registered_actions: MenuButton
+var _action_catalog: Callable
+var _run_action: Callable
+var _action_entries: Array[Dictionary] = []
 
-func setup(tools: RefCounted, spawn_at: Vector3, selected: String) -> void:
+func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Callable, run_action: Callable) -> void:
 	_tools = tools
 	_spawn_at = [spawn_at.x, spawn_at.y, spawn_at.z]
 	_selected = selected
+	_action_catalog = catalog
+	_run_action = run_action
 	add_theme_constant_override("separation", 10)
 	var spawn_row := HBoxContainer.new()
 	add_child(spawn_row)
@@ -71,6 +77,11 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String) -> void:
 	_duplicate = _button(actions, "Duplicate", _duplicate_entity)
 	_delete = _button(actions, "Delete", _run.bind("delete", {}))
 	_undo = _button(actions, "Undo", _run.bind("undo", {}))
+	_registered_actions = MenuButton.new()
+	_registered_actions.text = "Workshop actions"
+	actions.add_child(_registered_actions)
+	_registered_actions.about_to_popup.connect(_refresh_actions)
+	_registered_actions.get_popup().id_pressed.connect(_invoke_action)
 	_behaviors = BehaviorInspector.new()
 	add_child(_behaviors)
 	_behaviors.submitted.connect(func(value: Variant) -> void: _run("set_behavior", {"behavior": value}))
@@ -198,13 +209,15 @@ func _run(tool: String, args: Dictionary) -> void:
 	if not result.ok:
 		_status.text = result.error
 		return
-	_selected = result.id if not result.entity.is_empty() else ""
+	if not result.id.is_empty():
+		_selected = result.id if not result.entity.is_empty() else ""
 	_refresh()
 	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.",
 		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
 	_status.text = "Behavior preview updated." if result.get("preview", false) else messages[tool]
 
 func _refresh() -> void:
+	_refresh_actions()
 	_entities.clear()
 	_entities.add_item("Select an entity")
 	_entities.set_item_metadata(0, "")
@@ -222,6 +235,24 @@ func _refresh() -> void:
 	_select(index)
 	if not result.ok:
 		_status.text = result.error
+
+func _refresh_actions() -> void:
+	_action_entries.clear()
+	var popup := _registered_actions.get_popup()
+	popup.clear()
+	for entry in _action_catalog.call():
+		if entry.name == "grid_undo_edit":
+			continue
+		popup.add_item(entry.label, _action_entries.size())
+		popup.set_item_tooltip(_action_entries.size(), entry.description)
+		_action_entries.append(entry)
+	_registered_actions.visible = not _action_entries.is_empty()
+
+func _invoke_action(index: int) -> void:
+	if index >= 0 and index < _action_entries.size():
+		var result: Dictionary = _run_action.call(_action_entries[index])
+		_refresh()
+		_status.text = result.message
 
 func _select(index: int) -> void:
 	_selected = _entities.get_item_metadata(index)

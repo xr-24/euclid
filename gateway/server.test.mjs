@@ -151,4 +151,25 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   assert.deepEqual(command.behavior, behavior);
   await sync({ id: command.id, value: { ok: true } });
   assert.equal((await configuring).result.isError, false);
+
+  const reset = { name: 'grid_action_test_reset', label: 'Reset demo', description: 'Return the demo objects to their starting state.', revision: 'd'.repeat(64) };
+  context.workshop_tools = [reset];
+  await sync();
+  assert((await rpc('tools/list')).result.tools.some(tool => tool.name === reset.name));
+  const discovered = await rpc('tools/call', { name: 'list_workshop_tools' });
+  assert.deepEqual(JSON.parse(discovered.result.content[0].text).tools, [reset]);
+  assert.equal((await rpc('tools/call', { name: reset.name, arguments: { position: [1, 2, 3] } })).error.code, -32602);
+  const running = rpc('tools/call', { name: 'run_workshop_tool', arguments: { name: reset.name } });
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await sync());
+  assert.equal(command?.tool, 'run_workshop_tool');
+  assert.equal(command?.target, reset.name);
+  assert.equal(command?.revision, reset.revision);
+  assert.equal(command?.zone, context.current);
+  await sync({ id: command.id, value: { ok: true } });
+  assert.equal((await running).result.isError, false);
+  context.workshop_tools = [];
+  await sync();
+  assert(!(await rpc('tools/list')).result.tools.some(tool => tool.name === reset.name));
+  assert.equal((await rpc('tools/call', { name: reset.name })).result.isError, true);
 });

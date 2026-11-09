@@ -6,6 +6,7 @@ const Context = preload("res://scripts/zones/zone_build_context.gd")
 const Assets = preload("res://scripts/assets/asset_library.gd")
 const WaterInteractions = preload("res://scripts/simulation/water_interactions.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
+const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
@@ -89,6 +90,7 @@ func _run() -> void:
 	var ramp_y := pool_bottom[(ramp_j*int(pool.n)+ramp_i)*4]+float(pool.water_y)
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
 	_check_world_tools(path)
+	_check_workshop_actions(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
 	_check_linked_plugin(path)
@@ -277,6 +279,44 @@ func _check_prefabs(path: String) -> void:
 	_check(not second.execute("spawn_prefab", {"prefab_id": "unknown", "position": [0.0, 0.0, 0.0]}).ok,
 		"unknown prefab IDs do not create entities")
 	destination.free()
+	DirAccess.remove_absolute(path)
+
+func _check_workshop_actions(path: String) -> void:
+	var zone := Node3D.new()
+	root.add_child(zone)
+	var workshop := WorldTools.new(path)
+	workshop.attach(zone)
+	var cone := workshop.execute("spawn", {"type": "traffic_cone", "position": [5.0, 0.0, 4.0]})
+	var door := workshop.execute("spawn", {"type": "sliding_door", "position": [4.0, 0.0, 3.0]})
+	var actuator := zone.get_node("WorkshopEntities/Entity_%s/DoorActuator" % door.id)
+	actuator.set_opening_height(1.5)
+	var targets := [{"id": cone.id, "changes": {"position": [0.0, 0.0, -2.0]}, "close_door": false},
+		{"id": door.id, "changes": {"yaw": 25.0}, "close_door": true}]
+	var definition := {"schema_version": 1, "id": "fixture_reset", "label": "Reset demo", "description": "Reset cone and door.",
+		"zone": "fixture-space", "targets": targets}
+	var registry := ToolRegistry.new()
+	var draft := {"draft": "fixture", "workshop_tool": definition}
+	_check(registry.preview(draft, "fixture-space", workshop).ok and registry.catalog("other-space").size() == 1,
+		"preview registers the action only in its bound Grid space")
+	var name := "grid_action_fixture_reset"
+	var action: Dictionary = registry.catalog("fixture-space").filter(func(item: Dictionary) -> bool: return item.name == name)[0]
+	_check(not registry.execute("fixture-space", name, "stale", workshop).ok and actuator.opening_height() == 1.5,
+		"stale action revisions cannot mutate the Grid")
+	var invalid := targets.duplicate(true)
+	invalid[1].id = "a".repeat(32)
+	var saved := FileAccess.get_file_as_string(path)
+	_check(not workshop.run_action(invalid).ok and FileAccess.get_file_as_string(path) == saved,
+		"a missing target rejects the whole reset before saving")
+	_check(registry.execute("fixture-space", name, action.revision, workshop).ok, "run a registered workshop action")
+	actuator = zone.get_node("WorkshopEntities/Entity_%s/DoorActuator" % door.id)
+	_check(actuator.opening_height() == 0.0 and workshop.execute("inspect", {"id": cone.id}).entity.position == [0.0, 0.0, -2.0],
+		"reset saves the cone placement and closes the door")
+	_check(registry.finish("fixture", false) and not registry.execute("fixture-space", name, action.revision, workshop).ok,
+		"discard withdraws the registered action")
+	_check(workshop.execute("undo").ok and FileAccess.get_file_as_string(path) == saved
+		and zone.get_node("WorkshopEntities/Entity_%s/DoorActuator" % door.id).opening_height() == 1.5,
+		"one undo restores both saved records and door opening")
+	zone.free()
 	DirAccess.remove_absolute(path)
 
 func _check_world_tools(path: String) -> void:

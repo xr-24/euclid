@@ -188,6 +188,18 @@ place a pressure plate and sliding door, then ask **Write a plugin that opens th
 door while I stand on the plate**. The same review, preview, and discard actions
 are available after checks pass.
 
+To give Codex a new tool, place a sliding door and a cone, then ask in F2
+**Build a workshop tool that closes this door and resets the cone to its current
+position and color**. **Preview tool** registers the checked action in this Grid
+space. Move the cone, then ask F2 to run the action by name or open **B → Workshop
+actions**. The native CLI can discover it through `list_workshop_tools` and
+invoke it through `run_workshop_tool`.
+
+A reset is one Grid edit. Use **Undo** in the palette or ask F2 to undo the last
+Grid edit. **Discard** removes the previewed action and leaves its invocations
+in the ordinary undo history. **Commit** installs the action in this Grid space
+for future sessions.
+
 ### Edit source in Workbench
 
 Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot

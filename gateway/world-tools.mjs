@@ -8,6 +8,8 @@ const idPattern = /^[a-z0-9_-]{1,64}$/;
 const sessionPattern = /^[a-f0-9]{32}$/;
 const animationTarget = /^(companion|[a-f0-9]{32})$/;
 const behaviorId = /^[a-z_][a-z0-9_]{0,39}$/;
+const workshopName = /^(grid_undo_edit|grid_action_[a-z][a-z0-9_]{0,31})$/;
+const workshopText = (value, length) => typeof value === 'string' && value.length <= length && Boolean(value.trim()) && !/[\x00-\x1f\x7f]/.test(value);
 export const tools = [
   { name: 'list_environments', description: 'List the running Euclid world’s environments, their IDs, and the current environment.', inputSchema: object(), annotations: { readOnlyHint: true } },
   { name: 'travel', description: 'Shift the player to an existing Euclid environment. Discover the exact ID with list_environments.', inputSchema: object({ target: text('Exact environment ID') }, ['target']) },
@@ -40,23 +42,40 @@ export const tools = [
     inputSchema: object({ target: text('Exact ID from inspect_animation'), clip: companionSchema.$defs.clip }, ['target', 'clip']) },
   { name: 'save_animation', description: 'Save the active animation preview on its target.', inputSchema: object({ target: text('Optional exact preview target ID') }) },
   { name: 'discard_animation', description: 'Discard the active preview and restore its previous motion.', inputSchema: object({ target: text('Optional exact preview target ID') }) },
+  { name: 'list_workshop_tools', description: 'Discover actions registered in the current Grid space, including newly previewed actions.', inputSchema: object(), annotations: { readOnlyHint: true } },
+  { name: 'run_workshop_tool', description: 'Run a named action from list_workshop_tools. Call it only when the user asks to perform the action.',
+    inputSchema: object({ name: text('Exact name from list_workshop_tools') }, ['name']) },
 ];
+
+function validWorkshopCatalog(catalog) {
+  if (catalog === undefined) return true;
+  if (!Array.isArray(catalog) || catalog.length > 25) return false;
+  const names = new Set();
+  for (const tool of catalog) {
+    if (typeof tool?.name !== 'string' || !workshopName.test(tool.name) || names.has(tool.name) ||
+        !workshopText(tool.label, 48) || !workshopText(tool.description, 180) ||
+        typeof tool.revision !== 'string' || !/^[a-f0-9]{64}$/.test(tool.revision)) return false;
+    names.add(tool.name);
+  }
+  return true;
+}
 
 export function validContext(context) {
   return typeof context?.current === 'string' && Array.isArray(context.environments) &&
     context.environments.length > 0 && context.environments.length <= 15 &&
-    context.environments.some(zone => zone?.id === context.current) &&
+    validWorkshopCatalog(context.workshop_tools) && context.environments.some(zone => zone?.id === context.current) &&
     context.environments.every(zone => typeof zone?.id === 'string' && idPattern.test(zone.id) &&
       typeof zone.name === 'string' && zone.name.length <= 96 &&
       typeof zone.description === 'string' && zone.description.length <= 180);
 }
 
-const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior'];
+const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool'];
 
-export function validWorldPlan(plan) {
+export function validWorldPlan(plan, context) {
   if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;
   if (plan.tool === 'travel') return idPattern.test(plan.target);
   if (developmentTools.includes(plan.tool)) return plan.target === '';
+  if (plan.tool === 'run_workshop_tool') return Boolean(context?.workshop_tools?.some(tool => tool.name === plan.target));
   if (plan.tool === 'create_environment') return plan.target.trim().length > 0 && plan.target.length <= 96;
   if (plan.tool === 'save_prefab') return sessionPattern.test(plan.target) && typeof plan.name === 'string' &&
     plan.name.trim().length > 0 && [...plan.name.trim()].length <= 48 && !/[\x00-\x1f\x7f]/.test(plan.name);
@@ -77,7 +96,7 @@ export function validWorldPlan(plan) {
   if (['inspect_animation', 'save_animation', 'discard_animation'].includes(plan.tool)) {
     return plan.target === '' || animationTarget.test(plan.target);
   }
-  return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_entities', 'list_prefabs', 'unsupported'].includes(plan.tool);
+  return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_entities', 'list_prefabs', 'list_workshop_tools', 'unsupported'].includes(plan.tool);
 }
 
 function validBehavior(behavior) {
@@ -147,6 +166,9 @@ export function createWorldBridge(assets) {
     const error = (code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
     if (message?.jsonrpc !== '2.0' || typeof message.method !== 'string') return error(-32600, 'Invalid request');
     if (message.id === undefined) return null;
+    prune();
+    const world = sessions.get(session);
+    const catalog = world && Date.now() - world.seen <= 12000 ? world.context.workshop_tools ?? [] : [];
     switch (message.method) {
       case 'initialize':
         return reply({
@@ -155,10 +177,23 @@ export function createWorldBridge(assets) {
           instructions: 'Use these tools for the live Euclid world. Call list_environments to discover destinations.',
         });
       case 'ping': return reply({});
-      case 'tools/list': return reply({ tools });
+      case 'tools/list': return reply({ tools: [...tools, ...catalog.map(tool => ({
+        name: tool.name, description: tool.description, inputSchema: object(), annotations: { destructiveHint: false },
+      }))] });
       case 'tools/call': {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
+        if (name === 'list_workshop_tools' || name === 'run_workshop_tool' || (typeof name === 'string' && workshopName.test(name))) {
+          const wrapper = name === 'run_workshop_tool';
+          if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length !== (wrapper ? 1 : 0)) {
+            return error(-32602, 'Invalid workshop action arguments');
+          }
+          const descriptor = catalog.find(tool => tool.name === (wrapper ? args.name : name));
+          const result = name === 'list_workshop_tools' ? { ok: true, tools: catalog } : descriptor ? await call(session, {
+            tool: 'run_workshop_tool', target: descriptor.name, revision: descriptor.revision, zone: world.context.current,
+          }, signal) : { ok: false, message: 'That workshop action is no longer registered here. List the current tools.' };
+          return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        }
         if (['search_assets', 'import_asset', 'asset_status', 'list_assets', 'spawn_entity'].includes(name)) {
           if (!assets) return error(-32603, 'The asset service is unavailable.');
           let result;

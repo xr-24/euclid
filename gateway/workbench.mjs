@@ -7,6 +7,7 @@ import { createWorkbenchGit } from './workbench-git.mjs';
 import { livePlugin, pluginContext, pluginFiles, proposePlugin } from './workbench-plugin.mjs';
 import { shorelineAppearance } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
+import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
 import { fingerprint, isSourcePath, listSources, normalizeEdit, readSource } from './workbench-source.mjs';
 
@@ -51,7 +52,8 @@ async function readChanges(root, files) {
 }
 
 export function createWorkbench(root, storage, { runner = createPreviewRunner(root), propose = proposeEdit,
-  author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose } = {}) {
+  author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
+  designTool = proposeWorkshopTool } = {}) {
   const git = createWorkbenchGit(root);
   let draft = null;
   let operation = '';
@@ -85,12 +87,13 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
 
   async function state() {
     const appearance = draft && appearanceFor(draft.names);
+    const tool = draft && workshopToolFile(draft.names);
     return { operation, playing: runner.playing(), revision: await git.headRevision(), draft: draft && {
       id: draft.id, name: draft.names.length === 1 ? draft.names[0] : `${draft.names.length} files`, files: draft.names,
       diff: draft.diff, status: draft.status, log: draft.log, error: draft.error,
-      live: Boolean(draft.plugin || appearance), activation: appearance?.activation ?? (draft.plugin ? 'live' : 'restart'),
-      subject: appearance?.payload ?? (draft.plugin ? 'behavior' : 'source'),
-      checked_preview: Boolean(appearance || draft.fromWorld), from_world: draft.fromWorld === true,
+      live: Boolean(draft.plugin || appearance || tool), activation: appearance?.activation ?? (draft.plugin || tool ? 'live' : 'restart'),
+      subject: appearance?.payload ?? (tool ? 'workshop_tool' : draft.plugin ? 'behavior' : 'source'),
+      checked_preview: Boolean(appearance || tool || draft.fromWorld), from_world: draft.fromWorld === true,
       preview_zone: draft.binding?.zone ?? '', summary: draft.summary ?? '',
     } };
   }
@@ -134,6 +137,18 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const fromWorld = body.from_world === true;
     await writeDraft(base, files, binding, summary, fromWorld);
     if (fromWorld) runChecks(draft.id);
+  }
+
+  async function authorTool(body, signal) {
+    const base = await draftBase();
+    const context = workshopToolContext(body.context);
+    if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 600) throw new Error('Describe a workshop tool in 1 to 600 characters.');
+    const proposal = await designTool({ request: body.prompt, context }, signal);
+    const { file, text, summary } = workshopToolPackage(proposal, context);
+    const existing = await lstat(path.join(root, file)).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    if (existing) throw new Error('A workshop tool with that ID already exists. Open its definition to edit it.');
+    await writeDraft(base, new Map([[file, text]]), { zone: context.zone }, summary, true);
+    runChecks(draft.id);
   }
 
   async function developAppearance(body, signal, appearance, design) {
@@ -223,6 +238,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await verifyReview(change);
         const appearance = appearanceFor(change.names);
         if (appearance) readAppearance((await readSource(change.worktree, appearance.file)).text, appearance);
+        const tool = workshopToolFile(change.names);
+        if (tool) readWorkshopTool((await readSource(change.worktree, tool)).text, tool);
         await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal);
         await verifyReview(change);
         change.status = 'passed';
@@ -263,13 +280,22 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       switch (action) {
         case 'stage': await stage(body); break;
         case 'author': await authorDraft(body, signal); break;
+        case 'tool': await authorTool(body, signal); break;
         case 'shoreline': await developAppearance(body, signal, shorelineAppearance, designShoreline); break;
         case 'grid': await developAppearance(body, signal, gridAppearance, designGrid); break;
         case 'live': {
           const change = requireDraft(body.id);
           const appearance = appearanceFor(change.names);
-          if ((appearance || change.fromWorld) && change.status !== 'passed') {
+          const tool = workshopToolFile(change.names);
+          if ((appearance || tool || change.fromWorld) && change.status !== 'passed') {
             throw new Error('Wait for the draft to pass its checks before previewing.');
+          }
+          if (tool) {
+            await verifyReview(change);
+            const definition = readWorkshopTool((await readSource(change.worktree, tool)).text, tool);
+            await verifyReview(change);
+            live = { draft: change.id, workshop_tool: definition };
+            break;
           }
           if (appearance) {
             await verifyReview(change);

@@ -67,7 +67,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 13 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 14 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
@@ -152,7 +152,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         try {
           const plan = await gridPlanner(prompt, controller.signal, context);
           if (res.destroyed) return;
-          if (!(companion ? validWorldPlan(plan) : validGridPlan(plan))) return reply(res, 502, { error: 'Codex returned an invalid world plan.' });
+          if (!(companion ? validWorldPlan(plan, context) : validGridPlan(plan))) return reply(res, 502, { error: 'Codex returned an invalid world plan.' });
           return reply(res, 200, { agent_id: 'local-codex', plan });
         } catch (error) {
           if (!res.destroyed) return reply(res, 503, { error: error.message });

@@ -25,6 +25,7 @@ func request(tool: String, prompt: String, context: Dictionary) -> Dictionary:
 		"draft_shoreline": return await _send("shoreline", {"prompt": prompt})
 		"draft_grid": return await _send("grid", {"prompt": prompt})
 		"draft_behavior": return await _send("author", {"prompt": prompt, "context": context, "from_world": true})
+		"draft_workshop_tool": return await _send("tool", {"prompt": prompt, "context": context})
 	return {"error": "Unknown development request."}
 
 func command(action: String) -> Dictionary:

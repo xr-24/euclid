@@ -54,6 +54,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const shoreChecks = new Promise(resolve => { finishShoreChecks = resolve; });
   let finishBehaviorChecks;
   const behaviorChecks = new Promise(resolve => { finishBehaviorChecks = resolve; });
+  let finishToolChecks;
+  const toolChecks = new Promise(resolve => { finishToolChecks = resolve; });
   const runner = {
     async check(draft, output) {
       if (draft.names[0] === shorelinePath) {
@@ -65,6 +67,7 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
         assert.deepEqual(JSON.parse(await readFile(path.join(root, gridAppearance.file), 'utf8')), gridOriginal);
         return;
       }
+      if (draft.names[0].startsWith('world/data/workshop_tools/')) return toolChecks;
       if (draft.binding) return behaviorChecks;
       assert.equal(await readFile(file, 'utf8'), original);
       assert.match(await readFile(path.join(draft.worktree, name), 'utf8'), /VALUE := 2/);
@@ -87,6 +90,9 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
         supported: true, summary: 'Soften the foam.', foam_strength: 1, foam_softness: request === 'Unsafe' ? 3 : 1.5,
       }), designGrid: async ({ request }) => ({
         supported: true, summary: 'Space the lines apart.', floor_spacing: request === 'Unsafe' ? 9 : 4, wall_height: 1,
+      }), designTool: async ({ request }) => ({
+        supported: true, id: 'reset_demo', label: 'Reset demo', description: 'Restore the test door.', summary: 'Capture the door state.',
+        targets: [{ id: request === 'Invalid' ? 'f'.repeat(32) : door, fields: ['yaw', 'position'], close_door: true }],
       }), propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
         { file: name, original: 'VALUE := 1', replacement: 'VALUE := 2' },
         { file: other, original: '"Old"', replacement: '"New"' },
@@ -234,4 +240,21 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   for (let tries = 0; tries < 30 && (await call('state')).body.draft.status === 'checking'; tries++) await sleep(20);
   assert.deepEqual((await call('live', { id: behaviorId })).body.live.binding, packageDraft.binding);
   assert.equal((await call('discard', { id: behaviorId })).body.draft, null);
+
+  const toolContext = { zone: 'construct', entities: [{ id: door, type: 'sliding_door', position: [1, 0, 2], yaw: 15, scale: 1, color: '112233' }] };
+  assert.equal((await call('tool', { prompt: 'Reset demo', context: toolContext }, false)).code, 403);
+  assert.equal((await call('tool', { prompt: 'Invalid', context: toolContext })).code, 400);
+  const tool = await call('tool', { prompt: 'Reset demo', context: toolContext });
+  assert.equal(tool.code, 200, JSON.stringify(tool.body));
+  assert.equal(tool.body.draft.subject, 'workshop_tool');
+  assert.equal(tool.body.draft.preview_zone, 'construct');
+  const toolId = tool.body.draft.id;
+  assert.equal((await call('live', { id: toolId })).code, 400);
+  finishToolChecks();
+  for (let tries = 0; tries < 30 && (await call('state')).body.draft.status === 'checking'; tries++) await sleep(20);
+  const toolPreview = (await call('live', { id: toolId })).body.live.workshop_tool;
+  assert.deepEqual(toolPreview.targets, [{ id: door, changes: { yaw: 15, position: [1, 0, 2] }, close_door: true }]);
+  const toolCommit = await call('apply', { id: toolId, message: 'Add demo reset' });
+  assert.equal(toolCommit.code, 200, JSON.stringify(toolCommit.body));
+  assert.deepEqual(JSON.parse(await readFile(path.join(root, 'world/data/workshop_tools/reset_demo.json'), 'utf8')), toolPreview);
 });

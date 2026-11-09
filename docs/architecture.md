@@ -90,6 +90,20 @@ The world coordinator writes player state before requesting Godot's desktop
 restart. The restarted process restores the usual saved state and reconnects to
 the existing gateway.
 
+## In-world development requests
+
+The F2 planner can route a beach foam request to the privileged Workbench
+transport. This route writes one versioned appearance file into the ordinary
+Git draft and starts isolated checks. F2 tracks the draft and offers review,
+preview, and discard actions. F4 owns the diff and commit controls. Activation
+is a separate user action after checks pass.
+
+`rendering/shoreline_look.gd` validates the appearance profile and applies it
+to the attached beach's private surf and terrain materials. Commit promotes the
+preview to the active profile. Discard restores the previous profile. The host
+operates on material uniforms while the solver and its gameplay probes continue
+on the existing scene nodes.
+
 ## Live behavior plugins
 
 `world/data/behavior_plugins.json` registers built-in behaviors. Authored

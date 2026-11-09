@@ -45,6 +45,7 @@ uniform vec3 foam_albedo = vec3(0.62);
 uniform float refraction_strength : hint_range(0.0, 0.3) = 0.06;
 uniform float detail_normal_strength : hint_range(0.0, 2.0) = 0.32;
 uniform float foam_strength : hint_range(0.0, 1.0) = 1.0;
+uniform float foam_softness : hint_range(0.5, 2.0) = 1.0;
 uniform float base_roughness : hint_range(0.0, 1.0) = 0.045;
 uniform float lace_scale_coarse : hint_range(0.1, 10.0) = 1.2;
 uniform float lace_scale_fine : hint_range(0.01, 2.0) = 0.12;
@@ -246,7 +247,7 @@ void fragment() {
 		float lace_c = flow_lace(v_world_pos.xz, lace_scale_coarse, disp, t_flow);
 		float lace_f = flow_lace(v_world_pos.xz, lace_scale_fine, disp, t_flow + pn.g);
 		float lace = 0.72 * lace_c + 0.28 * lace_f;
-		float foam_mask = smoothstep(1.0 - fv, 1.0 - fv + 0.38, lace) * 0.94;
+		float foam_mask = smoothstep(1.0 - fv, 1.0 - fv + 0.38 * foam_softness, lace) * 0.94;
 
 		float fres = 0.02 + 0.98 * pow(1.0 - clamp(dot(VIEW, NORMAL), 0.0, 1.0), 5.0);
 		fres *= shore * (1.0 - foam_mask);

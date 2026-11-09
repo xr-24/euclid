@@ -8,6 +8,7 @@ const WaterInteractions = preload("res://scripts/simulation/water_interactions.g
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
+const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 var _failures := 0
 var _checks := 0
@@ -91,6 +92,7 @@ func _run() -> void:
 	_check_prefabs(path)
 	_check_live_behaviors(path)
 	_check_linked_plugin(path)
+	_check_shoreline_look()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -209,6 +211,36 @@ func _check_linked_plugin(path: String) -> void:
 	other.free()
 	zone.free()
 	DirAccess.remove_absolute(path)
+
+func _check_shoreline_look() -> void:
+	var profile: Variant = JSON.parse_string(FileAccess.get_file_as_string(ShorelineLook.PATH))
+	_check(ShorelineLook.valid_profile(profile), "the committed shoreline appearance is valid")
+	var look := ShorelineLook.new()
+	var beach := Node3D.new()
+	var terrain := ShaderMaterial.new()
+	terrain.shader = load("res://shaders/shore_terrain.gdshader")
+	var surface := ShaderMaterial.new()
+	surface.shader = load("res://shaders/shore_water.gdshader")
+	surface.set_shader_parameter("wave_time", 12.0)
+	beach.set_meta("water", {"sims": [{"profile": "shore", "terrain": terrain, "surfaces": [surface]}]})
+	look.attach(beach)
+	var candidate := {"draft": "test-shoreline", "shoreline": {"schema_version": 1, "foam_strength": 0.5, "foam_softness": 1.75}}
+	_check(look.preview(candidate).ok and is_equal_approx(float(terrain.get_shader_parameter("foam_strength")), 0.5)
+		and is_equal_approx(float(surface.get_shader_parameter("foam_softness")), 1.75)
+		and is_equal_approx(float(surface.get_shader_parameter("wave_time")), 12.0), "preview updates surf and sand and preserves the wave clock")
+	var invalid := candidate.duplicate(true)
+	invalid.shoreline.foam_softness = INF
+	_check(not look.preview(invalid).ok and is_equal_approx(float(surface.get_shader_parameter("foam_softness")), 1.75), "reject invalid profiles without touching the active appearance")
+	_check(look.finish("test-shoreline", false) and is_equal_approx(float(terrain.get_shader_parameter("foam_strength")), float(profile.foam_strength)),
+		"discard restores the committed shoreline appearance")
+	_check(look.preview(candidate).ok and look.finish("test-shoreline", true) and look.status("test-shoreline").is_empty()
+		and is_equal_approx(float(surface.get_shader_parameter("foam_softness")), 1.75), "commit retains the visible appearance")
+	var pool := Node3D.new()
+	pool.set_meta("water", {"sims": [{"profile": "pool", "terrain": terrain, "surfaces": [surface]}]})
+	look.attach(pool)
+	_check(not look.available() and not look.preview(candidate).ok, "the shore preview cannot attach to a pool")
+	pool.free()
+	beach.free()
 
 func _check_prefabs(path: String) -> void:
 	var library := PrefabLibrary.new(path)

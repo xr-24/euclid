@@ -233,7 +233,7 @@ static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_material
 	var surfaces: Array[ShaderMaterial] = [wmat]
 	surfaces.append_array(ocean_materials)
 	return {"sim": sim, "origin": origin, "dx": dx, "n": n, "sea_level": SEA_LEVEL,
-		"profile":"shore", "player_wet":false, "surfaces":surfaces}
+		"profile":"shore", "player_wet":false, "surfaces":surfaces, "terrain":terrain_mat}
 
 static func _ocean_ring(origin: Vector2, size: float, n: int) -> ArrayMesh:
 	var inner := [origin+Vector2(0.5,0.5),origin+Vector2(size-0.5,0.5),

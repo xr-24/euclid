@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "supported": {"type": "boolean"},
+    "summary": {"type": "string"},
+    "foam_strength": {"type": "number", "description": "Foam opacity and coverage strength from 0 to 1"},
+    "foam_softness": {"type": "number", "description": "Foam edge softness multiplier from 0.5 to 2.0"}
+  },
+  "required": ["supported", "summary", "foam_strength", "foam_softness"],
+  "additionalProperties": false
+}

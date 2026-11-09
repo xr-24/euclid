@@ -19,6 +19,8 @@ uniform float sea_level = -0.55;
 // Shoreline solver (optional): wetness memory, stranded foam and the water surface for caustics.
 uniform bool sim_enabled = false;
 uniform bool shore_contact_foam = false;
+uniform float foam_strength : hint_range(0.0, 1.0) = 1.0;
+uniform float foam_softness : hint_range(0.5, 2.0) = 1.0;
 uniform sampler2D tx_derived : hint_default_black, filter_linear, repeat_disable;
 uniform vec2 sim_origin = vec2(-24.32, -55.0);
 uniform float sim_size = 48.64;
@@ -146,8 +148,8 @@ void fragment() {
 
 	// Foam lace stranded by the backwash.
 	float lace = texture(lace_tex, wpos.xz / 1.1).r;
-	float foam_line = stranded * smoothstep(0.55, 0.85, lace);
-	foam_line = max(foam_line,contact_foam*smoothstep(0.3,0.72,lace)*0.75);
+	float foam_line = stranded * smoothstep(0.55, 0.55 + 0.30 * foam_softness, lace);
+	foam_line = max(foam_line,contact_foam*smoothstep(0.3,0.3 + 0.42 * foam_softness,lace)*0.75) * foam_strength;
 	albedo = mix(albedo, vec3(0.86, 0.87, 0.84), foam_line * (1.0 - rock_mask));
 	rough = mix(rough, 0.8, foam_line);
 	// Underwater caustics in the shallows.

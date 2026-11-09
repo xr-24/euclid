@@ -277,6 +277,7 @@ func _command(action: String, arguments := {}) -> void:
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
+			var live_subject := "shoreline look" if draft is Dictionary and draft.get("shoreline", false) else "behavior"
 			_buffers.clear()
 			_message.clear()
 			if not _source.is_empty():
@@ -285,8 +286,8 @@ func _command(action: String, arguments := {}) -> void:
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
-				"apply": ("Committed %s. The behavior stays active." if finished.live else "Committed %s. Restart Euclid to load it here.") % short,
-				"restore": "Created revert %s. Restart Euclid for changes outside live behaviors." % short}
+				"apply": "Committed %s. The %s stays active." % [short, live_subject] if finished.live else "Committed %s. Restart Euclid to load it here." % short,
+				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
 				_status.text += " " + result.warning
@@ -346,7 +347,7 @@ func _show_state(result: Dictionary) -> void:
 		elif _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 		elif _live_status() == "active" and draft.status != "checking":
-			_status.text += " Live behavior active."
+			_status.text += " Live preview active."
 	else:
 		_diff.text = ""
 		_log.text = ""
@@ -378,7 +379,8 @@ func _sync_controls() -> void:
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
 	_buttons.check.disabled = blocked or not staged or playing
 	var live := _live_status()
-	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active"
+	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active" \
+		or (draft.get("shoreline", false) and draft.status != "passed")
 	var passed: bool = staged and draft.status == "passed"
 	_buttons.play.disabled = blocked or not passed or playing
 	_buttons.stop.disabled = blocked or not playing

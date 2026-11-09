@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createGateway } from './server.mjs';
 import { fingerprint } from './workbench-source.mjs';
+import { shorelinePath } from './workbench-shoreline.mjs';
 
 test('workbench checks and commits an isolated two-file Git draft, and reverts it', async t => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'euclid-workbench-test-'));
@@ -34,6 +35,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   await mkdir(path.join(root, 'world/data'));
   await writeFile(path.join(root, plugin), original);
   await writeFile(path.join(root, 'world/data/behavior_plugins.json'), JSON.stringify({ schema_version: 1, plugins: [{ id: 'proximity_pulse' }] }));
+  const shoreOriginal = { schema_version: 1, foam_strength: 1, foam_softness: 1 };
+  await writeFile(path.join(root, shorelinePath), JSON.stringify(shoreOriginal));
   git('init', '-q');
   git('config', 'user.name', 'Euclid Test');
   git('config', 'user.email', 'test@example.invalid');
@@ -44,8 +47,15 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   let server;
   let fail = true;
   let playing = false;
+  let finishShoreChecks;
+  const shoreChecks = new Promise(resolve => { finishShoreChecks = resolve; });
   const runner = {
     async check(draft, output) {
+      if (draft.names[0] === shorelinePath) {
+        assert.deepEqual(JSON.parse(await readFile(path.join(root, shorelinePath), 'utf8')), shoreOriginal);
+        await shoreChecks;
+        return;
+      }
       assert.equal(await readFile(file, 'utf8'), original);
       assert.match(await readFile(path.join(draft.worktree, name), 'utf8'), /VALUE := 2/);
       assert.match(await readFile(path.join(draft.worktree, other), 'utf8'), /"New"/);
@@ -63,7 +73,9 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   });
   async function start() {
     const gateway = await createGateway({ dataDir, workbenchRoot: root, workbenchOptions: {
-      runner, author: async () => proposedPackage, propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
+      runner, author: async () => proposedPackage, designShoreline: async ({ request }) => ({
+        supported: true, summary: 'Soften the foam.', foam_strength: 1, foam_softness: request === 'Unsafe' ? 3 : 1.5,
+      }), propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
         { file: name, original: 'VALUE := 1', replacement: 'VALUE := 2' },
         { file: other, original: '"Old"', replacement: '"New"' },
       ] }),
@@ -166,4 +178,23 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.equal(packageDraft.definition.output, 'door_open');
   assert.deepEqual(packageDraft.binding, { zone: 'construct', source: plate, target: door });
   assert.equal((await call('discard', { id: authored.body.draft.id })).body.draft, null);
+
+  assert.equal((await call('shoreline', { prompt: 'Unsafe' })).code, 400);
+  const shore = await call('shoreline', { prompt: 'Soften the foam' });
+  assert.equal(shore.code, 200, JSON.stringify(shore.body));
+  const shoreId = shore.body.draft.id;
+  assert.equal(shore.body.operation, 'checking');
+  assert.equal(shore.body.draft.status, 'checking');
+  assert.deepEqual(shore.body.draft.files, [shorelinePath]);
+  assert.equal((await call('live', { id: shoreId })).code, 400);
+  finishShoreChecks();
+  for (let tries = 0; tries < 30; tries++) {
+    if ((await call('state')).body.draft.status !== 'checking') break;
+    await sleep(20);
+  }
+  const preview = await call('live', { id: shoreId });
+  assert.deepEqual(preview.body.live, { draft: shoreId, shoreline: { ...shoreOriginal, foam_softness: 1.5 } });
+  const accepted = await call('apply', { id: shoreId, message: 'Soften shore foam' });
+  assert.equal(accepted.code, 200, JSON.stringify(accepted.body));
+  assert.deepEqual(JSON.parse(await readFile(path.join(root, shorelinePath), 'utf8')), preview.body.live.shoreline);
 });

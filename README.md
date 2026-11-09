@@ -158,6 +158,20 @@ separate rigged asset ID for `spawn_entity`.
 
 ## Develop from inside Euclid
 
+### Ask from the beach
+
+Launch **Start Euclid Workbench.cmd**, go to the beach, and press **F2**. Ask
+**Make the shoreline foam softer**. Codex drafts an edit to the shoreline
+appearance file and starts the Workbench checks. **Review draft** opens the
+diff and logs. When checks pass, **Preview live** applies the look to the
+current surf and wet sand. Close the panel to look around. **Discard** restores
+the previous look. Open the draft and **Commit** to keep the previewed settings.
+
+This live edit covers foam strength and edge softness on simulated surf. It
+uses the same Git draft, check, and revert commands as the rest of Workbench.
+
+### Edit source in Workbench
+
 Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot
 scripts, shaders, the main scene, or project data files. Open each file you want
 Codex to see. For example, open `world/scripts/workshop/entity_types.gd` and

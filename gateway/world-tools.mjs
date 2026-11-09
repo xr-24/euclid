@@ -54,6 +54,7 @@ export function validContext(context) {
 export function validWorldPlan(plan) {
   if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;
   if (plan.tool === 'travel') return idPattern.test(plan.target);
+  if (plan.tool === 'draft_shoreline') return plan.target === '';
   if (plan.tool === 'create_environment') return plan.target.trim().length > 0 && plan.target.length <= 96;
   if (plan.tool === 'save_prefab') return sessionPattern.test(plan.target) && typeof plan.name === 'string' &&
     plan.name.trim().length > 0 && [...plan.name.trim()].length <= 48 && !/[\x00-\x1f\x7f]/.test(plan.name);
@@ -179,7 +180,7 @@ export function createWorldBridge(assets) {
           ...(name === 'preview_animation' ? { clip: args.clip } : {}),
           ...(name === 'set_behavior' ? { behavior: args.behavior } : {}),
           ...(name === 'save_prefab' ? { name: args.name } : {}) };
-        if (!validWorldPlan(plan) || plan.tool === 'unsupported') return error(-32602, 'Invalid world tool arguments');
+        if (!validWorldPlan(plan) || ['unsupported', 'draft_shoreline'].includes(plan.tool)) return error(-32602, 'Invalid world tool arguments');
         const result = await call(session, plan, signal);
         return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
       }

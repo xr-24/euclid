@@ -5,6 +5,7 @@ signal cli_requested
 signal minimize_requested
 signal layout_requested(expanded: bool)
 signal voice_requested(enabled: bool)
+signal development_requested(action: String)
 
 const INK := Color("ded9d8")
 const MUTED := Color("a29197")
@@ -15,6 +16,9 @@ var _history: RichTextLabel
 var _entry: LineEdit
 var _prompt: Label
 var _resize: Button
+var _draft_row: HBoxContainer
+var _draft_strip: MarginContainer
+var _preview_draft: Button
 
 static func frame_style() -> StyleBoxFlat:
 	var frame := StyleBoxFlat.new()
@@ -63,6 +67,13 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	var viewport := _inset(self, _history, 20, 16)
 	viewport.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_rule(self)
+	_draft_row = HBoxContainer.new()
+	_draft_row.add_theme_constant_override("separation", 8)
+	_draft_strip = _inset(self, _draft_row, 16, 4)
+	_draft_strip.hide()
+	_draft_button("Review draft", "review")
+	_preview_draft = _draft_button("Preview live", "live")
+	_draft_button("Discard", "discard")
 
 	var input_row := HBoxContainer.new()
 	input_row.custom_minimum_size.y = 49
@@ -85,6 +96,19 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 
 func focus_entry() -> void:
 	_entry.grab_focus()
+
+func update_development(draft: Dictionary, can_preview: bool, live: bool) -> void:
+	_draft_strip.visible = not draft.is_empty()
+	_preview_draft.disabled = not can_preview or draft.get("status") != "passed" or live
+	_preview_draft.text = "Preview active" if live else "Preview live"
+
+func _draft_button(label: String, action: String) -> Button:
+	var button := Button.new()
+	button.text = label
+	button.custom_minimum_size.y = 32
+	button.pressed.connect(func() -> void: development_requested.emit(action))
+	_draft_row.add_child(button)
+	return button
 
 func update_display(lines: PackedStringArray, busy: bool) -> void:
 	_busy = busy

@@ -16,6 +16,8 @@ const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
+const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
+const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
 var manifest: Dictionary
@@ -77,6 +79,8 @@ var voice_enabled := false
 var console_lines := PackedStringArray()
 var _workbench_capability := ""
 var _workbench_panel: Control
+var _development: WorldDevelopment
+var _shoreline := ShorelineLook.new()
 
 func _ready() -> void:
 	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
@@ -339,15 +343,17 @@ func _open_workbench() -> void:
 	overlay.add_theme_stylebox_override("panel", frame)
 	_workbench_panel = WorkbenchPanel.new()
 	overlay_content.add_child(_workbench_panel)
-	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_behavior,
-		_finish_live_behavior, behavior_runtime.preview_status, _workbench_plugin_context)
+	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_change,
+		_finish_live_change, _live_change_status, _workbench_plugin_context)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
 
-func _preview_live_behavior(candidate: Dictionary) -> Dictionary:
+func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
 	if shifting or building:
-		return {"ok": false, "message": "Wait for the environment to finish loading before swapping a behavior."}
+		return {"ok": false, "message": "Wait for the environment to finish loading before starting a live preview."}
+	if candidate.has("shoreline"):
+		return _shoreline.preview(candidate)
 	var binding: Dictionary = candidate.get("binding", {})
 	if not binding.is_empty() and (not _is_workshop(zone_id) or binding.get("zone") != zone_id):
 		return {"ok": false, "message": "Return to the Grid space used to author this plugin."}
@@ -363,11 +369,20 @@ func _preview_live_behavior(candidate: Dictionary) -> Dictionary:
 		return {"ok": false, "message": linked.error}
 	return {"ok": true, "message": "Plugin and test link active. Try the interaction in The Grid."}
 
-func _finish_live_behavior(action: String, draft_id: String) -> Dictionary:
+func _live_change_status(draft_id: String) -> String:
+	var shore_status := _shoreline.status(draft_id)
+	return shore_status if not shore_status.is_empty() else behavior_runtime.preview_status(draft_id)
+
+func _finish_live_change(action: String, draft_id: String) -> Dictionary:
 	if action == "restore":
 		behavior_runtime.reload_committed()
+		_shoreline.reload_committed()
 		return {"live": false}
 	var keep := action == "apply"
+	if _development:
+		_development.forget(draft_id)
+	if _shoreline.finish(draft_id, keep):
+		return {"live": true}
 	var was_live := behavior_runtime.finish(draft_id, keep)
 	var result: Dictionary = world_tools.finish_behavior_preview(draft_id, keep and was_live) if _is_workshop(zone_id) else {"ok": true}
 	return {"live": was_live, "warning": result.get("error", "")}
@@ -467,8 +482,44 @@ func _open_codex_console() -> void:
 	codex_console.minimize_requested.connect(_close_panel)
 	codex_console.layout_requested.connect(_layout_codex_console)
 	codex_console.voice_requested.connect(_set_voice)
+	codex_console.development_requested.connect(_codex_development_action)
 	_layout_codex_console(false)
 	codex_console.setup(console_lines, console_busy, voice_enabled)
+	_refresh_development_actions()
+	if _development:
+		_development.refresh()
+
+func _refresh_development_actions() -> void:
+	if is_instance_valid(codex_console) and _development:
+		var draft := _development.draft
+		codex_console.update_development(draft, _shoreline.available() and not shifting,
+			_shoreline.status(draft.get("id", "")) == "active")
+
+func _development_changed() -> void:
+	var draft := _development.draft
+	if draft.get("status") == "passed":
+		_console_notice("Shoreline checks passed. Preview live or review the diff.")
+	elif draft.get("status") == "failed":
+		_console_notice("The shoreline draft failed checks. Open the draft to inspect the results.")
+	_refresh_development_actions()
+
+func _codex_development_action(action: String) -> void:
+	if not _development or _development.draft.is_empty():
+		return
+	if action == "review":
+		_open_workbench()
+		return
+	var id: String = _development.draft.id
+	var result := await _development.command(action)
+	if result.has("error"):
+		_console_notice(result.error)
+	elif action == "live":
+		var activated := await _preview_live_change(result.live)
+		_console_notice(activated.message)
+	elif action == "discard":
+		_finish_live_change("discard", id)
+		_console_notice("Discarded the shoreline draft and restored its previous appearance.")
+	_refresh_development_actions()
 
 func _layout_codex_console(expanded: bool) -> void:
 	overlay.offset_left = 46 if expanded else 835
@@ -526,6 +577,8 @@ func _submit_codex_command(prompt: String) -> void:
 	console_busy = true
 	_console_notice("> " + prompt)
 	var context := _world_context()
+	context["shoreline_preview"] = zone_id == "beach"
+	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _is_workshop(zone_id) and not shifting:
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
 		context["entities"] = entities.slice(maxi(0, entities.size() - 64))
@@ -539,10 +592,30 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice(str(response.error))
 		return
 	console_busy = true
-	await _call_world_tool(response.plan)
+	if response.plan.tool == "draft_shoreline":
+		await _request_shoreline_draft(prompt, requested_zone)
+	else:
+		await _call_world_tool(response.plan)
 	console_busy = false
 	if is_instance_valid(codex_console):
 		codex_console.update_display(console_lines, false)
+
+func _request_shoreline_draft(prompt: String, requested_zone: int) -> void:
+	if not _development:
+		_console_notice("Open Start Euclid Workbench.cmd to develop and preview changes from F2.")
+		return
+	if not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not _shoreline.available():
+		_console_notice("Enter the beach with simulated surf to draft a shoreline change.")
+		return
+	var result := await _development.request_shoreline(prompt)
+	if result.has("error"):
+		_console_notice(result.error)
+	else:
+		var summary: String = result.draft.get("summary", "")
+		if not summary.is_empty():
+			_console_notice(summary)
+		if result.draft.status == "checking":
+			_console_notice("Review the diff while the shoreline checks run.")
 
 func _call_world_tool(plan: Dictionary) -> Dictionary:
 	var result := await _execute_world_tool(plan)
@@ -787,6 +860,8 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	if side != 0.0:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
+	_shoreline.attach(zone_root)
+	_refresh_development_actions()
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
@@ -1113,6 +1188,11 @@ func _setup_gateway() -> void:
 	grid_agent = GridAgentClient.new()
 	add_child(grid_agent)
 	grid_agent.configure(gateway_url, gateway_token)
+	if not _workbench_capability.is_empty() and not gateway_url.is_empty() and not gateway_token.is_empty():
+		_development = WorldDevelopment.new()
+		add_child(_development)
+		_development.configure(gateway_url, gateway_token, _workbench_capability)
+		_development.changed.connect(_development_changed)
 	request = HTTPRequest.new()
 	request.timeout = 3
 	add_child(request)

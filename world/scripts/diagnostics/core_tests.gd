@@ -193,7 +193,7 @@ func _check_linked_plugin(path: String) -> void:
 	runtime.finish("test-package", false)
 	tools.finish_behavior_preview("test-package", false)
 	controller._physics_process(2.0)
-	_check(not plate_node.has_node("BehaviorHost") and is_zero_approx(leaf.position.y) and runtime.available("pressure_plate").is_empty(),
+	_check(not plate_node.has_node("BehaviorHost") and is_zero_approx(leaf.position.y) and runtime.registry.definition("test_plate").is_empty(),
 		"discard unregisters the plugin, removes its request, and closes the door")
 	_check(runtime.preview(candidate).ok and tools.preview_behavior("test-package", plate.id, binding).ok
 		and runtime.finish("test-package", true) and tools.finish_behavior_preview("test-package", true).ok, "commit keeps the registered plugin and saves its link")

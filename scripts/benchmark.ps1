@@ -5,7 +5,8 @@ param(
     [int]$Width = 1440,
     [int]$Height = 900,
     [double]$MinimumFps = 0,
-    [double]$MaximumP95Ms = 0
+    [double]$MaximumP95Ms = 0,
+    [long]$WindowId = 0
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -24,7 +25,9 @@ $env:CONSTRUCT_BENCHMARK_DIR = $OutputDirectory
 $env:CONSTRUCT_BENCHMARK_ZONE = $Zone
 Remove-Item Env:CONSTRUCT_BENCHMARK_SUITE -ErrorAction SilentlyContinue
 try {
-    $lines = @(& $godotPath --path (Join-Path $projectRoot 'world') --windowed --resolution "${Width}x${Height}" --quit-after 20000 -- --benchmark "--quality=$Quality" 2>&1 | ForEach-Object { Write-Host $_; "$_" })
+    $embedding = @()
+    if ($WindowId -gt 0) { $embedding = @('--wid', "$WindowId", '--audio-driver', 'Dummy') }
+    $lines = @(& $godotPath --path (Join-Path $projectRoot 'world') --windowed --resolution "${Width}x${Height}" @embedding --quit-after 20000 -- --benchmark "--quality=$Quality" 2>&1 | ForEach-Object { Write-Host $_; "$_" })
     $exitCode = $LASTEXITCODE
     $lines | Set-Content -LiteralPath (Join-Path $OutputDirectory 'run.log')
     if ($exitCode -ne 0 -or (($lines -join "`n") -match '(?m)^(SCRIPT ERROR|ERROR):')) { throw 'Benchmark failed; inspect run.log.' }

@@ -5,17 +5,8 @@ const Backdrop = preload("res://scripts/zones/grid_backdrop.gd")
 const PLAYABLE_HALF_SIZE := 64.0
 
 ## Builds only into the detached zone root. Editing is attached separately on the main thread.
-static func build(root: Node3D) -> bool:
-	var floor_mesh := PlaneMesh.new()
-	floor_mesh.size = Vector2(640, 640)
-	var material := ShaderMaterial.new()
-	material.shader = FLOOR_SHADER
-	var floor_visual := MeshInstance3D.new()
-	floor_visual.mesh = floor_mesh
-	floor_visual.material_override = material
-	floor_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(floor_visual)
-
+static func build(root: Node3D, appearance: Dictionary) -> bool:
+	root.add_child(scenery(appearance))
 	var floor_body := StaticBody3D.new()
 	floor_body.name = "GridFloor"
 	root.add_child(floor_body)
@@ -23,9 +14,26 @@ static func build(root: Node3D) -> bool:
 	for edge in [-PLAYABLE_HALF_SIZE, PLAYABLE_HALF_SIZE]:
 		_box_collider(floor_body, Vector3(edge, 0.6, 0), Vector3(0.2, 1.2, 128))
 		_box_collider(floor_body, Vector3(0, 0.6, edge), Vector3(128, 1.2, 0.2))
-
-	Backdrop.build(root)
 	return true
+
+static func scenery(appearance: Dictionary) -> Node3D:
+	var root := Node3D.new()
+	root.name = "GridScenery"
+	root.set_meta("appearance", appearance)
+	var floor_mesh := PlaneMesh.new()
+	floor_mesh.size = Vector2(640, 640)
+	var material := ShaderMaterial.new()
+	material.shader = FLOOR_SHADER
+	material.set_shader_parameter("floor_spacing", float(appearance.floor_spacing))
+	var floor_visual := MeshInstance3D.new()
+	floor_visual.name = "FloorVisual"
+	floor_visual.mesh = floor_mesh
+	floor_visual.material_override = material
+	floor_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(floor_visual)
+
+	Backdrop.build(root, float(appearance.wall_height))
+	return root
 
 static func workstation(root: Node3D, at: Vector3) -> void:
 	var body := StaticBody3D.new()

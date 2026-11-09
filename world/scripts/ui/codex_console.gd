@@ -100,7 +100,8 @@ func focus_entry() -> void:
 func update_development(draft: Dictionary, can_preview: bool, live: bool) -> void:
 	_draft_strip.visible = not draft.is_empty()
 	_preview_draft.disabled = not can_preview or draft.get("status") != "passed" or live
-	_preview_draft.text = "Preview active" if live else "Preview live"
+	var label := "Preview Grid reload" if draft.get("activation") == "reload_grid" else "Preview live"
+	_preview_draft.text = "Preview active" if live else label
 
 func _draft_button(label: String, action: String) -> Button:
 	var button := Button.new()

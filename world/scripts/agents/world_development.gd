@@ -20,12 +20,16 @@ func configure(url: String, token: String, capability: String) -> void:
 	add_child(timer)
 	timer.start()
 
-func request_shoreline(prompt: String) -> Dictionary:
-	return await _send("shoreline", {"prompt": prompt})
+func request(tool: String, prompt: String, context: Dictionary) -> Dictionary:
+	match tool:
+		"draft_shoreline": return await _send("shoreline", {"prompt": prompt})
+		"draft_grid": return await _send("grid", {"prompt": prompt})
+		"draft_behavior": return await _send("author", {"prompt": prompt, "context": context, "from_world": true})
+	return {"error": "Unknown development request."}
 
 func command(action: String) -> Dictionary:
 	if draft.is_empty():
-		return {"error": "There is no shoreline draft to review."}
+		return {"error": "There is no development draft to review."}
 	return await _send(action, {"id": draft.id})
 
 func refresh() -> void:
@@ -46,8 +50,9 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 	if not response.has("error"):
 		var item: Variant = response.get("draft")
 		var next := {}
-		if item is Dictionary and item.get("shoreline", false):
-			next = {"id": item.id, "status": item.status, "summary": item.summary, "error": item.error}
+		if item is Dictionary and item.get("from_world", false):
+			next = {"id": item.id, "status": item.status, "summary": item.summary, "error": item.error,
+				"activation": item.activation, "subject": item.subject, "preview_zone": item.preview_zone}
 		if next != draft:
 			draft = next
 			changed.emit()

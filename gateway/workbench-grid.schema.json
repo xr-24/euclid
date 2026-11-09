@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "supported": {"type": "boolean"},
+    "summary": {"type": "string"},
+    "floor_spacing": {"type": "number", "description": "Floor line spacing in meters, 1 to 8"},
+    "wall_height": {"type": "number", "description": "Backdrop height multiplier, 0.5 to 1.5"}
+  },
+  "required": ["supported", "summary", "floor_spacing", "wall_height"],
+  "additionalProperties": false
+}

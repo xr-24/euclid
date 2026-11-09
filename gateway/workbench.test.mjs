@@ -8,6 +8,7 @@ import path from 'node:path';
 import { createGateway } from './server.mjs';
 import { fingerprint } from './workbench-source.mjs';
 import { shorelinePath } from './workbench-shoreline.mjs';
+import { gridAppearance } from './workbench-grid.mjs';
 
 test('workbench checks and commits an isolated two-file Git draft, and reverts it', async t => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'euclid-workbench-test-'));
@@ -37,6 +38,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   await writeFile(path.join(root, 'world/data/behavior_plugins.json'), JSON.stringify({ schema_version: 1, plugins: [{ id: 'proximity_pulse' }] }));
   const shoreOriginal = { schema_version: 1, foam_strength: 1, foam_softness: 1 };
   await writeFile(path.join(root, shorelinePath), JSON.stringify(shoreOriginal));
+  const gridOriginal = { schema_version: 1, floor_spacing: 2, wall_height: 1 };
+  await writeFile(path.join(root, gridAppearance.file), JSON.stringify(gridOriginal));
   git('init', '-q');
   git('config', 'user.name', 'Euclid Test');
   git('config', 'user.email', 'test@example.invalid');
@@ -49,6 +52,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   let playing = false;
   let finishShoreChecks;
   const shoreChecks = new Promise(resolve => { finishShoreChecks = resolve; });
+  let finishBehaviorChecks;
+  const behaviorChecks = new Promise(resolve => { finishBehaviorChecks = resolve; });
   const runner = {
     async check(draft, output) {
       if (draft.names[0] === shorelinePath) {
@@ -56,6 +61,11 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
         await shoreChecks;
         return;
       }
+      if (draft.names[0] === gridAppearance.file) {
+        assert.deepEqual(JSON.parse(await readFile(path.join(root, gridAppearance.file), 'utf8')), gridOriginal);
+        return;
+      }
+      if (draft.binding) return behaviorChecks;
       assert.equal(await readFile(file, 'utf8'), original);
       assert.match(await readFile(path.join(draft.worktree, name), 'utf8'), /VALUE := 2/);
       assert.match(await readFile(path.join(draft.worktree, other), 'utf8'), /"New"/);
@@ -75,6 +85,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
     const gateway = await createGateway({ dataDir, workbenchRoot: root, workbenchOptions: {
       runner, author: async () => proposedPackage, designShoreline: async ({ request }) => ({
         supported: true, summary: 'Soften the foam.', foam_strength: 1, foam_softness: request === 'Unsafe' ? 3 : 1.5,
+      }), designGrid: async ({ request }) => ({
+        supported: true, summary: 'Space the lines apart.', floor_spacing: request === 'Unsafe' ? 9 : 4, wall_height: 1,
       }), propose: async () => ({ summary: 'Raise the value and update the label.', edits: [
         { file: name, original: 'VALUE := 1', replacement: 'VALUE := 2' },
         { file: other, original: '"Old"', replacement: '"New"' },
@@ -197,4 +209,29 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const accepted = await call('apply', { id: shoreId, message: 'Soften shore foam' });
   assert.equal(accepted.code, 200, JSON.stringify(accepted.body));
   assert.deepEqual(JSON.parse(await readFile(path.join(root, shorelinePath), 'utf8')), preview.body.live.shoreline);
+
+  assert.equal((await call('grid', { prompt: 'Widen the floor lines' }, false)).code, 403);
+  assert.equal((await call('grid', { prompt: 'Unsafe' })).code, 400);
+  const grid = await call('grid', { prompt: 'Spread out the Grid floor lines' });
+  assert.equal(grid.code, 200, JSON.stringify(grid.body));
+  assert.equal(grid.body.draft.activation, 'reload_grid');
+  assert.equal(grid.body.draft.from_world, true);
+  const gridId = grid.body.draft.id;
+  for (let tries = 0; tries < 30 && (await call('state')).body.draft.status === 'checking'; tries++) await sleep(20);
+  assert.deepEqual((await call('live', { id: gridId })).body.live, { draft: gridId, grid: { ...gridOriginal, floor_spacing: 4 } });
+  assert.equal((await call('discard', { id: gridId })).body.draft, null);
+  assert.deepEqual(JSON.parse(await readFile(path.join(root, gridAppearance.file), 'utf8')), gridOriginal);
+
+  const inWorld = await call('author', { prompt: 'Create a door plate', from_world: true, context: {
+    zone: 'construct', entities: [{ id: plate, type: 'pressure_plate' }, { id: door, type: 'sliding_door' }],
+  } });
+  assert.equal(inWorld.code, 200, JSON.stringify(inWorld.body));
+  const behaviorId = inWorld.body.draft.id;
+  assert.equal(inWorld.body.draft.activation, 'live');
+  assert.equal(inWorld.body.draft.status, 'checking');
+  assert.equal((await call('live', { id: behaviorId })).code, 400);
+  finishBehaviorChecks();
+  for (let tries = 0; tries < 30 && (await call('state')).body.draft.status === 'checking'; tries++) await sleep(20);
+  assert.deepEqual((await call('live', { id: behaviorId })).body.live.binding, packageDraft.binding);
+  assert.equal((await call('discard', { id: behaviorId })).body.draft, null);
 });

@@ -18,6 +18,7 @@ const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
+const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
 var manifest: Dictionary
@@ -81,6 +82,8 @@ var _workbench_capability := ""
 var _workbench_panel: Control
 var _development: WorldDevelopment
 var _shoreline := ShorelineLook.new()
+var _grid_scenery := GridScenery.new()
+var _development_action_busy := false
 
 func _ready() -> void:
 	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
@@ -127,6 +130,22 @@ func _ready() -> void:
 	elif "--capture" in OS.get_cmdline_user_args():
 		smoke_mode = true
 		call_deferred("_capture_previews")
+	else:
+		_report_boot_ready()
+
+func _report_boot_ready() -> void:
+	var receipt := OS.get_environment("EUCLID_BOOT_READY")
+	OS.unset_environment("EUCLID_BOOT_READY")
+	if receipt.is_empty():
+		return
+	await get_tree().process_frame
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+	if is_instance_valid(zone_root) and is_instance_valid(player) and camera.is_current():
+		var file := FileAccess.open(receipt, FileAccess.WRITE)
+		if file:
+			file.store_string(str(OS.get_process_id()))
+			file.close()
 
 func _setup_input() -> void:
 	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "interact": KEY_E, "travel": KEY_TAB, "jump": KEY_SPACE, "dive": KEY_C}
@@ -354,6 +373,8 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 		return {"ok": false, "message": "Wait for the environment to finish loading before starting a live preview."}
 	if candidate.has("shoreline"):
 		return _shoreline.preview(candidate)
+	if candidate.has("grid"):
+		return _grid_scenery.preview(candidate)
 	var binding: Dictionary = candidate.get("binding", {})
 	if not binding.is_empty() and (not _is_workshop(zone_id) or binding.get("zone") != zone_id):
 		return {"ok": false, "message": "Return to the Grid space used to author this plugin."}
@@ -371,17 +392,21 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 
 func _live_change_status(draft_id: String) -> String:
 	var shore_status := _shoreline.status(draft_id)
-	return shore_status if not shore_status.is_empty() else behavior_runtime.preview_status(draft_id)
+	if not shore_status.is_empty():
+		return shore_status
+	var grid_status := _grid_scenery.status(draft_id)
+	return grid_status if not grid_status.is_empty() else behavior_runtime.preview_status(draft_id)
 
 func _finish_live_change(action: String, draft_id: String) -> Dictionary:
 	if action == "restore":
 		behavior_runtime.reload_committed()
 		_shoreline.reload_committed()
+		_grid_scenery.reload_committed()
 		return {"live": false}
 	var keep := action == "apply"
 	if _development:
 		_development.forget(draft_id)
-	if _shoreline.finish(draft_id, keep):
+	if _shoreline.finish(draft_id, keep) or _grid_scenery.finish(draft_id, keep):
 		return {"live": true}
 	var was_live := behavior_runtime.finish(draft_id, keep)
 	var result: Dictionary = world_tools.finish_behavior_preview(draft_id, keep and was_live) if _is_workshop(zone_id) else {"ok": true}
@@ -414,7 +439,17 @@ func _restart_workbench() -> void:
 	arguments.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "--"]))
 	arguments.append_array(OS.get_cmdline_user_args())
 	OS.set_environment("EUCLID_WORKBENCH_TOKEN", _workbench_capability)
-	OS.set_restart_on_exit(true, arguments)
+	var supervisor := OS.get_environment("EUCLID_BOOT_NODE")
+	if supervisor.is_empty():
+		OS.set_restart_on_exit(true, arguments)
+	else:
+		var command := PackedStringArray([ProjectSettings.globalize_path("res://../scripts/recovery.mjs"),
+			"restart", OS.get_executable_path(), str(OS.get_process_id())])
+		command.append_array(arguments)
+		if OS.create_process(supervisor, command) == -1:
+			OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
+			_workbench_panel.show_error("Euclid could not start the recovery supervisor. Restart cancelled.")
+			return
 	get_tree().quit()
 
 func _request_grid_palette() -> void:
@@ -492,24 +527,32 @@ func _open_codex_console() -> void:
 func _refresh_development_actions() -> void:
 	if is_instance_valid(codex_console) and _development:
 		var draft := _development.draft
-		codex_console.update_development(draft, _shoreline.available() and not shifting,
-			_shoreline.status(draft.get("id", "")) == "active")
+		var available := false
+		match draft.get("subject", ""):
+			"shoreline": available = _shoreline.available()
+			"grid": available = _grid_scenery.available()
+			"behavior": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
+		codex_console.update_development(draft, available and not shifting and not _development_action_busy,
+			_live_change_status(draft.get("id", "")) == "active")
 
 func _development_changed() -> void:
 	var draft := _development.draft
 	if draft.get("status") == "passed":
-		_console_notice("Shoreline checks passed. Preview live or review the diff.")
+		_console_notice("Draft checks passed. Preview the change or review the diff.")
 	elif draft.get("status") == "failed":
-		_console_notice("The shoreline draft failed checks. Open the draft to inspect the results.")
+		_console_notice("The draft failed checks. Open the draft to inspect the results.")
 	_refresh_development_actions()
 
 func _codex_development_action(action: String) -> void:
-	if not _development or _development.draft.is_empty():
+	if not _development or _development.draft.is_empty() or _development_action_busy or shifting:
 		return
 	if action == "review":
 		_open_workbench()
+		_workbench_panel.show_review()
 		return
 	var id: String = _development.draft.id
+	_development_action_busy = true
+	_refresh_development_actions()
 	var result := await _development.command(action)
 	if result.has("error"):
 		_console_notice(result.error)
@@ -517,8 +560,9 @@ func _codex_development_action(action: String) -> void:
 		var activated := await _preview_live_change(result.live)
 		_console_notice(activated.message)
 	elif action == "discard":
-		_finish_live_change("discard", id)
-		_console_notice("Discarded the shoreline draft and restored its previous appearance.")
+		var finished := _finish_live_change("discard", id)
+		_console_notice("Discarded the draft and restored the previous version." if finished.live else "Discarded the draft.")
+	_development_action_busy = false
 	_refresh_development_actions()
 
 func _layout_codex_console(expanded: bool) -> void:
@@ -578,6 +622,7 @@ func _submit_codex_command(prompt: String) -> void:
 	_console_notice("> " + prompt)
 	var context := _world_context()
 	context["shoreline_preview"] = zone_id == "beach"
+	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _is_workshop(zone_id) and not shifting:
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
@@ -592,22 +637,24 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice(str(response.error))
 		return
 	console_busy = true
-	if response.plan.tool == "draft_shoreline":
-		await _request_shoreline_draft(prompt, requested_zone)
+	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior"]:
+		await _request_development_draft(response.plan.tool, prompt, requested_zone)
 	else:
 		await _call_world_tool(response.plan)
 	console_busy = false
 	if is_instance_valid(codex_console):
 		codex_console.update_display(console_lines, false)
 
-func _request_shoreline_draft(prompt: String, requested_zone: int) -> void:
+func _request_development_draft(tool: String, prompt: String, requested_zone: int) -> void:
 	if not _development:
 		_console_notice("Open Start Euclid Workbench.cmd to develop and preview changes from F2.")
 		return
-	if not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not _shoreline.available():
-		_console_notice("Enter the beach with simulated surf to draft a shoreline change.")
+	var available := _shoreline.available() if tool == "draft_shoreline" else _grid_scenery.available()
+	if not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not available:
+		_console_notice("Enter the beach with simulated surf to draft a shoreline change." if tool == "draft_shoreline"
+			else "Enter a Grid space to draft this change.")
 		return
-	var result := await _development.request_shoreline(prompt)
+	var result := await _development.request(tool, prompt, _workbench_plugin_context() if tool == "draft_behavior" else {})
 	if result.has("error"):
 		_console_notice(result.error)
 	else:
@@ -615,7 +662,7 @@ func _request_shoreline_draft(prompt: String, requested_zone: int) -> void:
 		if not summary.is_empty():
 			_console_notice(summary)
 		if result.draft.status == "checking":
-			_console_notice("Review the diff while the shoreline checks run.")
+			_console_notice("Review the diff while the checks run.")
 
 func _call_world_tool(plan: Dictionary) -> Dictionary:
 	var result := await _execute_world_tool(plan)
@@ -766,7 +813,7 @@ func _label3d(text: String, at: Vector3, color := Color.WHITE, size := 45) -> La
 
 ## Instant zone change (restoring a save, tests, captures). Travel uses _shift instead.
 func _load_zone(destination: String) -> void:
-	var built := _build_zone(destination)
+	var built := _build_zone(destination, _grid_scenery.profile())
 	if zone_root:
 		zone_root.free()
 	_commit_zone(built)
@@ -784,20 +831,20 @@ func _load_zone(destination: String) -> void:
 
 ## Build a zone into a detached root. Safe to run on a worker thread: nothing here touches the
 ## scene tree, and the result is only handed to the world by _commit_zone on the main thread.
-func _build_zone(destination: String) -> Dictionary:
+func _build_zone(destination: String, grid_appearance: Dictionary) -> Dictionary:
 	build_mutex.lock()
-	var built := _build_zone_locked(destination)
+	var built := _build_zone_locked(destination, grid_appearance)
 	build_mutex.unlock()
 	return built
 
-func _build_zone_locked(destination: String) -> Dictionary:
+func _build_zone_locked(destination: String, grid_appearance: Dictionary) -> Dictionary:
 	build_root = Node3D.new()
 	build_root.name = "Zone_" + destination
 	build_interactables = []
 	build_agent_labels = {}
 	var zone := _zone(destination)
 	var is_grid: bool = destination == "construct" or zone.get("template") == "grid"
-	var art := (is_grid and Grid.build(build_root)) \
+	var art := (is_grid and Grid.build(build_root, grid_appearance)) \
 		or (destination == "villa" and Villa.build(self)) or (destination == "beach" and WorldArt.shore(self))
 	if not art:
 		var floor_y := -0.26 if destination == "villa" else -0.2
@@ -835,7 +882,8 @@ func _build_zone_async(destination: String) -> Dictionary:
 		await get_tree().process_frame
 	building = true
 	var result := {}
-	var task := WorkerThreadPool.add_task(func() -> void: result.merge(_build_zone(destination)), true, "Build " + destination)
+	var appearance := _grid_scenery.profile()
+	var task := WorkerThreadPool.add_task(func() -> void: result.merge(_build_zone(destination, appearance)), true, "Build " + destination)
 	while not WorkerThreadPool.is_task_completed(task):
 		await get_tree().process_frame
 	WorkerThreadPool.wait_for_task_completion(task)
@@ -847,6 +895,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		scene_animations.leave_workshop()
 	zone_id = built.id
 	zone_root = built.root
+	_grid_scenery.attach(zone_root)
 	if world_tools != null:
 		world_tools.attach(null)
 		if not workshops.has("construct"):
@@ -949,6 +998,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	_update_agent_labels()
 	_announce_zone()
 	shifting = false
+	_refresh_development_actions()
 	_save()
 
 ## Timing of the heavier steps of a shift, printed only by the automated preview capture.

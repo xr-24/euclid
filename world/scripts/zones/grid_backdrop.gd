@@ -3,7 +3,7 @@ extends RefCounted
 const WALL_SHADER = preload("res://shaders/grid_wall.gdshader")
 
 ## Detached set dressing. The wall and its suspended fragments are outside collision.
-static func build(root: Node3D) -> void:
+static func build(root: Node3D, height_scale: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 71023
 	var pieces: Array[Transform3D] = []
@@ -46,6 +46,7 @@ static func build(root: Node3D) -> void:
 		batch.set_instance_transform(i, pieces[i])
 	var walls := MultiMeshInstance3D.new()
 	walls.multimesh = batch
+	walls.scale.y = height_scale
 	walls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(walls)
 

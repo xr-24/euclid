@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode unshaded;
 #include "res://shaders/construct_fx.gdshaderinc"
 
+uniform float floor_spacing = 2.0;
+
 float grid_lines(vec2 point, float spacing, float width) {
 	vec2 cell = point / spacing;
 	vec2 footprint = max(fwidth(cell), vec2(0.0001));
@@ -21,8 +23,8 @@ void fragment() {
 	float distance_to_eye = length(point - CAMERA_POSITION_WORLD);
 	vec2 block = floor(point.xz / vec2(4.0, 8.0));
 	float tile = fract(sin(dot(block, vec2(32.47, 71.41))) * 2419.82);
-	float fine = grid_lines(point.xz, 2.0, 0.0028) * (1.0 - smoothstep(17.0, 62.0, distance_to_eye));
-	float major = grid_lines(point.xz, 8.0, 0.0021) * (1.0 - smoothstep(45.0, 135.0, distance_to_eye));
+	float fine = grid_lines(point.xz, floor_spacing, 0.0028) * (1.0 - smoothstep(17.0, 62.0, distance_to_eye));
+	float major = grid_lines(point.xz, floor_spacing * 4.0, 0.0021) * (1.0 - smoothstep(45.0, 135.0, distance_to_eye));
 	float grain = 0.5 + 0.5 * sin(point.x * 3.1 + sin(point.z * 7.2)) * sin(point.z * 11.7);
 	vec3 surface = vec3(0.011, 0.007, 0.013) * (0.7 + tile * 0.55 + grain * 0.11);
 	vec3 traces = vec3(0.35, 0.017, 0.028) * (fine * 0.063 + major * 0.087 * tile);

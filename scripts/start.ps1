@@ -1,10 +1,17 @@
-param([switch]$Editor, [switch]$NoGateway, [switch]$Compatibility, [ValidateSet('balanced','cinematic')][string]$Quality, [switch]$Windowed, [switch]$Workbench)
+param([switch]$Editor, [switch]$NoGateway, [switch]$Compatibility, [ValidateSet('balanced','cinematic')][string]$Quality, [switch]$Windowed, [switch]$Workbench, [switch]$Recovery)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $godotPath = Join-Path $projectRoot '.tools\godot\Godot_v4.7.2-stable_win64.exe'
 if ($env:GODOT_BIN) { $godotPath = $env:GODOT_BIN }
 if (-not (Test-Path -LiteralPath $godotPath)) { throw 'Run scripts\setup.ps1 first, or set GODOT_BIN to your Godot 4 executable.' }
+$godotPath = (Resolve-Path -LiteralPath $godotPath).Path
+$supervisor = Join-Path $PSScriptRoot 'recovery.mjs'
+if ($Recovery) {
+    & node $supervisor recovery $godotPath
+    exit $LASTEXITCODE
+}
 $worldPath = Join-Path $projectRoot 'world'
+Remove-Item Env:EUCLID_WORKBENCH_TOKEN -ErrorAction SilentlyContinue
 if (-not (Test-Path -LiteralPath (Join-Path $worldPath '.godot\imported'))) {
     & $godotPath --headless --path $worldPath --editor --import
     if ($LASTEXITCODE -ne 0) { throw 'Initial Godot asset import failed.' }
@@ -16,7 +23,7 @@ if (-not $NoGateway) {
     $health = $null
     try { $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2 } catch {}
     if ($health.service -eq 'construct-gateway') {
-        if ($health.version -ge 12) {
+        if ($health.version -ge 13) {
             $gatewayReady = $true
         } else {
             & (Join-Path $PSScriptRoot 'stop-gateway.ps1')
@@ -45,10 +52,15 @@ if (-not $NoGateway) {
     Remove-Item Env:CONSTRUCT_GATEWAY_URL -ErrorAction SilentlyContinue
     Remove-Item Env:CONSTRUCT_GATEWAY_TOKEN -ErrorAction SilentlyContinue
 }
-$godotArguments = @('--path', ('"' + $worldPath + '"'), '--resolution', '1920x1080', '--log-file', ('"' + (Join-Path $localDir 'world.log') + '"'))
 if ($Editor) {
-    $godotArguments += '--editor'
-} elseif ($Windowed) {
+    if ($Workbench) { throw 'Workbench mode requires the game launcher.' }
+    $editorArguments = @('--path', ('"' + $worldPath + '"'), '--editor')
+    if ($Compatibility) { $editorArguments += @('--rendering-method', 'gl_compatibility') }
+    Start-Process -FilePath $godotPath -ArgumentList $editorArguments -WorkingDirectory $projectRoot
+    return
+}
+$godotArguments = @('--path', $worldPath, '--resolution', '1920x1080')
+if ($Windowed) {
     $godotArguments += '--windowed'
 } else {
     $godotArguments += '--fullscreen'
@@ -61,4 +73,5 @@ if ($Workbench) {
 if ($Quality -or $Workbench) { $godotArguments += '--' }
 if ($Quality) { $godotArguments += "--quality=$Quality" }
 if ($Workbench) { $godotArguments += '--workbench' }
-Start-Process -FilePath $godotPath -ArgumentList $godotArguments -WorkingDirectory $projectRoot
+& node $supervisor start $godotPath @godotArguments
+exit $LASTEXITCODE

@@ -8,6 +8,12 @@ Double-click **Start Euclid.cmd**. This starts a local gateway and opens the wor
 
 For another Windows machine, install Node 22 or later, then run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1` once. The setup script downloads the pinned Godot build from its official release and verifies its SHA512 checksum. It does not install Godot system-wide.
 
+A successful launch from a clean Git checkout records that revision for recovery.
+If Euclid fails to start, double-click **Start Euclid Recovery.cmd**. It runs the
+last recorded revision in a separate checkout with separate saves and no gateway.
+Allow about 2.25 GiB for the temporary art copy. Startup logs are under
+`.local/recovery`.
+
 | Control | Action |
 | --- | --- |
 | WASD and mouse | Move and look |
@@ -170,6 +176,18 @@ the previous look. Open the draft and **Commit** to keep the previewed settings.
 This live edit covers foam strength and edge softness on simulated surf. It
 uses the same Git draft, check, and revert commands as the rest of Workbench.
 
+### Ask from The Grid
+
+In Workbench mode, press **F2** and ask **Spread the Grid floor lines farther
+apart** or **Make the distant Grid walls taller**. After checks pass, **Preview
+Grid reload** replaces the scenery in place. Your position, agent, and placed
+objects stay in the world. These settings apply to the shared Grid template.
+
+You can also ask for a new behavior plugin for existing objects. For example,
+place a pressure plate and sliding door, then ask **Write a plugin that opens the
+door while I stand on the plate**. The same review, preview, and discard actions
+are available after checks pass.
+
 ### Edit source in Workbench
 
 Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot
@@ -189,8 +207,9 @@ last** adds a revert commit when the last Workbench commit is at the branch tip.
 
 **Restart Euclid** saves your current environment, position, and view, then
 relaunches Euclid from the updated source. The window briefly closes during the
-restart. Live scene tools such as prefab placement and animation previews apply
-while the world is running.
+restart. Workbench identifies whether a draft supports a live swap, a Grid
+scenery reload, or a restart. Preview a live change before committing to keep
+it active in the running world.
 
 Drafts support up to six existing text files, 64 KiB per file and 128 KiB total.
 The local baseline tracks source, build tools, and asset metadata. Large binary

@@ -86,23 +86,33 @@ starts without the live gateway credentials. A failed check leaves the original
 source and live world saves untouched. Project and save isolation are filesystem
 boundaries. Reviewed code runs with the developer's local account permissions.
 
-The world coordinator writes player state before requesting Godot's desktop
-restart. The restarted process restores the usual saved state and reconnects to
-the existing gateway.
+The world coordinator writes player state before asking the launcher to restart.
+The restarted process restores the usual saved state and reconnects to the
+existing gateway. `scripts/recovery.mjs` waits for a fresh startup receipt from
+the process and advances `refs/euclid/last-good` only when the same clean Git
+revision is present before and after boot. **Start Euclid Recovery.cmd** starts
+that revision in a temporary detached worktree with an independent save profile.
+The supervisor and launcher sit outside the Workbench source allowlist.
 
 ## In-world development requests
 
-The F2 planner can route a beach foam request to the privileged Workbench
-transport. This route writes one versioned appearance file into the ordinary
-Git draft and starts isolated checks. F2 tracks the draft and offers review,
-preview, and discard actions. F4 owns the diff and commit controls. Activation
-is a separate user action after checks pass.
+The F2 planner routes shoreline appearance, Grid scenery, and new linked
+behavior requests to the privileged Workbench transport. Each route creates an
+ordinary Git draft and starts isolated checks. F2 tracks the draft and offers
+review, preview, and discard. F4 owns the diff and commit controls. Drafts
+describe their activation boundary as a live swap, Grid scenery reload, or
+restart. Preview from F2 is a separate user action after checks pass.
 
 `rendering/shoreline_look.gd` validates the appearance profile and applies it
 to the attached beach's private surf and terrain materials. Commit promotes the
 preview to the active profile. Discard restores the previous profile. The host
 operates on material uniforms while the solver and its gameplay probes continue
 on the existing scene nodes.
+
+`zones/grid_scenery.gd` manages the shared Grid template's replaceable visuals.
+It hands the zone builder a profile snapshot and swaps only the floor visual
+and backdrop on the main thread. The collision, anchors, entity nodes, player,
+and agent bridge retain their identity during a scenery reload.
 
 ## Live behavior plugins
 

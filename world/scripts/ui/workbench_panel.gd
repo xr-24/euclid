@@ -277,7 +277,6 @@ func _command(action: String, arguments := {}) -> void:
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
-			var live_subject := "shoreline look" if draft is Dictionary and draft.get("shoreline", false) else "behavior"
 			_buffers.clear()
 			_message.clear()
 			if not _source.is_empty():
@@ -286,7 +285,7 @@ func _command(action: String, arguments := {}) -> void:
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
-				"apply": "Committed %s. The %s stays active." % [short, live_subject] if finished.live else "Committed %s. Restart Euclid to load it here." % short,
+				"apply": "Committed %s. The preview stays active." % short if finished.live else "Committed %s. Restart Euclid to load it here." % short,
 				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
@@ -328,6 +327,9 @@ func _poll(force := false) -> void:
 		return
 	_show_state(result)
 
+func show_review() -> void:
+	_tabs.current_tab = 1
+
 func _show_state(result: Dictionary) -> void:
 	_state = result
 	var draft: Variant = result.get("draft")
@@ -339,7 +341,9 @@ func _show_state(result: Dictionary) -> void:
 			_log.set_caret_line(_log.get_line_count() - 1)
 		var messages := {"staged": "Review the Git diff before running the edited code.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
-		_status.text = "%s  ·  %s" % [draft.name, draft.error if draft.status == "failed" else messages[draft.status]]
+		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload", "restart": "Restart Euclid"}
+		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
+			draft.error if draft.status == "failed" else messages[draft.status]]
 		if draft.status == "staged" and not draft.get("summary", "").is_empty():
 			_status.text = draft.summary + " Review the diff before previewing."
 		if result.get("playing", false):
@@ -379,8 +383,9 @@ func _sync_controls() -> void:
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
 	_buttons.check.disabled = blocked or not staged or playing
 	var live := _live_status()
+	_buttons.live.text = "Preview Grid reload" if staged and draft.get("activation") == "reload_grid" else "Preview live"
 	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active" \
-		or (draft.get("shoreline", false) and draft.status != "passed")
+		or (draft.get("checked_preview", false) and draft.status != "passed")
 	var passed: bool = staged and draft.status == "passed"
 	_buttons.play.disabled = blocked or not passed or playing
 	_buttons.stop.disabled = blocked or not playing

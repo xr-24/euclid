@@ -90,6 +90,24 @@ The world coordinator writes player state before requesting Godot's desktop
 restart. The restarted process restores the usual saved state and reconnects to
 the existing gateway.
 
+## Live behavior plugins
+
+`world/data/behavior_plugins.json` registers behavior IDs, eligible entity
+types, and numeric settings. The Grid inspector and agent tools read this same
+catalog. Entity and prefab records store only a behavior ID and settings. A
+trusted behavior implementation lives at `scripts/plugins/<id>.gd` and returns a
+finite intensity from zero to one through `sample(seconds, distance, settings)`.
+The version 1 contract uses a pure `RefCounted` evaluator. Each entity's host owns
+its clock and material instance, and the evaluator receives read-only settings.
+
+The privileged Workbench endpoint serves the exact source of a single registered
+behavior from its reviewed Git draft. The coordinator activates it on the main
+thread after compilation and sample probes. Existing hosts read the active
+evaluator without replacing their entity nodes. Discard restores the committed
+evaluator, and a successful commit retains the active one. A preview that returns
+an invalid value falls back to the previous evaluator. This lifecycle separates
+state and cleanup. Trusted in-process GDScript retains the app's privileges.
+
 ## Ownership and threading
 
 The coordinator serializes builds with a mutex because material templates and generated assets are shared. Each build has its own `ZoneBuildContext`; its root, anchor list and avatar labels cannot alias another build. Only `_commit_zone` attaches a completed root to the live tree. Disposing a warm-up root does not dispose shared resources or the active zone.

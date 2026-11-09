@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "proximity_pulse",
+      "name": "Proximity pulse",
+      "entity_type": "traffic_cone",
+      "settings": {
+        "radius": {"label": "Radius (m)", "minimum": 0.5, "maximum": 12.0, "default": 4.0}
+      }
+    }
+  ]
+}

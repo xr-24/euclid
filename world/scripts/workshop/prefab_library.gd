@@ -3,7 +3,7 @@ extends RefCounted
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
-const PROPERTIES := ["type", "yaw", "scale", "color", "asset_id", "animation"]
+const PROPERTIES := ["type", "yaw", "scale", "color", "asset_id", "animation", "behavior"]
 const LIMIT := 64
 const MAX_BYTES := 3 * 1024 * 1024
 

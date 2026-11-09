@@ -4,6 +4,7 @@ extends VBoxContainer
 signal agent_requested(prompt: String, placement: Array)
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
+const BehaviorInspector = preload("res://scripts/ui/behavior_inspector.gd")
 
 var _tools: RefCounted
 var _spawn_at: Array
@@ -16,6 +17,7 @@ var _apply: Button
 var _delete: Button
 var _duplicate: Button
 var _undo: Button
+var _behaviors: BehaviorInspector
 var _prefabs: OptionButton
 var _prefab_name: LineEdit
 var _save_prefab: Button
@@ -65,6 +67,9 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String) -> void:
 	_duplicate = _button(actions, "Duplicate", _duplicate_entity)
 	_delete = _button(actions, "Delete", _run.bind("delete", {}))
 	_undo = _button(actions, "Undo", _run.bind("undo", {}))
+	_behaviors = BehaviorInspector.new()
+	add_child(_behaviors)
+	_behaviors.submitted.connect(func(value: Variant) -> void: _run("set_behavior", {"behavior": value}))
 	var save_row := HBoxContainer.new()
 	add_child(save_row)
 	_prefab_name = LineEdit.new()
@@ -178,6 +183,8 @@ func _duplicate_entity() -> void:
 		args["asset_id"] = entity.asset_id
 	if entity.has("animation"):
 		args["animation"] = entity.animation
+	if entity.has("behavior"):
+		args["behavior"] = entity.behavior
 	_run("spawn", args)
 
 func _run(tool: String, args: Dictionary) -> void:
@@ -190,7 +197,7 @@ func _run(tool: String, args: Dictionary) -> void:
 	_selected = result.id if not result.entity.is_empty() else ""
 	_refresh()
 	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.",
-		"edit": "Properties saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
+		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
 	_status.text = messages[tool]
 
 func _refresh() -> void:
@@ -223,8 +230,10 @@ func _select(index: int) -> void:
 	for field in _fields.values():
 		field.editable = result.ok
 	if not result.ok:
+		_behaviors.show_entity([], {})
 		return
 	var record: Dictionary = result.entity
+	_behaviors.show_entity(_tools.execute("list_behaviors", {"id": _selected}).get("behaviors", []), record.get("behavior", {}))
 	_fields.X.value = record.position[0]
 	_fields.Y.value = record.position[1]
 	_fields.Z.value = record.position[2]

@@ -7,6 +7,7 @@ const Assets = preload("res://scripts/assets/asset_library.gd")
 const WaterInteractions = preload("res://scripts/simulation/water_interactions.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
+const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 var _failures := 0
 var _checks := 0
@@ -88,6 +89,7 @@ func _run() -> void:
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
 	_check_world_tools(path)
 	_check_prefabs(path)
+	_check_live_behaviors(path)
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -97,6 +99,58 @@ func _run() -> void:
 	print("CONSTRUCT_CORE_TESTS: %d checks, %d failures" % [_checks,_failures])
 	if _failures == 0: print("CONSTRUCT_CORE_TESTS_OK")
 	quit(0 if _failures == 0 else 1)
+
+func _check_live_behaviors(path: String) -> void:
+	var zone := Node3D.new()
+	var observer := Node3D.new()
+	root.add_child(zone)
+	zone.add_child(observer)
+	var runtime := BehaviorRuntime.new(observer)
+	var library := PrefabLibrary.new("")
+	var tools := WorldTools.new(path, library, runtime)
+	tools.attach(zone)
+	var spawned := tools.execute("spawn", {"type": "traffic_cone", "position": [1.0, 0.0, 0.0]})
+	var entity := zone.get_node("WorkshopEntities").get_child(0)
+	var behavior := {"id": "proximity_pulse", "settings": {"radius": 3.5}}
+	var configured := tools.execute("set_behavior", {"id": spawned.id, "behavior": behavior})
+	_check(configured.ok and entity == zone.get_node("WorkshopEntities").get_child(0) and entity.has_node("BehaviorHost"),
+		"attach a registered behavior without replacing the entity")
+	_check(not tools.execute("set_behavior", {"id": spawned.id, "behavior": {"id": "proximity_pulse", "settings": {"radius": 30.0}}}).ok,
+		"reject a behavior setting outside its declared range")
+	var original := runtime.evaluate(behavior, 0.25, 0.0)
+	var source := "extends RefCounted\nconst API_VERSION := 1\nfunc sample(_time: float, _distance: float, _settings: Dictionary) -> float:\n\treturn 0.73\n"
+	var candidate := {"plugin": "proximity_pulse", "draft": "test", "source": source, "digest": source.sha256_text()}
+	var host := entity.get_node_or_null("BehaviorHost")
+	_check(runtime.preview(candidate).ok and is_equal_approx(runtime.evaluate(behavior, 0.25, 0.0), 0.73)
+		and host == entity.get_node_or_null("BehaviorHost"), "swap GDScript while keeping the behavior host")
+	_check(runtime.finish("test", false) and is_equal_approx(runtime.evaluate(behavior, 0.25, 0.0), original), "discard restores the committed evaluator")
+	var incompatible := source.replace("API_VERSION := 1", "API_VERSION := 2")
+	candidate.source = incompatible
+	candidate.digest = incompatible.sha256_text()
+	_check(not runtime.preview(candidate).ok and is_equal_approx(runtime.evaluate(behavior, 0.25, 0.0), original), "reject incompatible code without replacing the active evaluator")
+	var faulty := source.replace("return 0.73", "return 4.0 if _time > 1.0 else 0.73")
+	candidate.source = faulty
+	candidate.digest = faulty.sha256_text()
+	var original_later := runtime.evaluate(behavior, 2.0, 0.0)
+	_check(runtime.preview(candidate).ok and is_equal_approx(runtime.evaluate(behavior, 2.0, 0.0), original_later)
+		and runtime.preview_status("test") == "failed", "invalid output after activation rolls back the live draft")
+	runtime.finish("test", false)
+	candidate.source = source
+	candidate.digest = source.sha256_text()
+	_check(runtime.preview(candidate).ok and runtime.finish("test", true) and is_equal_approx(runtime.evaluate(behavior, 0.25, 0.0), 0.73),
+		"keep the accepted evaluator after the draft closes")
+	var saved := tools.execute("save_prefab", {"id": spawned.id, "name": "Signal cone"})
+	var copy := tools.execute("spawn_prefab", {"prefab_id": saved.get("prefab_id", ""), "position": [2.0, 0.0, 0.0]})
+	_check(copy.ok and copy.entity.behavior == behavior, "prefabs retain behavior identity and settings")
+	var reopened := WorldTools.new(path, library, runtime)
+	var other := Node3D.new()
+	reopened.attach(other)
+	_check(reopened.execute("inspect", {"id": spawned.id}).entity.behavior == behavior, "reload saved behavior settings")
+	other.free()
+	_check(tools.execute("set_behavior", {"id": spawned.id, "behavior": null}).ok and not entity.has_node("BehaviorHost")
+		and tools.execute("undo").ok and entity.has_node("BehaviorHost"), "removing and undoing behavior reuse the entity")
+	zone.free()
+	DirAccess.remove_absolute(path)
 
 func _check_prefabs(path: String) -> void:
 	var library := PrefabLibrary.new(path)

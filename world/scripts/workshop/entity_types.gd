@@ -3,6 +3,7 @@ extends RefCounted
 ## Trusted entity factories. Persisted records choose a registered type, never a script path.
 const Assets = preload("res://scripts/assets/runtime_assets.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
+const BehaviorRegistry = preload("res://scripts/plugins/behavior_registry.gd")
 const TYPES := {"traffic_cone": {"label": "Traffic cone", "color": "ff681d"},
 	"imported_model": {"label": "Imported model", "color": "ffffff"}}
 
@@ -12,6 +13,7 @@ static func valid_properties(record: Dictionary) -> bool:
 	return type is String and TYPES.has(type) \
 		and (type != "imported_model" or Assets.valid_id(record.get("asset_id"))) \
 		and (not record.has("animation") or (MotionClip.valid(record.animation) and MotionClip.supports(record.animation, false))) \
+		and (not record.has("behavior") or BehaviorRegistry.valid_record(record.behavior)) \
 		and number_between(record.get("yaw"), -360.0, 360.0) \
 		and number_between(record.get("scale"), 0.25, 4.0) \
 		and color is String and color.length() == 6 and Color.html_is_valid(color)
@@ -77,7 +79,7 @@ static func _cone(body: StaticBody3D, color: Color, size: float) -> void:
 	var base := BoxMesh.new()
 	base.size = Vector3(0.58, 0.07, 0.58) * size
 	_mesh(body, base, 0.035 * size, Color("22292e"), 0.88)
-	_mesh(body, _taper(0.24, 0.032, 0.78, size), 0.46 * size, color, 0.6)
+	_mesh(body, _taper(0.24, 0.032, 0.78, size), 0.46 * size, color, 0.6).name = "SignalSurface"
 	_mesh(body, _taper(0.153, 0.115, 0.14, size), 0.48 * size, Color("edf1e8"), 0.7)
 
 	var shape := ConvexPolygonShape3D.new()
@@ -101,7 +103,7 @@ static func _taper(bottom: float, top: float, height: float, size: float) -> Cyl
 	mesh.rings = 0
 	return mesh
 
-static func _mesh(parent: Node3D, mesh: Mesh, height: float, color: Color, roughness: float) -> void:
+static func _mesh(parent: Node3D, mesh: Mesh, height: float, color: Color, roughness: float) -> MeshInstance3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = roughness
@@ -113,3 +115,4 @@ static func _mesh(parent: Node3D, mesh: Mesh, height: float, color: Color, rough
 	instance.position.y = height
 	instance.material_override = material
 	parent.add_child(instance)
+	return instance

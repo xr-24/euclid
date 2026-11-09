@@ -7,6 +7,7 @@ const text = description => ({ type: 'string', description });
 const idPattern = /^[a-z0-9_-]{1,64}$/;
 const sessionPattern = /^[a-f0-9]{32}$/;
 const animationTarget = /^(companion|[a-f0-9]{32})$/;
+const behaviorId = /^[a-z_][a-z0-9_]{0,39}$/;
 export const tools = [
   { name: 'list_environments', description: 'List the running Euclid world’s environments, their IDs, and the current environment.', inputSchema: object(), annotations: { readOnlyHint: true } },
   { name: 'travel', description: 'Shift the player to an existing Euclid environment. Discover the exact ID with list_environments.', inputSchema: object({ target: text('Exact environment ID') }, ['target']) },
@@ -29,6 +30,10 @@ export const tools = [
     inputSchema: object({ target: text('Exact entity ID from list_entities'), name: text('New prefab name, up to 48 characters') }, ['target', 'name']) },
   { name: 'spawn_prefab', description: 'Place an independent copy of a saved prefab near the player in the current Grid space.',
     inputSchema: object({ target: text('Exact prefab ID from list_prefabs') }, ['target']) },
+  { name: 'list_behaviors', description: 'List registered entity behaviors and their editable settings. Supply an entity ID to filter compatible behaviors.',
+    inputSchema: object({ target: text('Optional exact entity ID from list_entities') }), annotations: { readOnlyHint: true } },
+  { name: 'set_behavior', description: 'Attach or configure a registered behavior on an existing entity. Pass null to remove it. The edit supports undo.',
+    inputSchema: object({ target: text('Exact entity ID'), behavior: { anyOf: [companionSchema.$defs.behavior, { type: 'null' }] } }, ['target', 'behavior']) },
   { name: 'inspect_animation', description: 'List animatable scene entities or inspect a target’s channels, joint names and current clip.',
     inputSchema: object({ target: text('Optional exact target ID. Use companion for Codex.') }), annotations: { readOnlyHint: true } },
   { name: 'preview_animation', description: 'Apply or revise a temporary looping animation on an exact target. Inspect the rig first. Use save_animation or discard_animation after review.',
@@ -53,6 +58,8 @@ export function validWorldPlan(plan) {
   if (plan.tool === 'save_prefab') return sessionPattern.test(plan.target) && typeof plan.name === 'string' &&
     plan.name.trim().length > 0 && [...plan.name.trim()].length <= 48 && !/[\x00-\x1f\x7f]/.test(plan.name);
   if (plan.tool === 'spawn_prefab') return sessionPattern.test(plan.target);
+  if (plan.tool === 'list_behaviors') return plan.target === '' || sessionPattern.test(plan.target);
+  if (plan.tool === 'set_behavior') return sessionPattern.test(plan.target) && validBehavior(plan.behavior);
   if (plan.tool === 'spawn_asset') return plan.target.trim().length > 0 && plan.target.length <= 120 &&
     (plan.preserve_rig === undefined || typeof plan.preserve_rig === 'boolean') &&
     (plan.scale === undefined || (Number.isFinite(plan.scale) && plan.scale >= 0.25 && plan.scale <= 4)) &&
@@ -68,6 +75,18 @@ export function validWorldPlan(plan) {
     return plan.target === '' || animationTarget.test(plan.target);
   }
   return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_entities', 'list_prefabs', 'unsupported'].includes(plan.tool);
+}
+
+function validBehavior(behavior) {
+  if (behavior === null) return true;
+  if (typeof behavior?.id !== 'string' || !behaviorId.test(behavior.id) || !Array.isArray(behavior.settings) || behavior.settings.length > 6) return false;
+  const keys = new Set();
+  for (const setting of behavior.settings) {
+    if (typeof setting?.key !== 'string' || !behaviorId.test(setting.key) || keys.has(setting.key) ||
+        !Number.isFinite(setting.value) || Math.abs(setting.value) > 10000) return false;
+    keys.add(setting.key);
+  }
+  return true;
 }
 
 export function createWorldBridge(assets) {
@@ -156,6 +175,7 @@ export function createWorldBridge(assets) {
         }
         const plan = { tool: name, target: args.target ?? '',
           ...(name === 'preview_animation' ? { clip: args.clip } : {}),
+          ...(name === 'set_behavior' ? { behavior: args.behavior } : {}),
           ...(name === 'save_prefab' ? { name: args.name } : {}) };
         if (!validWorldPlan(plan) || plan.tool === 'unsupported') return error(-32602, 'Invalid world tool arguments');
         const result = await call(session, plan, signal);

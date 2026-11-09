@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createGateway } from './server.mjs';
+import { fingerprint } from './workbench-source.mjs';
 
 test('workbench checks and commits an isolated two-file Git draft, and reverts it', async t => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'euclid-workbench-test-'));
@@ -13,6 +14,7 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const dataDir = path.join(folder, 'gateway');
   const name = 'world/scripts/example.gd';
   const other = 'world/scripts/other.gd';
+  const plugin = 'world/scripts/plugins/proximity_pulse.gd';
   const file = path.join(root, name);
   const original = 'extends Node\nconst VALUE := 1\n';
   const otherOriginal = 'extends Node\nconst LABEL := "Old"\n';
@@ -20,6 +22,10 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, original);
   await writeFile(path.join(root, other), otherOriginal);
+  await mkdir(path.join(root, 'world/scripts/plugins'));
+  await mkdir(path.join(root, 'world/data'));
+  await writeFile(path.join(root, plugin), original);
+  await writeFile(path.join(root, 'world/data/behavior_plugins.json'), JSON.stringify({ schema_version: 1, plugins: [{ id: 'proximity_pulse' }] }));
   git('init', '-q');
   git('config', 'user.name', 'Euclid Test');
   git('config', 'user.email', 'test@example.invalid');
@@ -87,6 +93,7 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const accept = { id, message: 'Update value and label' };
   assert.equal((await call('apply', accept)).code, 400);
   assert.equal((await call('play', { id })).code, 400);
+  assert.equal((await call('live', { id })).code, 400);
   async function checks() {
     await call('check', { id });
     for (let tries = 0; tries < 30; tries++) {
@@ -130,4 +137,13 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.equal(await readFile(path.join(root, other), 'utf8'), otherOriginal);
   assert.equal(git('rev-parse', 'HEAD^'), revision);
   assert.equal((await call('state')).body.revision, '');
+
+  const before = (await call('read', { name: plugin })).body;
+  const liveDraft = (await call('stage', { files: [{ name: plugin, hash: before.hash, text: files[0].text }] })).body.draft;
+  assert.equal(liveDraft.live, true);
+  assert.equal((await call('live', { id: liveDraft.id }, false)).code, 403);
+  const live = (await call('live', { id: liveDraft.id })).body.live;
+  assert.deepEqual(live, { draft: liveDraft.id, plugin: 'proximity_pulse', source: files[0].text, digest: fingerprint(files[0].text) });
+  assert.equal(await readFile(path.join(root, plugin), 'utf8'), original);
+  assert.equal((await call('discard', { id: liveDraft.id })).body.draft, null);
 });

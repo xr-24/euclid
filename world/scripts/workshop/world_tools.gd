@@ -7,6 +7,8 @@ const Store = preload("res://scripts/persistence/world_state_store.gd")
 const Art = preload("res://scripts/rendering/zone_effects.gd")
 const PropMotion = preload("res://scripts/animation/prop_motion.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
+const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
+const BehaviorHost = preload("res://scripts/plugins/behavior_host.gd")
 const MAX_ENTITIES := 256
 const MAX_UNDO := 64
 const MAX_SAVE_BYTES := 9 * 1024 * 1024
@@ -14,15 +16,17 @@ const EDITABLE := ["position", "yaw", "scale", "color", "animation"]
 
 var _path := ""
 var _prefabs: PrefabLibrary
+var _behaviors: BehaviorRuntime
 var _entities := {}
 var _nodes := {}
 var _history: Array[Dictionary] = []
 var _root: Node3D
 var _load_error := ""
 
-func _init(path := "", prefabs: PrefabLibrary = null) -> void:
+func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime = null) -> void:
 	_path = path
 	_prefabs = prefabs
+	_behaviors = behaviors
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -68,8 +72,17 @@ func execute(tool: String, args := {}) -> Dictionary:
 		"list_entities":
 			var entities: Array[Dictionary] = []
 			for item in _entities.values():
-				entities.append({"id": item.id, "name": EntityTypes.label(item).left(64)})
+				entities.append({"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
+					"behavior": item.get("behavior", {}).get("id", "")})
 			return {"ok": true, "entities": entities}
+		"list_behaviors":
+			if id != null and id != "" and record.is_empty():
+				return _error("Select an entity first.")
+			return {"ok": true, "behaviors": _behaviors.available(record.get("type", "")) if _behaviors else []}
+		"set_behavior":
+			if record.is_empty():
+				return _error("Select an entity first.")
+			return _set_behavior(id, record, args.get("behavior"))
 		"inspect":
 			return {"ok": true, "entity": record.duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
 		"list_prefabs", "save_prefab", "spawn_prefab":
@@ -89,6 +102,8 @@ func execute(tool: String, args := {}) -> Dictionary:
 				proposed["asset_id"] = args.asset_id
 			if args.has("animation"):
 				proposed["animation"] = args.animation
+			if args.has("behavior"):
+				proposed["behavior"] = args.behavior
 			return _edit(id, {}, proposed)
 		"edit":
 			if record.is_empty():
@@ -115,6 +130,19 @@ func execute(tool: String, args := {}) -> Dictionary:
 			_history.pop_back()
 			return {"ok": true, "id": edit.id, "entity": edit.previous.duplicate(true)}
 	return _error("Unknown world tool.")
+
+func _set_behavior(id: String, record: Dictionary, request: Variant) -> Dictionary:
+	var proposed := record.duplicate()
+	if request == null:
+		proposed.erase("behavior")
+	else:
+		if not _behaviors:
+			return _error("The behavior registry is unavailable.")
+		var configured := _behaviors.registry.configure(record.type, request)
+		if configured.is_empty() or not _behaviors.available(record.type).any(func(item: Dictionary) -> bool: return item.id == configured.id):
+			return _error("Choose a supported behavior with settings in range.")
+		proposed["behavior"] = configured
+	return _edit(id, record, proposed)
 
 func _prefab_command(tool: String, args: Dictionary, record: Dictionary) -> Dictionary:
 	if not _prefabs:
@@ -165,6 +193,8 @@ func _apply(id: String, record: Dictionary) -> bool:
 				var clip: Dictionary = record.get("animation", {})
 				if player.clip != clip:
 					player.set_clip(clip)
+				if previous.get("behavior") != record.get("behavior"):
+					_sync_behavior(_nodes[id], record)
 				return true
 		_nodes[id].free()
 		_nodes.erase(id)
@@ -185,8 +215,24 @@ func _show(record: Dictionary) -> void:
 	motion.name = "PropMotion"
 	motion.clip = record.get("animation", {})
 	entity.add_child(motion)
+	_sync_behavior(entity, record)
 	_root.add_child(entity)
 	_nodes[record.id] = entity
+
+func _sync_behavior(entity: Node3D, record: Dictionary) -> void:
+	var old := entity.get_node_or_null("BehaviorHost")
+	if old:
+		old.free()
+	if not _behaviors or not record.has("behavior"):
+		return
+	var configured := _behaviors.registry.configure(record.type, record.behavior)
+	if not configured.is_empty():
+		configured.settings.make_read_only()
+		var host := BehaviorHost.new()
+		host.name = "BehaviorHost"
+		host.runtime = _behaviors
+		host.behavior = configured
+		entity.add_child(host)
 
 func animation_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []

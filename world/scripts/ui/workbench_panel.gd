@@ -5,7 +5,7 @@ signal restart_requested
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
 const Console = preload("res://scripts/ui/codex_console.gd")
-const PREVIEW_ACTIONS := ["check", "play", "stop", "apply", "discard", "restore"]
+const PREVIEW_ACTIONS := ["live", "check", "play", "stop", "apply", "discard", "restore"]
 var _client: Client
 var _files: OptionButton
 var _editor: CodeEdit
@@ -20,8 +20,14 @@ var _buffers := {}
 var _message: LineEdit
 var _busy := false
 var _state := {}
+var _preview_behavior: Callable
+var _finish_behavior: Callable
+var _behavior_status: Callable
 
-func setup(url: String, token: String, capability: String) -> void:
+func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable, behavior_status: Callable) -> void:
+	_preview_behavior = preview_behavior
+	_finish_behavior = finish_behavior
+	_behavior_status = behavior_status
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
@@ -84,7 +90,7 @@ func setup(url: String, token: String, capability: String) -> void:
 
 	var controls := HBoxContainer.new()
 	add_child(controls)
-	var labels := ["Run checks", "Play preview", "Stop preview", "Commit", "Discard", "Revert last"]
+	var labels := ["Preview live", "Run checks", "Play preview", "Stop preview", "Commit", "Discard", "Revert last"]
 	for index in PREVIEW_ACTIONS.size():
 		var action: String = PREVIEW_ACTIONS[index]
 		_buttons[action] = _button(controls, labels[index], _command.bind(action))
@@ -227,6 +233,9 @@ func _command(action: String, arguments := {}) -> void:
 	if draft is Dictionary:
 		arguments["id"] = draft.id
 	if action == "apply":
+		if _live_status() == "failed":
+			show_error("The live preview failed. Discard this draft and revise the behavior.")
+			return
 		arguments["message"] = _message.text.strip_edges()
 	elif action == "restore":
 		arguments["revision"] = _state.get("revision", "")
@@ -242,9 +251,17 @@ func _command(action: String, arguments := {}) -> void:
 	match action:
 		"stage":
 			_tabs.current_tab = 1
+		"live":
+			_busy = true
+			_sync_controls()
+			var activated: Dictionary = await _preview_behavior.call(result.live)
+			_busy = false
+			_status.text = activated.message
+			_sync_controls()
 		"check":
 			_tabs.current_tab = 2
 		"discard", "apply", "restore":
+			var was_live: bool = _finish_behavior.call(action, arguments.get("id", ""))
 			_buffers.clear()
 			_message.clear()
 			if not _source.is_empty():
@@ -253,15 +270,20 @@ func _command(action: String, arguments := {}) -> void:
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
-				"apply": "Committed %s. Restart Euclid to load it here." % short,
-				"restore": "Created revert %s. Restart Euclid to load it here." % short}
+				"apply": ("Committed %s. The behavior stays active." if was_live else "Committed %s. Restart Euclid to load it here.") % short,
+				"restore": "Created revert %s. Restart Euclid for changes outside live behaviors." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
 				_status.text += " " + result.warning
 			_sync_controls()
 
 func _poll(force := false) -> void:
-	if _busy or not is_visible_in_tree() or (not force and not _state.get("playing", false) and _state.get("operation", "") != "checking"):
+	if _busy or not is_visible_in_tree():
+		return
+	if not force and not _state.get("playing", false) and _state.get("operation", "") != "checking":
+		if _live_status() == "failed":
+			_status.text = "Live preview failed. The previous behavior is active."
+			_sync_controls()
 		return
 	_busy = true
 	var result := await _client.send("state")
@@ -286,6 +308,10 @@ func _show_state(result: Dictionary) -> void:
 		_status.text = "%s  ·  %s" % [draft.name, draft.error if draft.status == "failed" else messages[draft.status]]
 		if result.get("playing", false):
 			_status.text = "The preview is open in a separate Euclid window."
+		elif _live_status() == "failed":
+			_status.text = "Live preview failed. The previous behavior is active."
+		elif _live_status() == "active" and draft.status != "checking":
+			_status.text += " Live behavior active."
 	else:
 		_diff.text = ""
 		_log.text = ""
@@ -315,13 +341,19 @@ func _sync_controls() -> void:
 	_buttons.propose.disabled = not editing or _request.text.strip_edges().is_empty()
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
 	_buttons.check.disabled = blocked or not staged or playing
+	var live := _live_status()
+	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active"
 	var passed: bool = staged and draft.status == "passed"
 	_buttons.play.disabled = blocked or not passed or playing
 	_buttons.stop.disabled = blocked or not playing
 	_message.visible = passed
 	_message.editable = not blocked
-	_buttons.apply.disabled = blocked or not passed or _message.text.strip_edges().is_empty()
+	_buttons.apply.disabled = blocked or not passed or live == "failed" or _message.text.strip_edges().is_empty()
 	_buttons.discard.disabled = _busy or not staged or (blocked and _state.get("operation") != "checking")
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or staged
+
+func _live_status() -> String:
+	var draft: Variant = _state.get("draft")
+	return _behavior_status.call(draft.id) if draft is Dictionary else ""

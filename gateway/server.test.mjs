@@ -140,4 +140,15 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   const saved = { ok: true, prefab_id: 'c'.repeat(32) };
   await sync({ id: command.id, value: saved });
   assert.deepEqual(JSON.parse((await saving).result.content[0].text), saved);
+
+  const behavior = { id: 'proximity_pulse', settings: [{ key: 'radius', value: 4 }] };
+  const repeated = { ...behavior, settings: [...behavior.settings, ...behavior.settings] };
+  assert.equal((await rpc('tools/call', { name: 'set_behavior', arguments: { target: entityId, behavior: repeated } })).error.code, -32602);
+  const configuring = rpc('tools/call', { name: 'set_behavior', arguments: { target: entityId, behavior } });
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await sync());
+  assert.equal(command?.tool, 'set_behavior');
+  assert.deepEqual(command.behavior, behavior);
+  await sync({ id: command.id, value: { ok: true } });
+  assert.equal((await configuring).result.isError, false);
 });

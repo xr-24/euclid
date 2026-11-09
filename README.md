@@ -95,6 +95,25 @@ live under `user://runtime-assets/`. World saves contain asset IDs and transform
 and never remote scripts or paths. Background import logs stay in the ignored
 cache directories.
 
+## Live behaviors
+
+Spawn a cone in The Grid. Select it with **B**, choose **Proximity pulse**, and
+click **Apply behavior**. Adjust **Radius (m)** in the same inspector. In **F2**
+with a single cone, try **Make the cone pulse when I come within five metres**.
+The native agent tools `list_behaviors` and `set_behavior` use the same settings.
+Behavior changes support Grid undo, and prefabs keep their behavior settings.
+
+To change the code while the cone is in the world, launch **Start Euclid
+Workbench.cmd**, press **F4**, and open
+`world/scripts/plugins/proximity_pulse.gd`. Ask Codex to **Change `PULSE_HZ`
+from 1.0 to 2.0**. Choose **Review diff**, then **Preview live**. Close the
+panel and approach the cone. **Discard** restores the previous code, and
+**Run checks → Commit** keeps the previewed version and records it in Git.
+
+A live draft edits one registered behavior script. The preview compiles and
+probes the replacement before activating it. The developer-mode plugin runs
+inside Euclid with your local account's permissions.
+
 ## Live animation
 
 Press **F2** and ask **Preview a four-second loop where the companion raises

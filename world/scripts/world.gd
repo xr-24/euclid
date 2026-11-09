@@ -16,6 +16,7 @@ const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
+const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
 var manifest: Dictionary
 var asset_client: Node
@@ -61,6 +62,7 @@ var water := {"has": false, "level": -INF}
 var underwater: ColorRect
 var world_tools: RefCounted
 var prefab_library: PrefabLibrary
+var behavior_runtime: BehaviorRuntime
 var workshops := {}
 var grid_palette_requested := false
 var grid_agent: HTTPRequest
@@ -88,11 +90,12 @@ func _ready() -> void:
 	environment_library = EnvironmentLibrary.new("" if smoke_mode else "user://environments.json")
 	manifest.zones.append_array(environment_library.environments())
 	prefab_library = PrefabLibrary.new("" if smoke_mode else "user://grid-prefabs.json")
-	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library)
 	Graphics.configure(get_viewport(), smoke_mode)
 	_setup_input()
 	_setup_lighting()
 	_setup_player()
+	behavior_runtime = BehaviorRuntime.new(player)
+	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library, behavior_runtime)
 	companion = BinaryAvatar.new()
 	companion.name = "CodexAvatar"
 	add_child(companion)
@@ -331,9 +334,21 @@ func _open_workbench() -> void:
 	overlay.add_theme_stylebox_override("panel", frame)
 	_workbench_panel = WorkbenchPanel.new()
 	overlay_content.add_child(_workbench_panel)
-	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability)
+	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_behavior, _finish_live_behavior, behavior_runtime.preview_status)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
+
+func _preview_live_behavior(candidate: Dictionary) -> Dictionary:
+	await get_tree().process_frame
+	if shifting or building:
+		return {"ok": false, "message": "Wait for the environment to finish loading before swapping a behavior."}
+	return behavior_runtime.preview(candidate)
+
+func _finish_live_behavior(action: String, draft_id: String) -> bool:
+	if action == "restore":
+		behavior_runtime.reload_committed()
+		return false
+	return behavior_runtime.finish(draft_id, action == "apply")
 
 func _restart_workbench() -> void:
 	if smoke_mode or shifting or _workbench_capability.is_empty():
@@ -487,6 +502,7 @@ func _submit_codex_command(prompt: String) -> void:
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
 		context["entities"] = entities.slice(maxi(0, entities.size() - 64))
 		context["prefabs"] = world_tools.execute("list_prefabs").get("prefabs", [])
+		context["behaviors"] = world_tools.execute("list_behaviors").get("behaviors", [])
 	if scene_animations:
 		context["animation"] = scene_animations.context(world_tools if _is_workshop(zone_id) else null)
 	var response: Dictionary = await grid_agent.plan(prompt, context)
@@ -512,7 +528,7 @@ func _call_world_tool(plan: Dictionary) -> Dictionary:
 func _execute_world_tool(plan: Dictionary) -> Dictionary:
 	var target: String = str(plan.get("target", ""))
 	match plan.get("tool", ""):
-		"list_entities", "list_prefabs", "save_prefab", "spawn_prefab":
+		"list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior":
 			return _execute_workshop_tool(plan)
 		"inspect_animation", "preview_animation", "save_animation", "discard_animation":
 			if shifting or not scene_animations:
@@ -568,10 +584,16 @@ func _execute_world_tool(plan: Dictionary) -> Dictionary:
 
 func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 	if not _is_workshop(zone_id) or shifting:
-		return {"ok": false, "message": "Enter The Grid or a custom Grid space to use prefabs."}
+		return {"ok": false, "message": "Enter The Grid or a custom Grid space to edit workshop entities."}
 	var target: String = plan.get("target", "")
+	var behavior: Variant = plan.get("behavior")
+	if behavior is Dictionary:
+		var settings := {}
+		for setting in behavior.settings:
+			settings[setting.key] = setting.value
+		behavior = {"id": behavior.id, "settings": settings}
 	var result: Dictionary = world_tools.execute(plan.tool, {"id": target, "prefab_id": target,
-		"name": plan.get("name"), "position": _workshop_spawn_position()})
+		"name": plan.get("name"), "position": _workshop_spawn_position(), "behavior": behavior})
 	if not result.ok:
 		result["message"] = result.error
 		return result
@@ -580,9 +602,11 @@ func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 			result["message"] = "Saved %s to the prefab library." % result.name
 		"spawn_prefab":
 			result["message"] = "Placed the prefab. You can edit it or undo the placement."
-		"list_entities", "list_prefabs":
+		"set_behavior":
+			result["message"] = "Removed the entity’s behavior." if behavior == null else "Saved the entity’s behavior."
+		"list_entities", "list_prefabs", "list_behaviors":
 			var names := PackedStringArray()
-			for item in result.get("prefabs", result.get("entities", [])):
+			for item in result.get("prefabs", result.get("entities", result.get("behaviors", []))):
 				names.append(item.name)
 			result["message"] = "Nothing here yet." if names.is_empty() else ", ".join(names)
 	return result
@@ -725,7 +749,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		if _is_workshop(zone_id):
 			if not workshops.has(zone_id):
 				var path := "" if smoke_mode else "user://grid-entities-%s.json" % zone_id
-				workshops[zone_id] = WorldTools.new(path, prefab_library)
+				workshops[zone_id] = WorldTools.new(path, prefab_library, behavior_runtime)
 			world_tools = workshops[zone_id]
 			world_tools.attach(zone_root)
 	if side != 0.0:

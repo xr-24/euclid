@@ -69,7 +69,7 @@ export function validContext(context) {
       typeof zone.description === 'string' && zone.description.length <= 180);
 }
 
-const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool'];
+const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool', 'draft_source'];
 
 export function validWorldPlan(plan, context) {
   if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;

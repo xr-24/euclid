@@ -7,6 +7,8 @@ const editable = /^world\/(?:scripts\/(?!diagnostics\/)(?:[\w-]+\/)*[\w.-]+\.gd|
 const decode = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const fingerprint = text => createHash('sha256').update(text).digest('hex');
 export const isSourcePath = name => typeof name === 'string' && editable.test(name);
+const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scenes\/(?:[\w-]+\/)*[\w.-]+\.tscn)$/;
+export const isAgentSourcePath = name => isSourcePath(name) || (typeof name === 'string' && agentSource.test(name));
 
 export async function listSources(root) {
   const files = ['world/main.tscn'];

@@ -164,6 +164,8 @@ separate rigged asset ID for `spawn_entity`.
 
 ## Develop from inside Euclid
 
+See the [in-Euclid development roadmap](docs/development-roadmap.md) for the remaining milestones.
+
 ### Ask from the beach
 
 Launch **Start Euclid Workbench.cmd**, go to the beach, and press **F2**. Ask
@@ -202,6 +204,17 @@ for future sessions.
 
 ### Edit source in Workbench
 
+For an agent-authored code change, ask in **F2** while in Workbench mode. For
+example, ask **Add undoable group duplication to the Grid palette and write a
+regression test**. Codex searches and edits a separate source workspace. When
+the draft is ready, **Review draft** opens its diff in F4. **Run checks** starts
+the isolated checks, then **Preview build** opens the checked build with its
+own saves. Commit through F4 if you want to install it.
+
+The source workspace supports one active task and up to 24 changed Godot
+source or test files. The checks and preview run code from the reviewed draft
+with your local account permissions.
+
 Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot
 scripts, shaders, the main scene, or project data files. Open each file you want
 Codex to see. For example, open `world/scripts/workshop/entity_types.gd` and
@@ -223,7 +236,7 @@ restart. Workbench identifies whether a draft supports a live swap, a Grid
 scenery reload, or a restart. Preview a live change before committing to keep
 it active in the running world.
 
-Drafts support up to six existing text files, 64 KiB per file and 128 KiB total.
+The F4 editor supports up to six existing text files, 64 KiB per file and 128 KiB total.
 The local baseline tracks source, build tools, and asset metadata. Large binary
 art under `world/assets`, Blender sources, and the standalone experiments are
 local inputs. Keep those files with a checkout you want to run. Preview projects

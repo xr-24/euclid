@@ -78,6 +78,14 @@ draft base. The worktree and its metadata live under `.local/workbench`.
 A restarted gateway recovers the draft and requires fresh checks. Rollback adds a
 revert commit when a Workbench commit is at the branch tip.
 
+For a general F2 source request, `gateway/workbench-agent-draft.mjs` copies
+the pinned checkout into a temporary source workspace without its Git metadata
+or ignored local data. `gateway/workbench-source-agent.mjs` runs Codex there
+and streams progress. The gateway compares the resulting files, validates the
+allowed paths, and transfers the exact changes to the Workbench Git draft.
+The user reviews the diff and starts checks before executing the edited code.
+This path currently accepts Godot source, data, scenes, and diagnostics.
+
 `gateway/workbench-runner.mjs` owns the preview snapshot, Godot import and
 project checks, and preview process. It copies the reviewed worktree and fills in
 local runtime art and import caches from the primary checkout. The snapshot gets

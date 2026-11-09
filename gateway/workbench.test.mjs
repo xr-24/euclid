@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createGateway } from './server.mjs';
+import { createWorkbench } from './workbench.mjs';
 import { fingerprint } from './workbench-source.mjs';
 import { shorelinePath } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
@@ -257,4 +258,93 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const toolCommit = await call('apply', { id: toolId, message: 'Add demo reset' });
   assert.equal(toolCommit.code, 200, JSON.stringify(toolCommit.body));
   assert.deepEqual(JSON.parse(await readFile(path.join(root, 'world/data/workshop_tools/reset_demo.json'), 'utf8')), toolPreview);
+});
+
+test('source agent stages isolated changes, requires checks, and can cancel', async t => {
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-source-test-'));
+  t.after(() => rm(area, { recursive: true, force: true }));
+  const root = path.join(area, 'project');
+  const storage = path.join(area, 'workbench');
+  const script = 'world/scripts/example.gd';
+  const removed = 'world/scripts/old.gd';
+  const testFile = 'world/scripts/diagnostics/example_test.gd';
+  await mkdir(path.join(root, 'world/scripts'), { recursive: true });
+  await writeFile(path.join(root, script), 'extends Node\n');
+  await writeFile(path.join(root, removed), 'extends Node\n');
+  await writeFile(path.join(root, '.gitignore'), '.local/\n');
+  await mkdir(path.join(root, '.local'));
+  await writeFile(path.join(root, '.local/fixture'), 'Ignored local data.');
+  const git = (...args) => execFileSync('git', args, { cwd: root, windowsHide: true, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.name', 'Euclid Test');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  git('add', '.');
+  git('commit', '-qm', 'Fixture');
+  const base = git('rev-parse', 'HEAD');
+  let checked = 0;
+  let played = false;
+  const runner = {
+    async check(draft) {
+      checked++;
+      assert.match(await readFile(path.join(draft.worktree, testFile), 'utf8'), /FIXTURE/);
+      await assert.rejects(readFile(path.join(draft.worktree, removed)), { code: 'ENOENT' });
+    },
+    playing: () => played,
+    async play() { played = true; },
+    async stop() { played = false; },
+  };
+  const editSource = async ({ workspace, request, signal, onProgress }) => {
+    await assert.rejects(readFile(path.join(workspace, '.git')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(workspace, '.local/fixture')), { code: 'ENOENT' });
+    assert.equal(await readFile(path.join(workspace, script), 'utf8'), 'extends Node\n');
+    if (request === 'Cancel') await sleep(10000, undefined, { signal });
+    if (request === 'Outside scope') return writeFile(path.join(workspace, 'world/project.godot'), 'Bad change');
+    onProgress('Reading source and adding a test.\n');
+    await mkdir(path.dirname(path.join(workspace, testFile)), { recursive: true });
+    await writeFile(path.join(workspace, testFile), 'extends SceneTree\nconst FIXTURE := true\n');
+    await writeFile(path.join(workspace, script), 'extends Node\nconst NEW := true\n');
+    await rm(path.join(workspace, removed));
+    return 'Updated the script and test.';
+  };
+  const connect = () => createWorkbench(root, storage, { runner, editSource });
+  let workbench = connect();
+  const call = (action, args = {}) => workbench(action, args, new AbortController().signal);
+  async function until(status) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const result = await call('state');
+      if (result.draft?.status === status) return result.draft;
+      await sleep(20);
+    }
+    assert.fail('Draft did not reach ' + status);
+  }
+  const rejected = await call('source', { prompt: 'Outside scope' });
+  assert.equal(rejected.draft.status, 'authoring');
+  assert.match((await until('failed')).error, /outside the draft scope/);
+  assert.equal((await call('discard', { id: rejected.draft.id })).draft, null);
+
+  const cancelled = await call('source', { prompt: 'Cancel' });
+  assert.equal((await call('discard', { id: cancelled.draft.id })).draft, null);
+  const started = await call('source', { prompt: 'Update the script' });
+  assert.equal(started.draft.status, 'authoring');
+  const reviewed = await until('staged');
+  assert.equal(reviewed.agent_source, true);
+  assert.deepEqual(reviewed.files, [testFile, script, removed]);
+  assert.match(reviewed.diff, /new file mode/);
+  assert.match(reviewed.diff, /deleted file mode/);
+  assert.equal(checked, 0);
+  assert.equal(git('rev-parse', 'HEAD'), base);
+  assert.equal(git('status', '--porcelain'), '');
+  await assert.rejects(call('play', { id: reviewed.id }), /pass the project checks/);
+
+  workbench = connect();
+  assert.equal((await call('state')).draft.diff, reviewed.diff);
+  await call('check', { id: reviewed.id });
+  await until('passed');
+  assert.equal(checked, 1);
+  assert.equal((await call('play', { id: reviewed.id })).playing, true);
+  await call('apply', { id: reviewed.id, message: 'Apply checked agent changes' });
+  assert.notEqual(git('rev-parse', 'HEAD'), base);
+  assert.equal(await readFile(path.join(root, testFile), 'utf8'), 'extends SceneTree\nconst FIXTURE := true\n');
+  assert.equal(git('status', '--porcelain'), '');
 });

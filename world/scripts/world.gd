@@ -86,6 +86,7 @@ var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
 var _development_action_busy := false
+var _development_status := ""
 
 func _ready() -> void:
 	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
@@ -541,15 +542,28 @@ func _refresh_development_actions() -> void:
 			"shoreline": available = _shoreline.available()
 			"grid": available = _grid_scenery.available()
 			"behavior", "workshop_tool": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
+		if draft.get("agent_source", false):
+			available = true
 		codex_console.update_development(draft, available and not shifting and not _development_action_busy,
 			_live_change_status(draft.get("id", "")) == "active")
 
 func _development_changed() -> void:
 	var draft := _development.draft
-	if draft.get("status") == "passed":
-		_console_notice("Draft checks passed. Preview the change or review the diff.")
-	elif draft.get("status") == "failed":
-		_console_notice("The draft failed checks. Open the draft to inspect the results.")
+	var status: String = draft.get("status", "")
+	var stamp := "%s/%s" % [draft.get("id", ""), status]
+	if stamp != _development_status:
+		_development_status = stamp
+		match status:
+			"staged":
+				if draft.get("agent_source", false):
+					_console_notice(draft.summary if not draft.summary.is_empty() else "Codex prepared the source draft.")
+					_console_notice("Review the diff, then run checks to prepare a playable build.")
+			"passed": _console_notice("Draft checks passed. Preview the change or review the diff.")
+			"failed":
+				if draft.get("has_patch", false):
+					_console_notice("The draft failed checks. Open the draft to inspect the results.")
+				else:
+					_console_notice("Source authoring failed. " + draft.error)
 	_refresh_development_actions()
 
 func _codex_development_action(action: String) -> void:
@@ -558,9 +572,11 @@ func _codex_development_action(action: String) -> void:
 	if action == "review":
 		_open_workbench()
 		if is_instance_valid(_workbench_panel):
-			_workbench_panel.show_review()
+			_workbench_panel.show_review(not _development.draft.get("has_patch", false))
 		return
 	var id: String = _development.draft.id
+	if action == "live" and _development.draft.get("agent_source", false):
+		action = "play" if _development.draft.status == "passed" else "check"
 	_development_action_busy = true
 	_refresh_development_actions()
 	var result := await _development.command(action)
@@ -569,6 +585,10 @@ func _codex_development_action(action: String) -> void:
 	elif action == "live":
 		var activated := await _preview_live_change(result.live)
 		_console_notice(activated.message)
+	elif action == "play":
+		_console_notice("Opened the checked build in a separate Euclid window.")
+	elif action == "check":
+		_console_notice("Running checks in the isolated preview project.")
 	elif action == "discard":
 		var finished := _finish_live_change("discard", id)
 		_console_notice("Discarded the draft and restored the previous version." if finished.live else "Discarded the draft.")
@@ -644,6 +664,7 @@ func _submit_codex_command(prompt: String) -> void:
 	var context := _world_context()
 	context["shoreline_preview"] = zone_id == "beach"
 	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
+	context["source_development"] = _development != null
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _is_workshop(zone_id) and not shifting:
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
@@ -658,7 +679,7 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice(str(response.error))
 		return
 	console_busy = true
-	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool"]:
+	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source"]:
 		await _request_development_draft(response.plan.tool, prompt, requested_zone)
 	elif response.plan.tool == "run_workshop_tool":
 		for entry in context.workshop_tools:
@@ -678,7 +699,7 @@ func _request_development_draft(tool: String, prompt: String, requested_zone: in
 		_console_notice("Open Start Euclid Workbench.cmd to develop and preview changes from F2.")
 		return
 	var available := _shoreline.available() if tool == "draft_shoreline" else _grid_scenery.available()
-	if not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not available:
+	if tool != "draft_source" and (not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not available):
 		_console_notice("Enter the beach with simulated surf to draft a shoreline change." if tool == "draft_shoreline"
 			else "Enter a Grid space to draft this change.")
 		return
@@ -694,6 +715,9 @@ func _request_development_draft(tool: String, prompt: String, requested_zone: in
 	var result := await _development.request(tool, prompt, context)
 	if result.has("error"):
 		_console_notice(result.error)
+	elif tool == "draft_source":
+		if result.draft.status == "authoring":
+			_console_notice("Codex is working in a separate source workspace. Open Workbench to see progress.")
 	else:
 		var summary: String = result.draft.get("summary", "")
 		if not summary.is_empty():

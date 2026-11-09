@@ -315,7 +315,7 @@ func _refresh_catalog() -> void:
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree():
 		return
-	if not force and not _state.get("playing", false) and _state.get("operation", "") != "checking":
+	if not force and not _state.get("playing", false) and _state.get("operation", "") not in ["checking", "authoring", "discarding"]:
 		if _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 			_sync_controls()
@@ -329,8 +329,8 @@ func _poll(force := false) -> void:
 		return
 	_show_state(result)
 
-func show_review() -> void:
-	_tabs.current_tab = 1
+func show_review(logs := false) -> void:
+	_tabs.current_tab = 2 if logs else 1
 
 func _show_state(result: Dictionary) -> void:
 	_state = result
@@ -341,7 +341,7 @@ func _show_state(result: Dictionary) -> void:
 		if _log.text != draft.log:
 			_log.text = draft.log
 			_log.set_caret_line(_log.get_line_count() - 1)
-		var messages := {"staged": "Review the Git diff before running the edited code.",
+		var messages := {"authoring": "Codex is working in a separate source workspace.", "staged": "Review the Git diff before running the edited code.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
 		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload", "restart": "Restart Euclid"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
@@ -383,7 +383,7 @@ func _sync_controls() -> void:
 	_buttons.propose.disabled = not editing or _request.text.strip_edges().is_empty()
 	_buttons.author.disabled = blocked or staged or _request.text.strip_edges().is_empty() or not _changed_files().is_empty()
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
-	_buttons.check.disabled = blocked or not staged or playing
+	_buttons.check.disabled = blocked or not staged or draft.files.is_empty() or playing
 	var live := _live_status()
 	_buttons.live.text = "Preview Grid reload" if staged and draft.get("activation") == "reload_grid" else "Preview live"
 	if staged and draft.get("subject") == "workshop_tool":
@@ -396,7 +396,8 @@ func _sync_controls() -> void:
 	_message.visible = passed
 	_message.editable = not blocked
 	_buttons.apply.disabled = blocked or not passed or live == "failed" or _message.text.strip_edges().is_empty()
-	_buttons.discard.disabled = _busy or not staged or (blocked and _state.get("operation") != "checking")
+	_buttons.discard.text = "Cancel authoring" if _state.get("operation") == "authoring" else "Discard"
+	_buttons.discard.disabled = _busy or not staged or (blocked and _state.get("operation") not in ["checking", "authoring"])
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or staged

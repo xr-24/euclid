@@ -9,7 +9,9 @@ import { shorelineAppearance } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
-import { fingerprint, isSourcePath, listSources, normalizeEdit, readSource } from './workbench-source.mjs';
+import { fingerprint, isAgentSourcePath, isSourcePath, listSources, normalizeEdit, readSource } from './workbench-source.mjs';
+import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
+import { authorSource } from './workbench-source-agent.mjs';
 
 const schema = fileURLToPath(new URL('./workbench-edit.schema.json', import.meta.url));
 const commitId = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/;
@@ -53,9 +55,10 @@ async function readChanges(root, files) {
 
 export function createWorkbench(root, storage, { runner = createPreviewRunner(root), propose = proposeEdit,
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
-  designTool = proposeWorkshopTool } = {}) {
+  designTool = proposeWorkshopTool, editSource = authorSource } = {}) {
   const git = createWorkbenchGit(root);
   let draft = null;
+  let sourceJob = null;
   let operation = '';
   let planning = false;
   let checks = null;
@@ -71,30 +74,39 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       let metadata;
       try { metadata = JSON.parse(await readFile(path.join(directory, 'draft.json'), 'utf8')); }
       catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-      const { id, names, base, branch, digest, binding, summary, fromWorld } = metadata;
+      const { id, names, base, branch, digest, binding, summary, fromWorld, agentSource } = metadata;
+      const allowed = agentSource === true ? isAgentSourcePath : isSourcePath;
       if (item.name !== `git-draft-${id}` || !commitId.test(base) || typeof branch !== 'string' || !branch.startsWith('refs/heads/') ||
-          !Array.isArray(names) || names.length < 1 || names.length > maxFiles || !names.every(isSourcePath) || draft) {
+          !Array.isArray(names) || names.length < 1 || names.length > (agentSource === true ? sourceDraftLimit : maxFiles) || !names.every(allowed) || draft) {
         throw new Error('The staged Git draft could not be recovered.');
       }
       const worktree = git.worktreePath(directory);
       const diff = await git.review(worktree, base, names);
       if (digest !== fingerprint(diff)) throw new Error('The recovered Git worktree differs from the reviewed draft.');
       draft = { id, names, base, branch, directory, worktree, diff, binding, summary,
+        agentSource: agentSource === true,
         fromWorld: fromWorld ?? (appearanceFor(names)?.payload === 'shoreline'),
-        plugin: await livePlugin(worktree, names, binding), status: 'staged', log: '', error: '' };
+        plugin: agentSource === true ? null : await livePlugin(worktree, names, binding), status: 'staged', log: '', error: '' };
     }
   }
 
   async function state() {
-    const appearance = draft && appearanceFor(draft.names);
-    const tool = draft && workshopToolFile(draft.names);
-    return { operation, playing: runner.playing(), revision: await git.headRevision(), draft: draft && {
+    const revision = await git.headRevision();
+    if (sourceJob) {
+      const { id, status, error, log } = sourceJob;
+      return { operation, playing: false, revision, draft: { id, status, error, log, diff: '', files: [],
+        name: 'Source workspace', summary: '', subject: 'source', activation: 'restart', live: false,
+        preview_zone: '', checked_preview: true, from_world: true, agent_source: true } };
+    }
+    const appearance = draft && !draft.agentSource && appearanceFor(draft.names);
+    const tool = draft && !draft.agentSource && workshopToolFile(draft.names);
+    return { operation, playing: runner.playing(), revision, draft: draft && {
       id: draft.id, name: draft.names.length === 1 ? draft.names[0] : `${draft.names.length} files`, files: draft.names,
       diff: draft.diff, status: draft.status, log: draft.log, error: draft.error,
       live: Boolean(draft.plugin || appearance || tool), activation: appearance?.activation ?? (draft.plugin || tool ? 'live' : 'restart'),
       subject: appearance?.payload ?? (tool ? 'workshop_tool' : draft.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || draft.fromWorld), from_world: draft.fromWorld === true,
-      preview_zone: draft.binding?.zone ?? '', summary: draft.summary ?? '',
+      preview_zone: draft.binding?.zone ?? '', summary: draft.summary ?? '', agent_source: draft.agentSource === true,
     } };
   }
 
@@ -110,7 +122,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   }
 
   async function draftBase() {
-    if (draft) throw new Error('Commit or discard the current Git draft first.');
+    if (draft || sourceJob) throw new Error('Commit or discard the current Git draft first.');
     const { head: base, branch, clean } = await git.primary();
     if (!clean) throw new Error('The main checkout has local changes. Commit or set them aside before creating a draft.');
     return { base, branch };
@@ -121,6 +133,36 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const changes = await readChanges(root, body.files);
     const files = new Map([...changes].filter(([, change]) => change.source.text !== change.after).map(([name, change]) => [name, change.after]));
     await writeDraft(base, files);
+  }
+
+  async function startSource(body) {
+    const { base, branch } = await draftBase();
+    if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 600) throw new Error('Describe a source change in 1 to 600 characters.');
+    const id = randomUUID();
+    const directory = path.join(storage, `git-draft-${id}`);
+    const worktree = git.worktreePath(directory);
+    const controller = new AbortController();
+    const job = { id, status: 'authoring', error: '', log: 'Preparing source from the pinned Git revision.\n', controller };
+    sourceJob = job;
+    job.finished = (async () => {
+      try {
+        await mkdir(directory, { recursive: true });
+        await git.add(worktree, base);
+        const { names, summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), author: editSource,
+          signal: controller.signal, intent: files => git.intent(worktree, files),
+          onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
+        controller.signal.throwIfAborted();
+        await registerDraft({ id, names, base, branch, directory, worktree, summary, fromWorld: true, agentSource: true }, job.log);
+        sourceJob = null;
+      } catch (error) {
+        await git.remove(worktree).catch(() => {});
+        await rm(directory, { recursive: true, force: true }).catch(() => {});
+        job.status = 'failed';
+        job.error = error.message;
+      } finally {
+        if (operation === 'authoring') operation = '';
+      }
+    })();
   }
 
   async function authorDraft(body, signal) {
@@ -189,16 +231,21 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         }
       }
       if (binding) await git.intent(worktree, names);
-      const diff = await git.review(worktree, base, names);
-      if (Buffer.byteLength(diff) > 256 * 1024) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
-      await writeFile(path.join(directory, 'draft.json'), JSON.stringify({ id, names, base, branch, digest: fingerprint(diff), binding, summary, fromWorld }));
-      draft = { id, names, base, branch, directory, worktree, diff, binding, summary, fromWorld,
-        plugin: await livePlugin(worktree, names, binding), status: 'staged', log: '', error: '' };
+      await registerDraft({ id, names, base, branch, directory, worktree, binding, summary, fromWorld });
     } catch (error) {
       await git.remove(worktree).catch(() => {});
       await rm(directory, { recursive: true, force: true });
       throw error;
     }
+  }
+
+  async function registerDraft(change, log = '') {
+    const { id, names, base, branch, directory, worktree, binding, summary, fromWorld, agentSource } = change;
+    const diff = await git.review(worktree, base, names);
+    if (Buffer.byteLength(diff) > 256 * 1024) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
+    const plugin = agentSource ? null : await livePlugin(worktree, names, binding);
+    await writeFile(path.join(directory, 'draft.json'), JSON.stringify({ id, names, base, branch, digest: fingerprint(diff), binding, summary, fromWorld, agentSource }));
+    draft = { ...change, diff, plugin, status: 'staged', log, error: '' };
   }
 
   async function ask(body, signal) {
@@ -270,6 +317,19 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     }
     if (action === 'state') return state();
     if (action === 'propose') return ask(body, signal);
+    if (action === 'discard' && sourceJob) {
+      if (operation === 'discarding') throw new Error('The source workspace is already being discarded.');
+      if (body.id !== sourceJob.id) throw new Error('Select the current source workspace first.');
+      const job = sourceJob;
+      operation = 'discarding';
+      try {
+        job.controller.abort(new Error('Source authoring cancelled.'));
+        await job.finished;
+        if (draft?.id === job.id) await removeDraft(draft);
+        sourceJob = null;
+      } finally { operation = ''; }
+      return state();
+    }
     if (operation && !(action === 'discard' && operation === 'checking')) throw new Error('The workbench is busy.');
     if (action === 'check') { runChecks(body.id); return state(); }
     operation = action;
@@ -278,6 +338,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     let live;
     try {
       switch (action) {
+        case 'source': operation = 'authoring'; await startSource(body); break;
         case 'stage': await stage(body); break;
         case 'author': await authorDraft(body, signal); break;
         case 'tool': await authorTool(body, signal); break;
@@ -285,6 +346,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         case 'grid': await developAppearance(body, signal, gridAppearance, designGrid); break;
         case 'live': {
           const change = requireDraft(body.id);
+          if (change.agentSource) throw new Error('Use the separate preview build for agent-authored source changes.');
           const appearance = appearanceFor(change.names);
           const tool = workshopToolFile(change.names);
           if ((appearance || tool || change.fromWorld) && change.status !== 'passed') {
@@ -349,7 +411,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           break;
         }
         case 'restore': {
-          if (draft) throw new Error('Discard the current draft before reverting a commit.');
+          if (draft || sourceJob) throw new Error('Discard the current draft before reverting a commit.');
           const latest = await git.headRevision();
           if (!latest || latest !== body.revision) throw new Error('The reviewed commit is no longer the tip of the main branch.');
           revision = await git.revert(latest);
@@ -357,7 +419,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         }
         default: throw new Error('Unknown workbench command.');
       }
-    } finally { if (operation !== 'checking') operation = ''; }
+    } finally { if (operation !== 'checking' && (operation !== 'authoring' || !sourceJob)) operation = ''; }
     return { ...await state(), commit: revision ?? '', warning, ...(live ? { live } : {}) };
   };
 }

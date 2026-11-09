@@ -19,6 +19,7 @@ var _resize: Button
 var _draft_row: HBoxContainer
 var _draft_strip: MarginContainer
 var _preview_draft: Button
+var _discard_draft: Button
 
 static func frame_style() -> StyleBoxFlat:
 	var frame := StyleBoxFlat.new()
@@ -73,7 +74,7 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	_draft_strip.hide()
 	_draft_button("Review draft", "review")
 	_preview_draft = _draft_button("Preview live", "live")
-	_draft_button("Discard", "discard")
+	_discard_draft = _draft_button("Discard", "discard")
 
 	var input_row := HBoxContainer.new()
 	input_row.custom_minimum_size.y = 49
@@ -99,6 +100,14 @@ func focus_entry() -> void:
 
 func update_development(draft: Dictionary, can_preview: bool, live: bool) -> void:
 	_draft_strip.visible = not draft.is_empty()
+	_discard_draft.text = "Cancel" if draft.get("status") == "authoring" else "Discard"
+	if draft.get("agent_source", false):
+		var status: String = draft.get("status", "")
+		var can_check: bool = status in ["staged", "failed"] and draft.get("has_patch", false)
+		var playing: bool = draft.get("playing", false)
+		_preview_draft.disabled = not can_preview or playing or (not can_check and status != "passed")
+		_preview_draft.text = "Preview open" if playing else ("Run checks" if can_check else "Preview build")
+		return
 	_preview_draft.disabled = not can_preview or draft.get("status") != "passed" or live
 	var label := "Preview Grid reload" if draft.get("activation") == "reload_grid" else "Preview live"
 	if draft.get("subject") == "workshop_tool":

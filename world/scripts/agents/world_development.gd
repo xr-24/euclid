@@ -26,6 +26,7 @@ func request(tool: String, prompt: String, context: Dictionary) -> Dictionary:
 		"draft_grid": return await _send("grid", {"prompt": prompt})
 		"draft_behavior": return await _send("author", {"prompt": prompt, "context": context, "from_world": true})
 		"draft_workshop_tool": return await _send("tool", {"prompt": prompt, "context": context})
+		"draft_source": return await _send("source", {"prompt": prompt})
 	return {"error": "Unknown development request."}
 
 func command(action: String) -> Dictionary:
@@ -53,7 +54,9 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 		var next := {}
 		if item is Dictionary and item.get("from_world", false):
 			next = {"id": item.id, "status": item.status, "summary": item.summary, "error": item.error,
-				"activation": item.activation, "subject": item.subject, "preview_zone": item.preview_zone}
+				"activation": item.activation, "subject": item.subject, "preview_zone": item.preview_zone,
+				"agent_source": item.get("agent_source", false), "has_patch": not item.files.is_empty(),
+				"playing": response.get("playing", false)}
 		if next != draft:
 			draft = next
 			changed.emit()

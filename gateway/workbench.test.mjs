@@ -20,7 +20,8 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const original = 'extends Node\nconst VALUE := 1\n';
   const proposedPackage = {
     supported: true, id: 'door_plate', name: 'Door plate', entity_type: 'pressure_plate', output: 'door_open',
-    settings: [{ key: 'radius', label: 'Radius', minimum: 0.4, maximum: 3, default: 0.65 }],
+    settings: [{ key: 'radius', label: 'Radius', minimum: 0.4, maximum: 3, default: 0.65 },
+      { key: 'speed', label: 'Speed', minimum: 0.2, maximum: 8, default: 2 }],
     source_entity: plate, target_entity: door, source: original, summary: 'Create a door plate.',
   };
   const file = path.join(root, name);

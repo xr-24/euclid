@@ -55,6 +55,10 @@ export function pluginFiles(proposal, context) {
         ![minimum, maximum, value].every(number) || minimum > value || value > maximum) throw new Error('The plugin settings are invalid.');
     settings[key] = { label, minimum, maximum, default: value };
   }
+  if (output === 'door_open' && (!settings.radius || settings.radius.minimum <= 0 || !settings.speed ||
+      settings.speed.minimum < 0.2 || settings.speed.maximum > 8)) {
+    throw new Error('A door plugin needs a positive radius and a door speed between 0.2 and 8 metres per second.');
+  }
   const script = normalizeEdit('', proposal.source);
   if (!script.trim()) throw new Error('Codex did not produce plugin source.');
   const definition = { id, name: name.trim(), entity_type, output, settings };

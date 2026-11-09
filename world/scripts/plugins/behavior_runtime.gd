@@ -5,7 +5,7 @@ const Registry = preload("res://scripts/plugins/behavior_registry.gd")
 const API_VERSION := 1
 const SOURCE_LIMIT := 65536
 
-var registry := Registry.new()
+var registry: Registry
 var observer: Node3D
 var _active := {}
 var _draft := {}

@@ -107,6 +107,7 @@ func _check_live_behaviors(path: String) -> void:
 	root.add_child(zone)
 	zone.add_child(observer)
 	var runtime := BehaviorRuntime.new(observer)
+	_check(runtime.available().size() == runtime.registry.list().size(), "all registered plugins compile and pass their sample probes")
 	var library := PrefabLibrary.new("")
 	var tools := WorldTools.new(path, library, runtime)
 	tools.attach(zone)

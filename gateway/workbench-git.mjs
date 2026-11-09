@@ -9,7 +9,7 @@ async function git(cwd, ...args) {
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true' };
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) delete env[key];
   try {
-    const { stdout } = await execute('git', ['-c', 'core.hooksPath=.git/euclid-disabled-hooks', '-c', 'commit.gpgSign=false', ...args],
+    const { stdout } = await execute('git', ['-c', 'core.longpaths=true', '-c', 'core.hooksPath=.git/euclid-disabled-hooks', '-c', 'commit.gpgSign=false', ...args],
       { cwd, env, windowsHide: true, timeout: 30000, maxBuffer: 768 * 1024 });
     return stdout;
   } catch (error) {

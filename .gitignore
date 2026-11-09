@@ -1,0 +1,24 @@
+.tools/
+.local/
+world/.godot/
+*.blend1
+node_modules/
+__pycache__/
+
+# Art packs and standalone experiment projects stay local.
+/assets/
+/experiments/
+/world/assets/**/*
+!/world/assets/**/
+!/world/assets/**/*.md
+!/world/assets/**/*.json
+!/world/assets/**/*.import
+/world/override.cfg
+
+# Local credentials and configuration overrides.
+.env
+.env.*
+*.pem
+*.key
+*sketchfab*token*.txt
+*sketchfab*key*.txt

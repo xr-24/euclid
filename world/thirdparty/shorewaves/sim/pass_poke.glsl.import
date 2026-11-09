@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b6cvq7kwydfbo"
+path="res://.godot/imported/pass_poke.glsl-180dd855d27300f5bcf3bcf829b535d3.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_poke.glsl"
+dest_files=["res://.godot/imported/pass_poke.glsl-180dd855d27300f5bcf3bcf829b535d3.res"]
+
+[params]
+

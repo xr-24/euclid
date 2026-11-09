@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ck8go2066072s"
+path="res://.godot/imported/pass_integrate.glsl-74e83d07f280e737d3222b729e7569f7.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_integrate.glsl"
+dest_files=["res://.godot/imported/pass_integrate.glsl-74e83d07f280e737d3222b729e7569f7.res"]
+
+[params]
+

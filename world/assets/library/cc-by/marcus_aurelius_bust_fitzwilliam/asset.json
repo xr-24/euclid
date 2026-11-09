@@ -1,0 +1,27 @@
+{
+ "id": "marcus_aurelius_bust_fitzwilliam",
+ "title": "Bust of Marcus Aurelius",
+ "category": "bust",
+ "tags": [
+  "roman",
+  "emperor",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.634,
+  "depth": 0.685,
+  "height": 0.78
+ },
+ "triangles": 49999,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bust of Marcus Aurelius",
+  "page": "https://sketchfab.com/3d-models/bust-of-marcus-aurelius-dba064e7f177442c9e20f755042bf662",
+  "author": "Fitzwilliam Museum",
+  "author_page": "https://sketchfab.com/fitzwilliammuseum",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 500000 to 49999 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

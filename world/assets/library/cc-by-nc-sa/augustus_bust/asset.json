@@ -1,0 +1,27 @@
+{
+ "id": "augustus_bust",
+ "title": "Bust of Augustus",
+ "category": "bust",
+ "tags": [
+  "roman",
+  "emperor",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.27,
+  "depth": 0.3,
+  "height": 0.48
+ },
+ "triangles": 49999,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bust of Augustus",
+  "page": "https://sketchfab.com/3d-models/bust-of-augustus-09133cc841584a1caab49875c98a1db8",
+  "author": "The British Museum",
+  "author_page": "https://sketchfab.com/britishmuseum",
+  "licence": "by-nc-sa",
+  "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+  "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "changes": "Reduced from 158060 to 49999 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

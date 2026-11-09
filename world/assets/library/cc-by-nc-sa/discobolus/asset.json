@@ -1,0 +1,27 @@
+{
+ "id": "discobolus",
+ "title": "Discobolus",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "athlete",
+  "marble"
+ ],
+ "size_m": {
+  "width": 1.079,
+  "depth": 0.544,
+  "height": 1.7
+ },
+ "triangles": 79994,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Discobolus",
+  "page": "https://sketchfab.com/3d-models/discobolus-8ee8411b0b33471d8c9b9ced27768681",
+  "author": "Geoffrey Marchal",
+  "author_page": "https://sketchfab.com/geoffreymarchal",
+  "licence": "by-nc-sa",
+  "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+  "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "changes": "Reduced from 388397 to 79994 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "id": "trajan_tower_hill",
+ "title": "Statue of Emperor Trajan",
+ "category": "statue",
+ "tags": [
+  "roman",
+  "emperor",
+  "standing",
+  "bronze",
+  "on pedestal"
+ ],
+ "size_m": {
+  "width": 1.419,
+  "depth": 1.137,
+  "height": 3.101
+ },
+ "triangles": 89996,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Statue of Emperor Trajan (Tower Hill, London)",
+  "page": "https://sketchfab.com/3d-models/statue-of-emperor-trajan-tower-hill-london-6bb04d9b5a3240d39791b6a3dbcd3d41",
+  "author": "nate_siddle",
+  "author_page": "https://sketchfab.com/nate_sid",
+  "licence": "by-nc",
+  "licence_label": "CC Attribution-NonCommercial",
+  "licence_url": "http://creativecommons.org/licenses/by-nc/4.0/",
+  "changes": "Reduced from 426429 to 89996 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

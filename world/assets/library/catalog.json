@@ -1,0 +1,1521 @@
+{
+ "assets": {
+  "antique_ceramic_vase_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/antique_ceramic_vase_01.glb",
+   "size_m": {
+    "depth": 0.255,
+    "height": 0.44,
+    "width": 0.255
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/antique_ceramic_vase_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Antique ceramic vase 01",
+   "triangles": 9408
+  },
+  "apollo_belvedere": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/apollo_belvedere/apollo_belvedere.glb",
+   "size_m": {
+    "depth": 1.126,
+    "height": 2.24,
+    "width": 1.467
+   },
+   "source": {
+    "author": "Rigsters",
+    "author_page": "https://sketchfab.com/rigsters",
+    "changes": "Rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/apollo-belvedere-9b67614ab3f9422d9f6c88fb4fdd60cc",
+    "site": "Sketchfab",
+    "title": "Apollo Belvedere"
+   },
+   "tags": [
+    "greek",
+    "god",
+    "standing",
+    "marble"
+   ],
+   "title": "Apollo Belvedere",
+   "triangles": 50018
+  },
+  "athena_lemnia": {
+   "category": "statue",
+   "licence": "cc-by-nc-sa",
+   "scene": "res://assets/library/cc-by-nc-sa/athena_lemnia/athena_lemnia.glb",
+   "size_m": {
+    "depth": 0.738,
+    "height": 2.0,
+    "width": 0.727
+   },
+   "source": {
+    "author": "Geoffrey Marchal",
+    "author_page": "https://sketchfab.com/geoffreymarchal",
+    "changes": "Reduced from 402566 to 79996 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc-sa",
+    "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+    "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "page": "https://sketchfab.com/3d-models/athena-lemnia-cededeb8878a497bb23efd4271c81ad0",
+    "site": "Sketchfab",
+    "title": "Athena Lemnia"
+   },
+   "tags": [
+    "greek",
+    "goddess",
+    "standing"
+   ],
+   "title": "Athena Lemnia",
+   "triangles": 79996
+  },
+  "augustus_bust": {
+   "category": "bust",
+   "licence": "cc-by-nc-sa",
+   "scene": "res://assets/library/cc-by-nc-sa/augustus_bust/augustus_bust.glb",
+   "size_m": {
+    "depth": 0.3,
+    "height": 0.48,
+    "width": 0.27
+   },
+   "source": {
+    "author": "The British Museum",
+    "author_page": "https://sketchfab.com/britishmuseum",
+    "changes": "Reduced from 158060 to 49999 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc-sa",
+    "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+    "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "page": "https://sketchfab.com/3d-models/bust-of-augustus-09133cc841584a1caab49875c98a1db8",
+    "site": "Sketchfab",
+    "title": "Bust of Augustus"
+   },
+   "tags": [
+    "roman",
+    "emperor",
+    "marble"
+   ],
+   "title": "Bust of Augustus",
+   "triangles": 49999
+  },
+  "boulder_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/boulder_01.glb",
+   "size_m": {
+    "depth": 1.838,
+    "height": 1.01,
+    "width": 1.275
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/boulder_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Boulder 01",
+   "triangles": 26611
+  },
+  "caryatid": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/caryatid/caryatid.glb",
+   "size_m": {
+    "depth": 0.598,
+    "height": 2.301,
+    "width": 0.632
+   },
+   "source": {
+    "author": "3Dystopia",
+    "author_page": "https://sketchfab.com/Dystopia",
+    "changes": "Reduced from 452518 to 79998 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/caryatid-ancient-greece-collection-fc0ac58d0ab14c3a939da89063f8f57e",
+    "site": "Sketchfab",
+    "title": "Caryatid - Ancient Greece Collection"
+   },
+   "tags": [
+    "greek",
+    "architectural",
+    "column",
+    "standing",
+    "marble"
+   ],
+   "title": "Caryatid",
+   "triangles": 79998
+  },
+  "cheiridopsis_succulent": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/cheiridopsis_succulent.glb",
+   "size_m": {
+    "depth": 0.949,
+    "height": 0.274,
+    "width": 2.143
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/cheiridopsis_succulent",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Cheiridopsis succulent",
+   "triangles": 4378
+  },
+  "classic_laptop": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/classic_laptop.glb",
+   "size_m": {
+    "depth": 0.486,
+    "height": 0.543,
+    "width": 0.652
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/classic_laptop",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Classic laptop",
+   "triangles": 14450
+  },
+  "coast_land_rocks_03": {
+   "category": "rock",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/coast_land_rocks_03.glb",
+   "size_m": {
+    "depth": 5.632,
+    "height": 1.529,
+    "width": 8.975
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/coast_land_rocks_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coast land rocks 03",
+   "triangles": 70000
+  },
+  "coast_line_02": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/coast_line_02.glb",
+   "size_m": {
+    "depth": 23.276,
+    "height": 2.297,
+    "width": 45.639
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/coast_line_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coast line 02",
+   "triangles": 120000
+  },
+  "coast_rocks_05": {
+   "category": "rock",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/coast_rocks_05.glb",
+   "size_m": {
+    "depth": 3.748,
+    "height": 1.329,
+    "width": 4.041
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/coast_rocks_05",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coast rocks 05",
+   "triangles": 45000
+  },
+  "coastal_cliff_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/coastal_cliff_01.glb",
+   "size_m": {
+    "depth": 10.966,
+    "height": 10.327,
+    "width": 91.983
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/coastal_cliff_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coastal cliff 01",
+   "triangles": 119998
+  },
+  "crystalline_iceplant": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/crystalline_iceplant.glb",
+   "size_m": {
+    "depth": 0.735,
+    "height": 0.079,
+    "width": 1.617
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/crystalline_iceplant",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Crystalline iceplant",
+   "triangles": 7334
+  },
+  "dionysos_torso": {
+   "category": "fragment",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/dionysos_torso/dionysos_torso.glb",
+   "size_m": {
+    "depth": 0.392,
+    "height": 0.95,
+    "width": 0.725
+   },
+   "source": {
+    "author": "Thomas Flynn",
+    "author_page": "https://sketchfab.com/nebulousflynn",
+    "changes": "Reduced from 74378 to 50000 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/marble-torso-from-a-statue-of-dionysos-de078950bd474c73bb6cd7e1cf31de9b",
+    "site": "Sketchfab",
+    "title": "Marble torso from a statue of Dionysos"
+   },
+   "tags": [
+    "roman",
+    "torso",
+    "marble"
+   ],
+   "title": "Marble torso of Dionysos",
+   "triangles": 50000
+  },
+  "discobolus": {
+   "category": "statue",
+   "licence": "cc-by-nc-sa",
+   "scene": "res://assets/library/cc-by-nc-sa/discobolus/discobolus.glb",
+   "size_m": {
+    "depth": 0.544,
+    "height": 1.7,
+    "width": 1.079
+   },
+   "source": {
+    "author": "Geoffrey Marchal",
+    "author_page": "https://sketchfab.com/geoffreymarchal",
+    "changes": "Reduced from 388397 to 79994 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc-sa",
+    "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+    "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "page": "https://sketchfab.com/3d-models/discobolus-8ee8411b0b33471d8c9b9ced27768681",
+    "site": "Sketchfab",
+    "title": "Discobolus"
+   },
+   "tags": [
+    "greek",
+    "athlete",
+    "marble"
+   ],
+   "title": "Discobolus",
+   "triangles": 79994
+  },
+  "farnese_hercules_study": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/farnese_hercules_study/farnese_hercules_study.glb",
+   "size_m": {
+    "depth": 0.927,
+    "height": 2.2,
+    "width": 1.125
+   },
+   "source": {
+    "author": "Deepak C C",
+    "author_page": "https://sketchfab.com/DeepakCC",
+    "changes": "Reduced from 970379 to 89994 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/the-punishment-a-study-of-farnese-hercules-0b36d63fd4e44ab6b59088438d4da441",
+    "site": "Sketchfab",
+    "title": "The Punishment- A study of Farnese Hercules"
+   },
+   "tags": [
+    "modern",
+    "standing",
+    "hero"
+   ],
+   "title": "The Punishment: a study of the Farnese Hercules",
+   "triangles": 89994
+  },
+  "faun_with_kid": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/faun_with_kid/faun_with_kid.glb",
+   "size_m": {
+    "depth": 0.761,
+    "height": 1.6,
+    "width": 0.681
+   },
+   "source": {
+    "author": "3Dystopia",
+    "author_page": "https://sketchfab.com/Dystopia",
+    "changes": "Rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/faune-au-chevreau-cae7d6375b0640b883239d3a9c0ba47d",
+    "site": "Sketchfab",
+    "title": "Faune au Chevreau"
+   },
+   "tags": [
+    "satyr",
+    "standing",
+    "marble"
+   ],
+   "title": "Faune au Chevreau",
+   "triangles": 14981
+  },
+  "flower_gazania": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/flower_gazania.glb",
+   "size_m": {
+    "depth": 0.738,
+    "height": 0.186,
+    "width": 1.533
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/flower_gazania",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Flower gazania",
+   "triangles": 6993
+  },
+  "grass_medium_02": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/grass_medium_02.glb",
+   "size_m": {
+    "depth": 0.433,
+    "height": 0.405,
+    "width": 1.311
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/grass_medium_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Grass medium 02",
+   "triangles": 7842
+  },
+  "hermes": {
+   "category": "statue",
+   "licence": "cc-by-nc-sa",
+   "scene": "res://assets/library/cc-by-nc-sa/hermes/hermes.glb",
+   "size_m": {
+    "depth": 0.842,
+    "height": 1.9,
+    "width": 1.099
+   },
+   "source": {
+    "author": "Geoffrey Marchal",
+    "author_page": "https://sketchfab.com/geoffreymarchal",
+    "changes": "Reduced from 391003 to 79999 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc-sa",
+    "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+    "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "page": "https://sketchfab.com/3d-models/hermes-69407dad508347f393b8cb40511cdfb4",
+    "site": "Sketchfab",
+    "title": "Hermes"
+   },
+   "tags": [
+    "greek",
+    "god",
+    "standing",
+    "marble"
+   ],
+   "title": "Hermes",
+   "triangles": 79999
+  },
+  "horse_statue_01": {
+   "category": "statue",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/horse_statue_01.glb",
+   "size_m": {
+    "depth": 0.108,
+    "height": 0.22,
+    "width": 0.163
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/horse_statue_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Horse statue 01",
+   "triangles": 22388
+  },
+  "island_tree_01": {
+   "category": "tree",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/island_tree_01.glb",
+   "size_m": {
+    "depth": 4.82,
+    "height": 4.97,
+    "width": 4.711
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/island_tree_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Island tree 01",
+   "triangles": 257966
+  },
+  "island_tree_02": {
+   "category": "tree",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/island_tree_02.glb",
+   "size_m": {
+    "depth": 4.068,
+    "height": 3.402,
+    "width": 4.202
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/island_tree_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Island tree 02",
+   "triangles": 217709
+  },
+  "island_tree_03": {
+   "category": "tree",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/island_tree_03.glb",
+   "size_m": {
+    "depth": 2.912,
+    "height": 2.628,
+    "width": 2.978
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/island_tree_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Island tree 03",
+   "triangles": 278261
+  },
+  "jacaranda_tree": {
+   "category": "tree",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/jacaranda_tree.glb",
+   "size_m": {
+    "depth": 18.883,
+    "height": 19.435,
+    "width": 24.326
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/jacaranda_tree",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Jacaranda tree",
+   "triangles": 215769
+  },
+  "lambis_shell": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/lambis_shell.glb",
+   "size_m": {
+    "depth": 0.075,
+    "height": 0.047,
+    "width": 0.139
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/lambis_shell",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Lambis shell",
+   "triangles": 12498
+  },
+  "lion_head": {
+   "category": "statue",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/lion_head.glb",
+   "size_m": {
+    "depth": 0.207,
+    "height": 0.436,
+    "width": 0.321
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/lion_head",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Lion head",
+   "triangles": 47214
+  },
+  "lycean_apollo": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/lycean_apollo/lycean_apollo.glb",
+   "size_m": {
+    "depth": 0.946,
+    "height": 3.4,
+    "width": 0.946
+   },
+   "source": {
+    "author": "Samuel F. Angrick-Johanns (Oneironauticus)",
+    "author_page": "https://sketchfab.com/oneironauticus",
+    "changes": "Reduced from 307584 to 79997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/the-lycean-apollo-c0cf5a23f26d49a08e3a4509049c0f3d",
+    "site": "Sketchfab",
+    "title": "The Lycean Apollo"
+   },
+   "tags": [
+    "greek",
+    "god",
+    "standing",
+    "marble",
+    "on pedestal"
+   ],
+   "title": "The Lycean Apollo",
+   "triangles": 79997
+  },
+  "marble_bust_01": {
+   "category": "bust",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/marble_bust_01.glb",
+   "size_m": {
+    "depth": 0.3,
+    "height": 0.515,
+    "width": 0.272
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/marble_bust_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Marble bust 01",
+   "triangles": 17456
+  },
+  "marcus_aurelius_bust": {
+   "category": "bust",
+   "licence": "cc-by-nc-sa",
+   "scene": "res://assets/library/cc-by-nc-sa/marcus_aurelius_bust/marcus_aurelius_bust.glb",
+   "size_m": {
+    "depth": 0.406,
+    "height": 0.801,
+    "width": 0.412
+   },
+   "source": {
+    "author": "Geoffrey Marchal",
+    "author_page": "https://sketchfab.com/geoffreymarchal",
+    "changes": "Reduced from 400030 to 59999 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc-sa",
+    "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+    "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "page": "https://sketchfab.com/3d-models/marcus-aurelius-03d7639ecbe943bba20b22ba1f9746d3",
+    "site": "Sketchfab",
+    "title": "Marcus Aurelius"
+   },
+   "tags": [
+    "roman",
+    "emperor",
+    "marble"
+   ],
+   "title": "Marcus Aurelius",
+   "triangles": 59999
+  },
+  "marcus_aurelius_bust_fitzwilliam": {
+   "category": "bust",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/marcus_aurelius_bust_fitzwilliam/marcus_aurelius_bust_fitzwilliam.glb",
+   "size_m": {
+    "depth": 0.685,
+    "height": 0.78,
+    "width": 0.634
+   },
+   "source": {
+    "author": "Fitzwilliam Museum",
+    "author_page": "https://sketchfab.com/fitzwilliammuseum",
+    "changes": "Reduced from 500000 to 49999 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bust-of-marcus-aurelius-dba064e7f177442c9e20f755042bf662",
+    "site": "Sketchfab",
+    "title": "Bust of Marcus Aurelius"
+   },
+   "tags": [
+    "roman",
+    "emperor",
+    "marble"
+   ],
+   "title": "Bust of Marcus Aurelius",
+   "triangles": 49999
+  },
+  "modular_wooden_pier": {
+   "category": "structure",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/modular_wooden_pier.glb",
+   "size_m": {
+    "depth": 19.026,
+    "height": 7.516,
+    "width": 3.102
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/modular_wooden_pier",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Modular wooden pier",
+   "triangles": 84780
+  },
+  "nile_river_god": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/nile_river_god/nile_river_god.glb",
+   "size_m": {
+    "depth": 1.522,
+    "height": 1.617,
+    "width": 3.101
+   },
+   "source": {
+    "author": "Rigsters",
+    "author_page": "https://sketchfab.com/rigsters",
+    "changes": "Reduced from 300488 to 139998 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/nile-42e02439c61049d681c897441d40aaa1",
+    "site": "Sketchfab",
+    "title": "Nile"
+   },
+   "tags": [
+    "roman",
+    "reclining",
+    "river god",
+    "fountain",
+    "group"
+   ],
+   "title": "The Nile",
+   "triangles": 139998
+  },
+  "ocean_buoy": {
+   "category": "floating",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/ocean_buoy.glb",
+   "size_m": {
+    "depth": 0.952,
+    "height": 2.656,
+    "width": 1.067
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/ocean_buoy",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Ocean buoy",
+   "triangles": 12240
+  },
+  "orestes_sarcophagus": {
+   "category": "sarcophagus",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/orestes_sarcophagus/orestes_sarcophagus.glb",
+   "size_m": {
+    "depth": 0.689,
+    "height": 0.656,
+    "width": 2.15
+   },
+   "source": {
+    "author": "Zoilo",
+    "author_page": "https://sketchfab.com/iliedom",
+    "changes": "Rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/sarcofago-de-la-orestiada-de-husillos-man-af2088bea8c64f49bd8a46f6f3755281",
+    "site": "Sketchfab",
+    "title": "Sarcófago de la Orestíada de Husillos (M.A.N.)"
+   },
+   "tags": [
+    "roman",
+    "relief",
+    "marble"
+   ],
+   "title": "Orestes sarcophagus of Husillos",
+   "triangles": 29982
+  },
+  "outdoor_table_chair_set_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/outdoor_table_chair_set_01.glb",
+   "size_m": {
+    "depth": 1.717,
+    "height": 0.859,
+    "width": 0.742
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/outdoor_table_chair_set_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Outdoor table chair set 01",
+   "triangles": 9828
+  },
+  "potted_plant_01": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/potted_plant_01.glb",
+   "size_m": {
+    "depth": 0.549,
+    "height": 1.294,
+    "width": 0.524
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/potted_plant_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Potted plant 01",
+   "triangles": 67624
+  },
+  "potted_plant_02": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/potted_plant_02.glb",
+   "size_m": {
+    "depth": 0.657,
+    "height": 0.841,
+    "width": 0.701
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/potted_plant_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Potted plant 02",
+   "triangles": 69806
+  },
+  "rock_face_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/rock_face_01.glb",
+   "size_m": {
+    "depth": 3.827,
+    "height": 3.565,
+    "width": 4.954
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/rock_face_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Rock face 01",
+   "triangles": 14000
+  },
+  "rock_face_02": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/rock_face_02.glb",
+   "size_m": {
+    "depth": 2.126,
+    "height": 2.473,
+    "width": 2.711
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/rock_face_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Rock face 02",
+   "triangles": 14000
+  },
+  "round_wooden_table_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/round_wooden_table_01.glb",
+   "size_m": {
+    "depth": 1.399,
+    "height": 1.005,
+    "width": 1.399
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/round_wooden_table_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Round wooden table 01",
+   "triangles": 8640
+  },
+  "sand_rocks_small_01": {
+   "category": "rock",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/sand_rocks_small_01.glb",
+   "size_m": {
+    "depth": 3.882,
+    "height": 0.536,
+    "width": 4.628
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/sand_rocks_small_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Sand rocks small 01",
+   "triangles": 45000
+  },
+  "satyr_and_nymph": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/satyr_and_nymph/satyr_and_nymph.glb",
+   "size_m": {
+    "depth": 0.673,
+    "height": 1.1,
+    "width": 1.01
+   },
+   "source": {
+    "author": "artfletch",
+    "author_page": "https://sketchfab.com/artfletch",
+    "changes": "Reduced from 99972 to 69997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/satyr-and-nymph-statue-10a13a5defbe4873a9ce677b6d33c7f2",
+    "site": "Sketchfab",
+    "title": "Satyr And Nymph Statue"
+   },
+   "tags": [
+    "group",
+    "seated",
+    "marble"
+   ],
+   "title": "Satyr and Nymph",
+   "triangles": 69997
+  },
+  "searsia_burchellii": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/searsia_burchellii.glb",
+   "size_m": {
+    "depth": 5.058,
+    "height": 3.244,
+    "width": 8.409
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/searsia_burchellii",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Searsia burchellii",
+   "triangles": 59102
+  },
+  "searsia_lucida": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/searsia_lucida.glb",
+   "size_m": {
+    "depth": 2.835,
+    "height": 2.338,
+    "width": 4.814
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/searsia_lucida",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Searsia lucida",
+   "triangles": 70272
+  },
+  "seasons_sarcophagus": {
+   "category": "sarcophagus",
+   "licence": "cc-by-nc",
+   "scene": "res://assets/library/cc-by-nc/seasons_sarcophagus/seasons_sarcophagus.glb",
+   "size_m": {
+    "depth": 1.101,
+    "height": 1.083,
+    "width": 2.109
+   },
+   "source": {
+    "author": "noxfcna",
+    "author_page": "https://sketchfab.com/noxfcna",
+    "changes": "Reduced from 493311 to 69997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc",
+    "licence_label": "CC Attribution-NonCommercial",
+    "licence_url": "http://creativecommons.org/licenses/by-nc/4.0/",
+    "page": "https://sketchfab.com/3d-models/seasons-sarcophagus-late-roman-330-335-874a2b65cad54d7788db9cb4ac366cf5",
+    "site": "Sketchfab",
+    "title": "Seasons Sarcophagus - Late Roman 330-335"
+   },
+   "tags": [
+    "roman",
+    "relief",
+    "marble"
+   ],
+   "title": "Seasons Sarcophagus",
+   "triangles": 69997
+  },
+  "shrub_01": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/shrub_01.glb",
+   "size_m": {
+    "depth": 0.24,
+    "height": 0.507,
+    "width": 2.609
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/shrub_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shrub 01",
+   "triangles": 41839
+  },
+  "shrub_02": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/shrub_02.glb",
+   "size_m": {
+    "depth": 2.302,
+    "height": 1.72,
+    "width": 6.085
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/shrub_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shrub 02",
+   "triangles": 14956
+  },
+  "shrub_03": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/shrub_03.glb",
+   "size_m": {
+    "depth": 0.151,
+    "height": 0.403,
+    "width": 1.367
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/shrub_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shrub 03",
+   "triangles": 8287
+  },
+  "shrub_04": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/shrub_04.glb",
+   "size_m": {
+    "depth": 0.15,
+    "height": 0.237,
+    "width": 0.558
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/shrub_04",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shrub 04",
+   "triangles": 8309
+  },
+  "shrub_sorrel_01": {
+   "category": "plant",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/shrub_sorrel_01.glb",
+   "size_m": {
+    "depth": 0.146,
+    "height": 0.058,
+    "width": 0.352
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/shrub_sorrel_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shrub sorrel 01",
+   "triangles": 3319
+  },
+  "sleeping_ariadne": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/sleeping_ariadne/sleeping_ariadne.glb",
+   "size_m": {
+    "depth": 0.876,
+    "height": 0.964,
+    "width": 2.3
+   },
+   "source": {
+    "author": "davide100",
+    "author_page": "https://sketchfab.com/davide100",
+    "changes": "Reduced from 438199 to 99997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/sleeping-ariadne-arianna-dormiente-4fec8a5871284a21a44c202ac97a433b",
+    "site": "Sketchfab",
+    "title": "Sleeping Ariadne / Arianna dormiente"
+   },
+   "tags": [
+    "roman",
+    "reclining",
+    "marble"
+   ],
+   "title": "Sleeping Ariadne",
+   "triangles": 99997
+  },
+  "sleeping_hermaphroditus": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/sleeping_hermaphroditus/sleeping_hermaphroditus.glb",
+   "size_m": {
+    "depth": 0.583,
+    "height": 0.339,
+    "width": 1.747
+   },
+   "source": {
+    "author": "davide100",
+    "author_page": "https://sketchfab.com/davide100",
+    "changes": "Reduced from 394427 to 89997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/sleeping-hermaphroditus-ermafrodito-dormiente-774421a30f264926b68a8a843f75134b",
+    "site": "Sketchfab",
+    "title": "Sleeping Hermaphroditus / Ermafrodito dormiente"
+   },
+   "tags": [
+    "roman",
+    "reclining",
+    "marble"
+   ],
+   "title": "Sleeping Hermaphroditus",
+   "triangles": 89997
+  },
+  "trajan_tower_hill": {
+   "category": "statue",
+   "licence": "cc-by-nc",
+   "scene": "res://assets/library/cc-by-nc/trajan_tower_hill/trajan_tower_hill.glb",
+   "size_m": {
+    "depth": 1.137,
+    "height": 3.101,
+    "width": 1.419
+   },
+   "source": {
+    "author": "nate_siddle",
+    "author_page": "https://sketchfab.com/nate_sid",
+    "changes": "Reduced from 426429 to 89996 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by-nc",
+    "licence_label": "CC Attribution-NonCommercial",
+    "licence_url": "http://creativecommons.org/licenses/by-nc/4.0/",
+    "page": "https://sketchfab.com/3d-models/statue-of-emperor-trajan-tower-hill-london-6bb04d9b5a3240d39791b6a3dbcd3d41",
+    "site": "Sketchfab",
+    "title": "Statue of Emperor Trajan (Tower Hill, London)"
+   },
+   "tags": [
+    "roman",
+    "emperor",
+    "standing",
+    "bronze",
+    "on pedestal"
+   ],
+   "title": "Statue of Emperor Trajan",
+   "triangles": 89996
+  },
+  "tree_small_02": {
+   "category": "tree",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/tree_small_02.glb",
+   "size_m": {
+    "depth": 4.199,
+    "height": 4.596,
+    "width": 2.899
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/tree_small_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Tree small 02",
+   "triangles": 172763
+  },
+  "venus_dockive": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/venus_dockive/venus_dockive.glb",
+   "size_m": {
+    "depth": 0.512,
+    "height": 1.904,
+    "width": 0.513
+   },
+   "source": {
+    "author": "Dockive",
+    "author_page": "https://sketchfab.com/Dockive",
+    "changes": "Reduced from 426112 to 79997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/venus-f98704b144d14473898053ab58e7569c",
+    "site": "Sketchfab",
+    "title": "Venus"
+   },
+   "tags": [
+    "goddess",
+    "standing",
+    "marble"
+   ],
+   "title": "Venus",
+   "triangles": 79997
+  },
+  "venus_verticordia": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/venus_verticordia/venus_verticordia.glb",
+   "size_m": {
+    "depth": 0.512,
+    "height": 1.7,
+    "width": 0.517
+   },
+   "source": {
+    "author": "Fitzwilliam Museum",
+    "author_page": "https://sketchfab.com/fitzwilliammuseum",
+    "changes": "Reduced from 500000 to 79994 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/venus-verticordia-2f551fe5aa6346878834805787d1dbdf",
+    "site": "Sketchfab",
+    "title": "Venus Verticordia"
+   },
+   "tags": [
+    "goddess",
+    "standing",
+    "marble"
+   ],
+   "title": "Venus Verticordia",
+   "triangles": 79994
+  },
+  "wild_rooibos_bush": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wild_rooibos_bush.glb",
+   "size_m": {
+    "depth": 0.749,
+    "height": 0.601,
+    "width": 2.266
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wild_rooibos_bush",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wild rooibos bush",
+   "triangles": 10038
+  },
+  "wine_barrel_01": {
+   "category": "floating",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wine_barrel_01.glb",
+   "size_m": {
+    "depth": 0.756,
+    "height": 0.871,
+    "width": 0.742
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wine_barrel_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wine barrel 01",
+   "triangles": 10820
+  },
+  "woman_venus": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/woman_venus/woman_venus.glb",
+   "size_m": {
+    "depth": 0.483,
+    "height": 1.803,
+    "width": 0.567
+   },
+   "source": {
+    "author": "Migo's Workshop",
+    "author_page": "https://sketchfab.com/Migosworkshop",
+    "changes": "Reduced from 499998 to 79995 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/statue-of-woman-possibly-venus-aphrodite-2f3fa0e1a80b4e8cb9854a00c217dc28",
+    "site": "Sketchfab",
+    "title": "Statue of woman (possibly Venus / Aphrodite)"
+   },
+   "tags": [
+    "goddess",
+    "standing",
+    "marble"
+   ],
+   "title": "Statue of a woman (possibly Venus)",
+   "triangles": 79995
+  },
+  "wooden_bookshelf_worn": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wooden_bookshelf_worn.glb",
+   "size_m": {
+    "depth": 0.581,
+    "height": 2.063,
+    "width": 1.374
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wooden_bookshelf_worn",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wooden bookshelf worn",
+   "triangles": 10106
+  },
+  "wooden_crate_01": {
+   "category": "floating",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wooden_crate_01.glb",
+   "size_m": {
+    "depth": 0.409,
+    "height": 0.35,
+    "width": 0.825
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wooden_crate_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wooden crate 01",
+   "triangles": 6576
+  },
+  "wooden_lantern_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wooden_lantern_01.glb",
+   "size_m": {
+    "depth": 0.235,
+    "height": 0.53,
+    "width": 0.221
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wooden_lantern_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wooden lantern 01",
+   "triangles": 8321
+  },
+  "wounded_amazon_flynn": {
+   "category": "statue",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/wounded_amazon_flynn/wounded_amazon_flynn.glb",
+   "size_m": {
+    "depth": 0.547,
+    "height": 2.0,
+    "width": 0.738
+   },
+   "source": {
+    "author": "Thomas Flynn",
+    "author_page": "https://sketchfab.com/nebulousflynn",
+    "changes": "Rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/wounded-amazon-9b7f0e8397f2490987820020b091c6e1",
+    "site": "Sketchfab",
+    "title": "\"Wounded Amazon\""
+   },
+   "tags": [
+    "roman",
+    "standing",
+    "marble"
+   ],
+   "title": "Wounded Amazon (cast)",
+   "triangles": 59004
+  }
+ },
+ "generated_by": "scripts/assets/build_catalog.py",
+ "schema_version": 1
+}

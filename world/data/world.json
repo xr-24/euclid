@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "zones": [
+    { "id": "construct", "name": "The Grid", "subtitle": "A space to build together", "description": "The dark digital workshop and starting hub.", "color": "071217" },
+    { "id": "villa", "name": "Villa Aurelia", "subtitle": "Space for focused work", "description": "A Roman villa with marble columns, formal gardens and a reflecting pool.", "color": "d8bd92" },
+    { "id": "beach", "name": "The Shore", "subtitle": "Room to breathe", "description": "The beach, a sandy ocean cove with waves and a pier.", "color": "dfc795" }
+  ],
+  "anchors": [
+    { "id": "construct.terminal", "zone": "construct", "position": [0,0,-4], "kind": "application", "app_id": "terminal", "label": "Terminal preview" },
+    { "id": "villa.library.desk_01", "zone": "villa", "position": [-8,0.15,-76], "kind": "application", "app_id": "terminal", "label": "Study terminal" },
+    { "id": "villa.agent.home", "zone": "villa", "position": [8,0.15,-76], "kind": "agent", "agent_id": "example-worker", "label": "Example worker" },
+    { "id": "beach.media.wall_02", "zone": "beach", "position": [0,0,-4], "kind": "application", "app_id": "media", "label": "Media preview" }
+  ]
+}

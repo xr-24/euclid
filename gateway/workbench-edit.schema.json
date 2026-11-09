@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string", "description": "One short sentence about the proposed change or why the request needs a different file"},
+    "original": {"type": "string", "description": "An exact, unique contiguous excerpt from the source to replace. Empty when the request is unsupported in this file."},
+    "replacement": {"type": "string", "description": "Complete replacement for that excerpt, with matching indentation and newlines"}
+  },
+  "required": ["summary", "original", "replacement"],
+  "additionalProperties": false
+}

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://drm88rhmvxxxi"
+path="res://.godot/imported/pass_genbathy.glsl-8ea467f1129432d2285797827042aadd.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_genbathy.glsl"
+dest_files=["res://.godot/imported/pass_genbathy.glsl-8ea467f1129432d2285797827042aadd.res"]
+
+[params]
+

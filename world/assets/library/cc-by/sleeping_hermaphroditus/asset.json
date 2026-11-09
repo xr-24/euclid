@@ -1,0 +1,27 @@
+{
+ "id": "sleeping_hermaphroditus",
+ "title": "Sleeping Hermaphroditus",
+ "category": "statue",
+ "tags": [
+  "roman",
+  "reclining",
+  "marble"
+ ],
+ "size_m": {
+  "width": 1.747,
+  "depth": 0.583,
+  "height": 0.339
+ },
+ "triangles": 89997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Sleeping Hermaphroditus / Ermafrodito dormiente",
+  "page": "https://sketchfab.com/3d-models/sleeping-hermaphroditus-ermafrodito-dormiente-774421a30f264926b68a8a843f75134b",
+  "author": "davide100",
+  "author_page": "https://sketchfab.com/davide100",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 394427 to 89997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

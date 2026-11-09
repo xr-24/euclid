@@ -1,0 +1,27 @@
+{
+ "id": "seasons_sarcophagus",
+ "title": "Seasons Sarcophagus",
+ "category": "sarcophagus",
+ "tags": [
+  "roman",
+  "relief",
+  "marble"
+ ],
+ "size_m": {
+  "width": 2.109,
+  "depth": 1.101,
+  "height": 1.083
+ },
+ "triangles": 69997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Seasons Sarcophagus - Late Roman 330-335",
+  "page": "https://sketchfab.com/3d-models/seasons-sarcophagus-late-roman-330-335-874a2b65cad54d7788db9cb4ac366cf5",
+  "author": "noxfcna",
+  "author_page": "https://sketchfab.com/noxfcna",
+  "licence": "by-nc",
+  "licence_label": "CC Attribution-NonCommercial",
+  "licence_url": "http://creativecommons.org/licenses/by-nc/4.0/",
+  "changes": "Reduced from 493311 to 69997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

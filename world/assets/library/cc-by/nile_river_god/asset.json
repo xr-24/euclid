@@ -1,0 +1,29 @@
+{
+ "id": "nile_river_god",
+ "title": "The Nile",
+ "category": "statue",
+ "tags": [
+  "roman",
+  "reclining",
+  "river god",
+  "fountain",
+  "group"
+ ],
+ "size_m": {
+  "width": 3.101,
+  "depth": 1.522,
+  "height": 1.617
+ },
+ "triangles": 139998,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Nile",
+  "page": "https://sketchfab.com/3d-models/nile-42e02439c61049d681c897441d40aaa1",
+  "author": "Rigsters",
+  "author_page": "https://sketchfab.com/rigsters",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 300488 to 139998 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

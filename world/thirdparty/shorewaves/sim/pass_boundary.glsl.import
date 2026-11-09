@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bqfrbe7dap3wv"
+path="res://.godot/imported/pass_boundary.glsl-799a64cd2d30dd6b8e2a4b76eb6a9fbf.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_boundary.glsl"
+dest_files=["res://.godot/imported/pass_boundary.glsl-799a64cd2d30dd6b8e2a4b76eb6a9fbf.res"]
+
+[params]
+

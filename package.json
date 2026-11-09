@@ -1,0 +1,12 @@
+{
+  "name": "euclid-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node gateway/server.mjs",
+    "test": "node --test gateway/*.test.mjs",
+    "agent:example": "node scripts/example-agent.mjs"
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "id": "farnese_hercules_study",
+ "title": "The Punishment: a study of the Farnese Hercules",
+ "category": "statue",
+ "tags": [
+  "modern",
+  "standing",
+  "hero"
+ ],
+ "size_m": {
+  "width": 1.125,
+  "depth": 0.927,
+  "height": 2.2
+ },
+ "triangles": 89994,
+ "source": {
+  "site": "Sketchfab",
+  "title": "The Punishment- A study of Farnese Hercules",
+  "page": "https://sketchfab.com/3d-models/the-punishment-a-study-of-farnese-hercules-0b36d63fd4e44ab6b59088438d4da441",
+  "author": "Deepak C C",
+  "author_page": "https://sketchfab.com/DeepakCC",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 970379 to 89994 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

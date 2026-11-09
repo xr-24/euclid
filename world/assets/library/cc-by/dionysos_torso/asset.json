@@ -1,0 +1,27 @@
+{
+ "id": "dionysos_torso",
+ "title": "Marble torso of Dionysos",
+ "category": "fragment",
+ "tags": [
+  "roman",
+  "torso",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.725,
+  "depth": 0.392,
+  "height": 0.95
+ },
+ "triangles": 50000,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Marble torso from a statue of Dionysos",
+  "page": "https://sketchfab.com/3d-models/marble-torso-from-a-statue-of-dionysos-de078950bd474c73bb6cd7e1cf31de9b",
+  "author": "Thomas Flynn",
+  "author_page": "https://sketchfab.com/nebulousflynn",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 74378 to 50000 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "id": "venus_verticordia",
+ "title": "Venus Verticordia",
+ "category": "statue",
+ "tags": [
+  "goddess",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.517,
+  "depth": 0.512,
+  "height": 1.7
+ },
+ "triangles": 79994,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Venus Verticordia",
+  "page": "https://sketchfab.com/3d-models/venus-verticordia-2f551fe5aa6346878834805787d1dbdf",
+  "author": "Fitzwilliam Museum",
+  "author_page": "https://sketchfab.com/fitzwilliammuseum",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 500000 to 79994 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

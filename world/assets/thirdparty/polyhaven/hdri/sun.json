@@ -1,0 +1,18 @@
+{
+ "kloofendal_48d_partly_cloudy_puresky_4k.hdr": {
+  "u": 0.595,
+  "v": 0.2337,
+  "elevation_deg": 47.93,
+  "peak": 74608.8448,
+  "mean": 0.6739303369200562,
+  "sky_mean_upper": 1.1453190579873982
+ },
+ "kloppenheim_06_puresky_4k.hdr": {
+  "u": 0.6053,
+  "v": 0.4559,
+  "elevation_deg": 7.93,
+  "peak": 46.2166,
+  "mean": 0.5871724092455697,
+  "sky_mean_upper": 0.7814676062133168
+ }
+}

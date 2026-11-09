@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "action": { "type": "string", "enum": ["spawn_cone", "unsupported"] },
+    "color": { "type": "string", "description": "Six lowercase hexadecimal RGB digits without a # prefix" },
+    "scale": { "type": "number", "description": "A cone scale between 0.25 and 4" }
+  },
+  "required": ["action", "color", "scale"],
+  "additionalProperties": false
+}

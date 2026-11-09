@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://nan6h5do6voq"
+path="res://.godot/imported/pass_ground.glsl-bf4030d18079bcdbd96bc892d97bfc6f.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_ground.glsl"
+dest_files=["res://.godot/imported/pass_ground.glsl-bf4030d18079bcdbd96bc892d97bfc6f.res"]
+
+[params]
+

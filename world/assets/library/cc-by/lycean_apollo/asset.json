@@ -1,0 +1,29 @@
+{
+ "id": "lycean_apollo",
+ "title": "The Lycean Apollo",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "god",
+  "standing",
+  "marble",
+  "on pedestal"
+ ],
+ "size_m": {
+  "width": 0.946,
+  "depth": 0.946,
+  "height": 3.4
+ },
+ "triangles": 79997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "The Lycean Apollo",
+  "page": "https://sketchfab.com/3d-models/the-lycean-apollo-c0cf5a23f26d49a08e3a4509049c0f3d",
+  "author": "Samuel F. Angrick-Johanns (Oneironauticus)",
+  "author_page": "https://sketchfab.com/oneironauticus",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 307584 to 79997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

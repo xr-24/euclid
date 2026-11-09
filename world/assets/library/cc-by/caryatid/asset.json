@@ -1,0 +1,29 @@
+{
+ "id": "caryatid",
+ "title": "Caryatid",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "architectural",
+  "column",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.632,
+  "depth": 0.598,
+  "height": 2.301
+ },
+ "triangles": 79998,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Caryatid - Ancient Greece Collection",
+  "page": "https://sketchfab.com/3d-models/caryatid-ancient-greece-collection-fc0ac58d0ab14c3a939da89063f8f57e",
+  "author": "3Dystopia",
+  "author_page": "https://sketchfab.com/Dystopia",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 452518 to 79998 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

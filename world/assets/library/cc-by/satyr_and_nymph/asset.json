@@ -1,0 +1,27 @@
+{
+ "id": "satyr_and_nymph",
+ "title": "Satyr and Nymph",
+ "category": "statue",
+ "tags": [
+  "group",
+  "seated",
+  "marble"
+ ],
+ "size_m": {
+  "width": 1.01,
+  "depth": 0.673,
+  "height": 1.1
+ },
+ "triangles": 69997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Satyr And Nymph Statue",
+  "page": "https://sketchfab.com/3d-models/satyr-and-nymph-statue-10a13a5defbe4873a9ce677b6d33c7f2",
+  "author": "artfletch",
+  "author_page": "https://sketchfab.com/artfletch",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 99972 to 69997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

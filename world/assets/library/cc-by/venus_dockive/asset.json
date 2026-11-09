@@ -1,0 +1,27 @@
+{
+ "id": "venus_dockive",
+ "title": "Venus",
+ "category": "statue",
+ "tags": [
+  "goddess",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.513,
+  "depth": 0.512,
+  "height": 1.904
+ },
+ "triangles": 79997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Venus",
+  "page": "https://sketchfab.com/3d-models/venus-f98704b144d14473898053ab58e7569c",
+  "author": "Dockive",
+  "author_page": "https://sketchfab.com/Dockive",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 426112 to 79997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

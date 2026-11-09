@@ -1,0 +1,52 @@
+config_version=5
+
+[application]
+config/name="Euclid"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Construct"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+
+[audio]
+general/text_to_speech=true
+
+[display]
+window/size/mode=3
+window/size/mode.editor=0
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/default_filters/anisotropic_filtering_level=4
+anti_aliasing/quality/msaa_3d=0
+anti_aliasing/quality/use_taa=true
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
+global_illumination/sdfgi/frames_to_converge=1
+limits/global_shader_variables/buffer_size=262144
+environment/defaults/default_clear_color=Color(0.87,0.90,0.94,1)
+
+[shader_globals]
+
+construct_reflection_camera={
+"type": "vec4",
+"value": Vector4(0, 0, 0, -10000)
+}
+
+construct_origin={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+construct_radius={
+"type": "float",
+"value": 0.0
+}
+construct_progress={
+"type": "float",
+"value": 0.0
+}

@@ -1,0 +1,143 @@
+extends RefCounted
+## Shared imported resources and PBR construction. Builders serialize access to this cache.
+const PH := "res://assets/thirdparty/polyhaven/"
+static var _cache := {}
+static var _resources := {}
+static var _materials := {}
+static var _collision_shapes := {}
+static var _resource_mutex := Mutex.new()
+static var has_rd := false
+
+static func initialize() -> void:
+	has_rd = RenderingServer.get_rendering_device() != null
+
+## load() with a cache that keeps resources alive between visits, so a zone builds instantly the
+## second time (and after the startup warm-up). Access is serialized by the world coordinator.
+
+static func get_resource(path: String) -> Resource:
+	# The environment may request a sky on the main thread while a worker builds geometry.
+	_resource_mutex.lock()
+	if not _resources.has(path):
+		_resources[path] = load(path)
+	var resource: Resource = _resources[path]
+	_resource_mutex.unlock()
+	return resource
+
+static func texture_set(id: String) -> Dictionary:
+	if _cache.has(id):
+		return _cache[id]
+	var base := PH + "textures/%s/%s_" % [id, id]
+	for res in ["2k", "4k", "1k"]:
+		var maps := {"albedo": base + "diff_%s.jpg" % res, "normal": base + "nor_gl_%s.jpg" % res, "orm": base + "arm_%s.jpg" % res}
+		if maps.values().all(func(path: String) -> bool: return ResourceLoader.exists(path)):
+			for map in maps:
+				maps[map] = get_resource(maps[map])
+			_cache[id] = maps
+			return maps
+	return {}
+
+## World-space triplanar PBR material, so it works on any mesh regardless of UVs.
+
+static func pbr(id: String, size_m: float, tint := Color.WHITE, fallback := Color(0.7, 0.7, 0.7)) -> BaseMaterial3D:
+	# These are immutable templates. Instances/transition shaders carry per-object state.
+	var key := str([id, size_m, tint, fallback])
+	if _materials.has(key):
+		return _materials[key]
+	var maps := texture_set(id)
+	if maps.is_empty():
+		var plain := StandardMaterial3D.new()
+		plain.albedo_color = fallback
+		plain.roughness = 0.75
+		_materials[key] = plain
+		return plain
+	var mat := ORMMaterial3D.new()
+	mat.albedo_texture = maps.albedo
+	mat.albedo_color = tint
+	mat.normal_enabled = true
+	mat.normal_texture = maps.normal
+	mat.orm_texture = maps.orm
+	mat.uv1_triplanar = true
+	mat.uv1_world_triplanar = true
+	mat.uv1_triplanar_sharpness = 6.0
+	mat.uv1_scale = Vector3.ONE / size_m
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_materials[key] = mat
+	return mat
+
+## Collision geometry is immutable and shared across visits; bodies retain independent transforms.
+static func add_mesh_collision(instance: MeshInstance3D) -> void:
+	if instance.mesh == null:
+		return
+	if not _collision_shapes.has(instance.mesh):
+		_collision_shapes[instance.mesh] = instance.mesh.create_trimesh_shape()
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	shape.shape = _collision_shapes[instance.mesh]
+	body.add_child(shape)
+	instance.add_child(body)
+
+static func model(id: String) -> Node3D:
+	var path := PH + "models/%s.glb" % id
+	if not ResourceLoader.exists(path):
+		return null
+	return (get_resource(path) as PackedScene).instantiate() as Node3D
+
+## Instance a Poly Haven model; height (metres) rescales it uniformly when given.
+
+static func place(parent: Node3D, id: String, at: Vector3, yaw_deg := 0.0, height := 0.0, scale := 1.0) -> Node3D:
+	var node := model(id)
+	if node == null:
+		return null
+	parent.add_child(node)
+	if height > 0.0:
+		var box := bounds(node)
+		if box.size.y > 0.0:
+			scale = height / box.size.y
+	node.scale = Vector3.ONE * scale
+	node.position = at
+	node.rotation_degrees.y = yaw_deg
+	return node
+
+static func bounds(node: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		var local := (node.global_transform.affine_inverse() * mi.global_transform) * mi.get_aabb() if node.is_inside_tree() else mi.get_aabb()
+		box = local if first else box.merge(local)
+		first = false
+	return box
+
+static func add_static_box(parent: Node3D, at: Vector3, size: Vector3) -> void:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
+	body.position = at
+	parent.add_child(body)
+
+static func noise_texture(seed: int, frequency: float, normal_map: bool, size := 512) -> ImageTexture:
+	var key := "noise%d_%f_%s_%d" % [seed, frequency, normal_map, size]
+	if _cache.has(key):
+		return _cache[key]
+	var noise := FastNoiseLite.new()
+	noise.seed = seed
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = frequency
+	noise.fractal_octaves = 4
+	var image := noise.get_seamless_image(size, size, false, false, 0.15, true)
+	if normal_map:
+		image.convert(Image.FORMAT_RGBA8)
+		image.bump_map_to_normal_map(6.0)
+	image.generate_mipmaps()
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
+static func ground_height(tri: TriangleMesh, x: float, z: float) -> float:
+	if tri == null or not tri.has_method("intersect_ray"):
+		return 0.0
+	var hit: Dictionary = tri.call("intersect_ray", Vector3(x, 80, z), Vector3.DOWN)
+	return hit.position.y if not hit.is_empty() else 0.0

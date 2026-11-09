@@ -1,0 +1,27 @@
+{
+ "id": "orestes_sarcophagus",
+ "title": "Orestes sarcophagus of Husillos",
+ "category": "sarcophagus",
+ "tags": [
+  "roman",
+  "relief",
+  "marble"
+ ],
+ "size_m": {
+  "width": 2.15,
+  "depth": 0.689,
+  "height": 0.656
+ },
+ "triangles": 29982,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Sarcófago de la Orestíada de Husillos (M.A.N.)",
+  "page": "https://sketchfab.com/3d-models/sarcofago-de-la-orestiada-de-husillos-man-af2088bea8c64f49bd8a46f6f3755281",
+  "author": "Zoilo",
+  "author_page": "https://sketchfab.com/iliedom",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

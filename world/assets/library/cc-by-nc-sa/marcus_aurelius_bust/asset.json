@@ -1,0 +1,27 @@
+{
+ "id": "marcus_aurelius_bust",
+ "title": "Marcus Aurelius",
+ "category": "bust",
+ "tags": [
+  "roman",
+  "emperor",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.412,
+  "depth": 0.406,
+  "height": 0.801
+ },
+ "triangles": 59999,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Marcus Aurelius",
+  "page": "https://sketchfab.com/3d-models/marcus-aurelius-03d7639ecbe943bba20b22ba1f9746d3",
+  "author": "Geoffrey Marchal",
+  "author_page": "https://sketchfab.com/geoffreymarchal",
+  "licence": "by-nc-sa",
+  "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+  "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "changes": "Reduced from 400030 to 59999 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

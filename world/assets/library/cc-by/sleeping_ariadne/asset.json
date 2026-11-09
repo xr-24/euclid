@@ -1,0 +1,27 @@
+{
+ "id": "sleeping_ariadne",
+ "title": "Sleeping Ariadne",
+ "category": "statue",
+ "tags": [
+  "roman",
+  "reclining",
+  "marble"
+ ],
+ "size_m": {
+  "width": 2.3,
+  "depth": 0.876,
+  "height": 0.964
+ },
+ "triangles": 99997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Sleeping Ariadne / Arianna dormiente",
+  "page": "https://sketchfab.com/3d-models/sleeping-ariadne-arianna-dormiente-4fec8a5871284a21a44c202ac97a433b",
+  "author": "davide100",
+  "author_page": "https://sketchfab.com/davide100",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 438199 to 99997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

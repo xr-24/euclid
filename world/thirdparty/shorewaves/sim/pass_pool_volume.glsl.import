@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://qkpu5jof2tod"
+path="res://.godot/imported/pass_pool_volume.glsl-9f1c6d40d6e77756925b3dc0c25448d6.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_pool_volume.glsl"
+dest_files=["res://.godot/imported/pass_pool_volume.glsl-9f1c6d40d6e77756925b3dc0c25448d6.res"]
+
+[params]
+

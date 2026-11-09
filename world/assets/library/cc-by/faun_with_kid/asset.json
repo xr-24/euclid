@@ -1,0 +1,27 @@
+{
+ "id": "faun_with_kid",
+ "title": "Faune au Chevreau",
+ "category": "statue",
+ "tags": [
+  "satyr",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.681,
+  "depth": 0.761,
+  "height": 1.6
+ },
+ "triangles": 14981,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Faune au Chevreau",
+  "page": "https://sketchfab.com/3d-models/faune-au-chevreau-cae7d6375b0640b883239d3a9c0ba47d",
+  "author": "3Dystopia",
+  "author_page": "https://sketchfab.com/Dystopia",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "tool": { "type": "string", "enum": ["list_environments", "travel", "create_environment", "follow", "stay", "spawn_asset", "list_assets", "list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "inspect_animation", "preview_animation", "save_animation", "discard_animation", "unsupported"] },
+    "target": { "type": "string", "description": "Exact environment ID for travel, name for create_environment, search phrase or asset ID for spawn_asset, exact entity ID for save_prefab, exact prefab ID for spawn_prefab, animation target ID, or an empty string" },
+    "name": { "type": "string", "description": "Prefab name of 1 to 48 characters for save_prefab, empty for other tools" },
+    "preserve_rig": { "type": "boolean", "description": "True only for spawn_asset when the user requests a rigged model" },
+    "clip": { "anyOf": [{ "$ref": "#/$defs/clip" }, { "type": "null" }], "description": "New clip for preview_animation, null for other tools" }
+  },
+  "required": ["tool", "target", "name", "preserve_rig", "clip"],
+  "additionalProperties": false,
+  "$defs": {
+    "clip": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Clip name of 1 to 48 characters" },
+        "duration": { "type": "number", "description": "Loop length in seconds, from 1 to 30" },
+        "interpolation": { "type": "string", "enum": ["linear", "smooth"] },
+        "keyframes": { "type": "array", "description": "2 to 10 ordered keys from zero to duration. Match endpoints, with whole turns allowed for rotation.", "items": {
+          "type": "object", "properties": {
+            "time": { "type": "number" },
+            "offset": { "type": "array", "items": { "type": "number" }, "description": "Three local offsets in metres, each within -2 to 2. Zero for companion." },
+            "rotation": { "type": "array", "items": { "type": "number" }, "description": "Three local Euler angles in degrees, each within -720 to 720. Zero for companion." },
+            "pose": { "type": "array", "items": { "type": "number" }, "description": "Two companion Lift and Drift weights within -1 to 1. Zero for props and for clips with joint tracks." }
+          }, "required": ["time", "offset", "rotation", "pose"], "additionalProperties": false
+        } },
+        "joint_tracks": { "type": "array", "description": "Up to 16 rig joint tracks. Empty for unrigged props or companion Lift/Drift clips.", "items": {
+          "type": "object", "properties": {
+            "joint": { "type": "string", "description": "Exact joint name from inspection" },
+            "keyframes": { "type": "array", "description": "2 to 10 ordered keys. The first is at zero and the last at duration, with matching rotations.", "items": {
+              "type": "object", "properties": {
+                "time": { "type": "number" },
+                "rotation": { "type": "array", "items": { "type": "number" }, "description": "Three local Euler angles relative to rest in degrees, each within -180 to 180" }
+              }, "required": ["time", "rotation"], "additionalProperties": false
+            } }
+          }, "required": ["joint", "keyframes"], "additionalProperties": false
+        } }
+      }, "required": ["name", "duration", "interpolation", "keyframes", "joint_tracks"], "additionalProperties": false
+    }
+  }
+}

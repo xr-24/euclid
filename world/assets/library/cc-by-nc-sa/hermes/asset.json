@@ -1,0 +1,28 @@
+{
+ "id": "hermes",
+ "title": "Hermes",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "god",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 1.099,
+  "depth": 0.842,
+  "height": 1.9
+ },
+ "triangles": 79999,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Hermes",
+  "page": "https://sketchfab.com/3d-models/hermes-69407dad508347f393b8cb40511cdfb4",
+  "author": "Geoffrey Marchal",
+  "author_page": "https://sketchfab.com/geoffreymarchal",
+  "licence": "by-nc-sa",
+  "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+  "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "changes": "Reduced from 391003 to 79999 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

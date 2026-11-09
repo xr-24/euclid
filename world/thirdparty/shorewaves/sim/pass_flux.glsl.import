@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://q4gmrnvy0nga"
+path="res://.godot/imported/pass_flux.glsl-d80cd610eb0fcaf1b7df920582db5177.res"
+
+[deps]
+
+source_file="res://thirdparty/shorewaves/sim/pass_flux.glsl"
+dest_files=["res://.godot/imported/pass_flux.glsl-d80cd610eb0fcaf1b7df920582db5177.res"]
+
+[params]
+

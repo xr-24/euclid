@@ -1,0 +1,27 @@
+{
+ "id": "wounded_amazon_flynn",
+ "title": "Wounded Amazon (cast)",
+ "category": "statue",
+ "tags": [
+  "roman",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 0.738,
+  "depth": 0.547,
+  "height": 2.0
+ },
+ "triangles": 59004,
+ "source": {
+  "site": "Sketchfab",
+  "title": "\"Wounded Amazon\"",
+  "page": "https://sketchfab.com/3d-models/wounded-amazon-9b7f0e8397f2490987820020b091c6e1",
+  "author": "Thomas Flynn",
+  "author_page": "https://sketchfab.com/nebulousflynn",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

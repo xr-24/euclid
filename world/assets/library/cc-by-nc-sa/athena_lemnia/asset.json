@@ -1,0 +1,27 @@
+{
+ "id": "athena_lemnia",
+ "title": "Athena Lemnia",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "goddess",
+  "standing"
+ ],
+ "size_m": {
+  "width": 0.727,
+  "depth": 0.738,
+  "height": 2.0
+ },
+ "triangles": 79996,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Athena Lemnia",
+  "page": "https://sketchfab.com/3d-models/athena-lemnia-cededeb8878a497bb23efd4271c81ad0",
+  "author": "Geoffrey Marchal",
+  "author_page": "https://sketchfab.com/geoffreymarchal",
+  "licence": "by-nc-sa",
+  "licence_label": "CC Attribution-NonCommercial-ShareAlike",
+  "licence_url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "changes": "Reduced from 402566 to 79996 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

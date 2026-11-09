@@ -1,0 +1,28 @@
+{
+ "id": "apollo_belvedere",
+ "title": "Apollo Belvedere",
+ "category": "statue",
+ "tags": [
+  "greek",
+  "god",
+  "standing",
+  "marble"
+ ],
+ "size_m": {
+  "width": 1.467,
+  "depth": 1.126,
+  "height": 2.24
+ },
+ "triangles": 50018,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Apollo Belvedere",
+  "page": "https://sketchfab.com/3d-models/apollo-belvedere-9b67614ab3f9422d9f6c88fb4fdd60cc",
+  "author": "Rigsters",
+  "author_page": "https://sketchfab.com/rigsters",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

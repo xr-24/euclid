@@ -261,7 +261,12 @@ func _panel(title: String, description: String) -> void:
 	overlay.offset_right = -520
 	overlay.offset_bottom = -190
 	for child in overlay_content.get_children():
-		child.free()
+		if child == codex_console:
+			codex_console = null
+		if child == _workbench_panel:
+			_workbench_panel = null
+		overlay_content.remove_child(child)
+		child.queue_free()
 	if not title.is_empty():
 		var heading := Label.new()
 		heading.text = title

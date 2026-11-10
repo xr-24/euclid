@@ -10,7 +10,7 @@ import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
-import { fingerprint, isAgentSourcePath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
+import { fingerprint, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
 import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
 import { authorSource } from './workbench-source-agent.mjs';
@@ -24,6 +24,9 @@ const maxBytes = 128 * 1024;
 const maxDiff = 256 * 1024;
 const paletteSource = 'world/scripts/ui/grid_palette.gd';
 const ownerName = value => typeof value === 'string' && /^[a-z0-9_-]{1,32}$/.test(value) ? value : undefined;
+// Where a committed source draft takes effect.
+const sourceActivation = names => names.some(name => name.startsWith('world/')) ? 'restart'
+  : names.some(isGatewayPath) ? 'gateway_restart' : 'none';
 const isPalette = names => names.length === 1 && names[0] === paletteSource;
 const appearanceFor = names => names.length === 1 && [shorelineAppearance, gridAppearance].find(item => item.file === names[0]);
 
@@ -62,7 +65,7 @@ async function readChanges(root, files) {
 
 export function createWorkbench(root, storage, { runner = createPreviewRunner(root), propose = proposeEdit,
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
-  designTool = proposeWorkshopTool, editSource = authorSource } = {}) {
+  designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '' } = {}) {
   const git = createWorkbenchGit(root);
   const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
   let draft = null;
@@ -73,6 +76,14 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   let diagnosticJob = null;
   let diagnosticNotice = '';
   let recovery;
+
+  // A commit that changes gateway source only takes effect in a new gateway process.
+  function loadGateway(names) {
+    if (!names.some(isGatewayPath)) return '';
+    if (!onGatewayChange) return 'Restart the gateway to load the committed code.';
+    onGatewayChange();
+    return 'The gateway is restarting to load the committed code.';
+  }
 
   function checkoutPath(directory, name) {
     if (name !== 'worktree' && (typeof name !== 'string' || !revisionFolder.test(name))) throw new Error('Invalid draft checkout.');
@@ -131,7 +142,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   async function state() {
     const change = draft;
     const authoring = sourceJob;
-    const pending = { operation, playing: runner.playing(), diagnostic_notice: diagnosticNotice,
+    const pending = { operation, playing: runner.playing(), diagnostic_notice: diagnosticNotice, gateway_notice: gatewayNotice(),
       diagnostic_job: diagnosticJob && { id: diagnosticJob.id, log: diagnosticJob.log } };
     const version = change ? fingerprint(change.diff) : '';
     const [revision, diagnostic, previewLog] = await Promise.all([
@@ -155,7 +166,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
       live: Boolean(change.plugin || appearance || tool || palette),
-      activation: appearance?.activation ?? (palette ? 'reload_palette' : change.plugin || tool ? 'live' : 'restart'),
+      activation: appearance?.activation ?? (palette ? 'reload_palette' : change.plugin || tool ? 'live' : sourceActivation(change.names)),
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
@@ -625,6 +636,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           } catch {
             warning = 'The commit succeeded. The temporary Git worktree could not be removed.';
           }
+          warning = [warning, loadGateway(change.names)].filter(Boolean).join(' ');
           break;
         }
         case 'discard': {
@@ -642,6 +654,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           const latest = await git.headRevision();
           if (!latest || latest !== body.revision) throw new Error('The reviewed commit is no longer the tip of the main branch.');
           revision = await git.revert(latest);
+          warning = loadGateway(await git.touched(latest));
           break;
         }
         default: throw new Error('Unknown workbench command.');

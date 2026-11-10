@@ -87,10 +87,11 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   assert.equal((await rpc('tools/call', { name: 'read_source', arguments: { path: script, extra: true } })).error.code, -32602);
   assert.equal((await rpc('tools/call', { name: 'run_checks', arguments: { version: 'latest' } })).error.code, -32602);
 
-  assert.deepEqual((await tool('list_source')).files, ['README.md', 'docs/architecture.md', obsolete, script].sort());
+  assert.deepEqual((await tool('list_source')).files, ['README.md', 'docs/architecture.md', 'package.json', obsolete, script].sort());
   assert.equal((await tool('read_source', { path: script })).content, 'extends Node\nconst READY := false\n');
   assert.equal((await tool('read_source', { path: 'README.md' })).content, '# Fixture\n');
-  for (const name of ['package.json', '.git/config', '../project/README.md', 'world/scripts/../../package.json']) {
+  assert.equal((await tool('read_source', { path: 'package.json' })).content, '{}\n');
+  for (const name of ['world/project.godot', '.git/config', '.local/gateway.json', '../project/README.md', 'world/scripts/../../package.json']) {
     assert.equal((await tool('read_source', { path: name })).isError, true, name);
   }
   assert.deepEqual(await tool('draft_status'), { ok: true, draft: null, busy: '', isError: false });
@@ -102,7 +103,9 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
     assert.match(answer.message, pattern);
     assert.equal((await tool('draft_status')).draft, null);
   };
-  await rejected({ files: [{ path: 'gateway/server.mjs', content: 'x' }] }, /cannot change gateway\/server\.mjs/);
+  await rejected({ files: [{ path: 'gateway/workbench-git.mjs', content: 'x' }] }, /cannot change gateway\/workbench-git\.mjs/);
+  await rejected({ files: [{ path: 'scripts/start.ps1', content: 'x' }] }, /cannot change scripts\/start\.ps1/);
+  await rejected({ delete: ['package.json'] }, /cannot change package\.json/);
   await rejected({ files: [{ path: 'world/project.godot', content: 'x' }] }, /cannot change world\/project\.godot/);
   await rejected({ files: [{ path: script, content: 'a' }, { path: script, content: 'b' }] }, /more than once/);
   await rejected({}, /Submit 1 to 24 files/);

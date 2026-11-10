@@ -102,6 +102,10 @@ export function createWorkbenchGit(root) {
       await git(root, 'revert', '--no-edit', revision);
       return (await primary()).head;
     },
+    async touched(revision) {
+      const names = await git(root, 'diff', '--name-only', '--no-renames', '-z', `${revision}~1`, revision, '--');
+      return names.split('\0').filter(Boolean);
+    },
     worktreePath: directory => path.join(directory, 'worktree'),
   };
 }

@@ -8,7 +8,16 @@ const decode = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const fingerprint = text => createHash('sha256').update(text).digest('hex');
 export const isSourcePath = name => typeof name === 'string' && editable.test(name);
 const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scenes\/(?:[\w-]+\/)*[\w.-]+\.tscn)$/;
-export const isAgentSourcePath = name => isSourcePath(name) || (typeof name === 'string' && agentSource.test(name));
+// The kernel decides what a draft may change, verifies and commits it, isolates its
+// checks, and replaces the running gateway. No draft may change it. The launcher,
+// check and recovery scripts under scripts/ and the files in the project root are
+// outside every draft as well, so a bad change can always be reviewed and undone.
+export const kernel = Object.freeze(['gateway/handoff.mjs', 'gateway/workbench-git.mjs', 'gateway/workbench-runner.mjs', 'gateway/workbench-source.mjs']);
+export const isKernelPath = name => kernel.includes(name);
+export const isGatewayPath = name => typeof name === 'string' && name.startsWith('gateway/');
+const harness = /^(?:gateway\/(?:[\w-]+\/)*[\w.-]+\.(?:mjs|json)|docs\/[\w.-]+\.md|README\.md)$/;
+export const isAgentSourcePath = name => isSourcePath(name) ||
+  (typeof name === 'string' && (agentSource.test(name) || (harness.test(name) && !isKernelPath(name))));
 
 export async function listSources(root) {
   const files = ['world/main.tscn'];
@@ -42,10 +51,11 @@ export function normalizeEdit(original, text, limit = sourceLimit) {
   return formatted;
 }
 
-// What a connected agent may read: everything a source draft may change, plus the project guides.
+// What a connected agent may read: everything a source draft may change, plus the kernel,
+// the project guides and the launcher scripts.
 export const agentFileLimit = 256 * 1024;
-const guide = /^(?:README\.md|AGENTS\.md|docs\/[\w.-]+\.md)$/;
-const isAgentReadable = name => isAgentSourcePath(name) || (typeof name === 'string' && guide.test(name));
+const reference = /^(?:AGENTS\.md|package\.json|scripts\/[\w.-]+\.(?:ps1|mjs|py|sh))$/;
+const isAgentReadable = name => isAgentSourcePath(name) || isKernelPath(name) || (typeof name === 'string' && reference.test(name));
 
 export async function listAgentSources(root) {
   const files = [];
@@ -60,8 +70,8 @@ export async function listAgentSources(root) {
         (await lstat(path.join(root, name))).size <= agentFileLimit) files.push(name);
     }
   }
-  for (const directory of ['docs', 'world/scripts', 'world/shaders', 'world/data', 'world/scenes']) await scan(directory);
-  for (const name of ['README.md', 'AGENTS.md', 'world/main.tscn']) {
+  for (const directory of ['docs', 'gateway', 'scripts', 'world/scripts', 'world/shaders', 'world/data', 'world/scenes']) await scan(directory);
+  for (const name of ['README.md', 'AGENTS.md', 'package.json', 'world/main.tscn']) {
     const info = await lstat(path.join(root, name)).catch(error => { if (error.code !== 'ENOENT') throw error; });
     if (info?.isFile() && info.size <= agentFileLimit) files.push(name);
   }

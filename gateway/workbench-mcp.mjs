@@ -9,7 +9,7 @@ const sourcePath = { type: 'string', maxLength: 200, description: 'A path from l
 // a draft, running its checks and reading the results. Committing, previewing
 // and reverting stay with the person in Euclid's Workbench.
 export const developmentTools = [
-  { name: 'list_source', description: 'List the Euclid source files and project guides you can read. Source drafts may change the world/ paths.',
+  { name: 'list_source', description: 'List the files you can read. A draft may change Godot source in world/, gateway source and tests in gateway/, README.md and docs/. The kernel files, AGENTS.md, package.json and scripts/ are read-only.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },

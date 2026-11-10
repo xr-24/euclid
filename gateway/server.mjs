@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile, writeFile, mkdir, appendFile, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, appendFile, rename, rm } from 'node:fs/promises';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
@@ -9,6 +10,7 @@ import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
+import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const states = { 'task.started': 'working', 'task.completed': 'completed', 'task.failed': 'failed', 'task.blocked': 'blocked', 'presence.online': 'idle' };
@@ -25,7 +27,8 @@ export function validateEvent(event) {
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
-  workbenchRoot = root, workbenchOptions, developmentToken } = {}) {
+  workbenchRoot = root, workbenchOptions, developmentToken, workbenchToken: workbenchSecret,
+  reloadGateway = null, gatewayNotice = () => '' } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
   let saved = { agents: {}, seen: [] };
@@ -33,9 +36,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const secret = token ?? randomBytes(32).toString('hex');
   const expected = Buffer.from(`Bearer ${secret}`);
-  const workbenchToken = randomBytes(32).toString('hex');
+  const workbenchToken = workbenchSecret ?? randomBytes(32).toString('hex');
   const workbenchExpected = Buffer.from(workbenchToken);
-  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), workbenchOptions);
+  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), { onGatewayChange: reloadGateway, gatewayNotice, ...workbenchOptions });
   // A third capability, for agents: source reads, drafts and checks, without commit or preview.
   const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
   const developmentExpected = Buffer.from(developmentSecret);
@@ -74,7 +77,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 24 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 25 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
       const developmentRoute = /^\/mcp\/dev\/([a-f0-9]{64})(?:\/([a-z0-9_-]{1,32}))?$/.exec(req.url);
@@ -104,6 +107,12 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const body = await readJson(req, res, 512 * 1024);
         if (body === undefined) return;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
+        if (workbenchRoute[1] === 'reload') {
+          // Loads gateway code that changed on disk, such as after a merge made outside Euclid.
+          if (!reloadGateway) return reply(res, 400, { error: 'This gateway cannot replace itself.' });
+          reloadGateway();
+          return reply(res, 200, { restarting: true });
+        }
         const controller = new AbortController();
         res.once('close', () => controller.abort());
         try { return reply(res, 200, await workbench(workbenchRoute[1], body, controller.signal)); }
@@ -221,12 +230,36 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const gateway = await createGateway();
-  const port = Number(process.env.CONSTRUCT_PORT ?? 4317);
+  if (process.argv.includes('--preflight')) {
+    // Proves this code can build and serve a gateway, using throwaway data and a free port.
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), 'euclid-preflight-'));
+    try {
+      const { server } = await createGateway({ dataDir });
+      await listen(server, 0);
+      const health = await fetch(`http://127.0.0.1:${server.address().port}/health`);
+      if (!health.ok || (await health.json()).service !== 'construct-gateway') throw new Error('The gateway did not report its identity.');
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
+    process.exit(0);
+  }
+  const handoff = inheritedHandoff(process.env);
+  const dataDir = process.env.EUCLID_DATA_DIR || path.join(root, '.local');
+  const port = handoff?.port ?? Number(process.env.CONSTRUCT_PORT ?? 4317);
+  let reload;
+  const gateway = await createGateway({ dataDir, token: handoff?.token, workbenchToken: handoff?.workbench_token,
+    developmentToken: handoff?.development_token, reloadGateway: () => reload.start(), gatewayNotice: () => reload.notice() });
+  const credentials = { token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken };
+  reload = createHandoff({ entry: fileURLToPath(import.meta.url), cwd: root, port, credentials, server: gateway.server, logDirectory: dataDir });
+  // A replacement can start a moment before the gateway it replaces has released the port.
+  try { await listen(gateway.server, port, handoff ? 40 : 1); }
+  catch (error) { console.error(`Gateway: ${error.message}`); process.exit(1); }
   gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
-  gateway.server.listen(port, '127.0.0.1', async () => {
-    await writeFile(path.join(root, '.local/gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken }), { mode: 0o600 });
-    console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
-  });
+  await writeFile(path.join(dataDir, 'gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, ...credentials }), { mode: 0o600 });
+  // The launcher records the gateway it starts. A replacement records itself for stop-gateway.ps1.
+  if (handoff) await writeFile(path.join(dataDir, 'gateway.pid'), String(process.pid));
+  console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => gateway.server.close());
 }

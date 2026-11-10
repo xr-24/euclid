@@ -184,7 +184,7 @@ existing gateway. `scripts/recovery.mjs` waits for a fresh startup receipt from
 the process and advances `refs/euclid/last-good` only when the same clean Git
 revision is present before and after boot. **Start Euclid Recovery.cmd** starts
 that revision in a temporary detached worktree with an independent save profile.
-The supervisor and launcher sit outside the Workbench source allowlist.
+The supervisor and launcher sit outside the Workbench source allowlist, as does a small gateway kernel. Agent drafts reach the rest of the gateway and the docs, and a committed gateway change [reloads the gateway in place](draft-scope.md#gateway-reload).
 
 ## In-world development requests
 

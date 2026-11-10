@@ -24,9 +24,15 @@ A connected agent can read source, submit and revise its own draft, and run
 its checks through the [development MCP endpoint](agents.md#development-tools-for-connected-agents).
 Drafts record the agent that owns them.
 
+Agent drafts can also change gateway source and tests, `README.md` and
+`docs/`. A fixed kernel and the launcher scripts stay outside every draft, and
+a commit that touches the gateway replaces the gateway process in place. See
+[what a draft may change](draft-scope.md).
+
 **Remaining.** Add durable task history, separate workspaces for concurrent
-agents, and conflict review when the primary branch advances. Expand eligible
-source areas alongside their validation and activation paths.
+agents, and conflict review when the primary branch advances. Bring the
+gateway and docs into the F4 editor, and label gateway activation in the
+Workbench.
 
 ## 2. Session continuity and safe activation
 

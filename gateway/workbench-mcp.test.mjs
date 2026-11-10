@@ -139,7 +139,9 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // The owner runs checks, reads the failure, and revises on top of the draft.
   assert.match((await tool('run_checks', { version: 'f'.repeat(64) })).message, /current version/);
-  assert.equal((await tool('run_checks', { version: staged.version })).draft.status, 'checking');
+  const started = await tool('run_checks', { version: staged.version });
+  assert.equal(started.isError, false, started.message);
+  assert.equal(started.draft.version, staged.version);
   const failed = await until('failed');
   assert.equal(failed.error, 'READY must be true.');
   assert.match(failed.output, /Checked \d+ characters/);

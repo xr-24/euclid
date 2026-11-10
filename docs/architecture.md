@@ -24,6 +24,7 @@ All paths below are relative to `world/scripts/`.
 | `simulation/water_interactions.gd` | Bounded, time-scaled wake, splash and fountain impulses | Pure functions; separate pool and shore profiles |
 | `player/player_motor.gd` | Walking, jumping, wading and swimming | Inputs and water state go in; one body movement step comes out |
 | `ui/world_ui.gd` | Menus and application previews | Emits user-intent signals; cannot load zones or save the world |
+| `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `diagnostics/` | Benchmarks, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save |
@@ -64,10 +65,34 @@ The environment library persists new Grid-template entries under stable IDs. The
 
 ## Source workbench
 
-`ui/workbench_panel.gd` holds the editor buffers and review views. Its transport
-uses a separate credential supplied by the Workbench launcher. The native
-world MCP catalog exposes live scene tools. Workbench source operations use a
-separate endpoint and are driven from the developer panel.
+`ui/workbench_panel.gd` holds the editor buffers and review views. Each open file has its own
+`ui/code_editor.gd` (a `CodeEdit` with highlighting from `ui/code_highlighters.gd`, completion and
+line commands), so undo history and scroll position stay with the file. `ui/find_bar.gd`
+searches the active view. `ui/quick_open.gd` searches the source catalog. The panel saves
+dirty buffers to `user://workbench-buffers.json` every five seconds while editing and on
+**Ctrl+S**. When a file is opened, the panel restores its buffer only if the on-disk hash
+matches. Closing or reloading a file clears its local buffer. Committing, discarding, or
+reverting a draft clears the saved buffer store. Inline F4 proposals use one undo operation
+per file. The F2 source agent instead hands off a reviewed Git diff.
+
+The Diff and Checks tabs use read-only editors. The panel extracts `res://…:line` references
+from check output and marks those lines in open source files. During review, new files and
+draft-only changes are visible in Diff.
+
+`ui/code_fx.gd` draws above a `TextEdit` or `LineEdit`: a smoothed caret with a short motion
+trail, a flash for inserted characters, dissolving ghosts for removed ones and a scan-line reveal
+on load. It diffs consecutive texts (a line-level LCS refined to characters) rather than hooking
+editor internals, so typing, undo, Codex proposals and streamed logs all animate the same way.
+`ui/glow_layer.gd` blooms the finished panel from the screen texture's mipmaps. Both follow the
+Workbench's **FX** switch. The F2 uplink uses the same theme, displays new replies progressively,
+and keeps a session-local prompt history. `scripts/background-render.py --text-tools` uses a
+read-only gateway stand-in and writes fixture buffers alongside the captures. The native CLI
+still opens through `scripts/codex-terminal.ps1`. See the [embedded terminal proposal](terminal-blueprint.md).
+
+The standard Euclid launcher supplies a separate credential for the Workbench
+transport, and F4 opens the editor in the running world. The native world MCP
+catalog exposes live scene tools. Workbench source operations use a separate
+endpoint and are driven from the developer panel.
 
 `gateway/workbench.mjs` coordinates a multi-file draft. The Codex adapter
 proposes exact text replacements in open files. The source module limits
@@ -86,6 +111,14 @@ allowed paths, and transfers the exact changes to the Workbench Git draft.
 The user reviews the diff and starts checks before executing the edited code.
 This path currently accepts Godot source, data, scenes, and diagnostics.
 
+Revisions replay the reviewed patch into a fresh checkout at the same Git base.
+Codex receives that source and the latest check output. The gateway keeps the
+active draft until it has verified the replacement, then records the previous
+patch and exposes a diff between the two versions. The draft ID stays the same.
+Check, preview, and commit requests identify the patch version so a stale
+review cannot approve a newer patch. Restoring the previous patch swaps the
+two versions and requires fresh checks.
+
 `gateway/workbench-runner.mjs` owns the preview snapshot, Godot import and
 project checks, and preview process. It copies the reviewed worktree and fills in
 local runtime art and import caches from the primary checkout. The snapshot gets
@@ -94,7 +127,8 @@ starts without the live gateway credentials. A failed check leaves the original
 source and live world saves untouched. Project and save isolation are filesystem
 boundaries. Reviewed code runs with the developer's local account permissions.
 
-The world coordinator writes player state before asking the launcher to restart.
+The world coordinator writes player state before asking the launcher to restart
+after a source update.
 The restarted process restores the usual saved state and reconnects to the
 existing gateway. `scripts/recovery.mjs` waits for a fresh startup receipt from
 the process and advances `refs/euclid/last-good` only when the same clean Git
@@ -104,12 +138,13 @@ The supervisor and launcher sit outside the Workbench source allowlist.
 
 ## In-world development requests
 
-The F2 planner routes shoreline appearance, Grid scenery, and new linked
-behavior requests to the privileged Workbench transport. Each route creates an
-ordinary Git draft and starts isolated checks. F2 tracks the draft and offers
-review, preview, and discard. F4 owns the diff and commit controls. Drafts
-describe their activation boundary as a live swap, Grid scenery reload, or
-restart. Preview from F2 is a separate user action after checks pass.
+The F2 planner routes shoreline appearance, Grid scenery, linked behaviors, and
+workshop actions to the privileged Workbench transport. These routes create Git
+drafts and start isolated checks. General source requests create a draft for the
+user to review and check. F2 tracks drafts and offers review, preview, and discard.
+F4 owns the diff and commit controls. Drafts describe their activation boundary
+as a live swap, Grid scenery reload, or restart. The user starts a preview after
+checks pass.
 
 `rendering/shoreline_look.gd` validates the appearance profile and applies it
 to the attached beach's private surf and terrain materials. Commit promotes the

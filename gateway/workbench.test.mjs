@@ -260,7 +260,7 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.deepEqual(JSON.parse(await readFile(path.join(root, 'world/data/workshop_tools/reset_demo.json'), 'utf8')), toolPreview);
 });
 
-test('source agent stages isolated changes, requires checks, and can cancel', async t => {
+test('source drafts isolate authoring, revise from failed checks, and restore reviewed versions', async t => {
   const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-source-test-'));
   t.after(() => rm(area, { recursive: true, force: true }));
   const root = path.join(area, 'project');
@@ -286,25 +286,42 @@ test('source agent stages isolated changes, requires checks, and can cancel', as
   let checked = 0;
   let played = false;
   const runner = {
-    async check(draft) {
+    async check(draft, log) {
       checked++;
       assert.match(await readFile(path.join(draft.worktree, testFile), 'utf8'), /FIXTURE/);
       await assert.rejects(readFile(path.join(draft.worktree, removed)), { code: 'ENOENT' });
+      if (!(await readFile(path.join(draft.worktree, script), 'utf8')).includes('const NEW := true')) {
+        log('FIXTURE expected NEW to be true.\n');
+        throw new Error('The fixture failed.');
+      }
     },
     playing: () => played,
     async play() { played = true; },
     async stop() { played = false; },
   };
-  const editSource = async ({ workspace, request, signal, onProgress }) => {
+  const editSource = async ({ workspace, request, context, signal, onProgress }) => {
     await assert.rejects(readFile(path.join(workspace, '.git')), { code: 'ENOENT' });
     await assert.rejects(readFile(path.join(workspace, '.local/fixture')), { code: 'ENOENT' });
+    if (context) {
+      assert.equal(context.request, 'Update the script');
+      assert.deepEqual(context.files, [testFile, script, removed]);
+      assert.equal(context.check_status, 'failed');
+      assert.match(context.check_output, /expected NEW/);
+      assert.equal(await readFile(path.join(workspace, script), 'utf8'), original + 'const NEW := false\n');
+      assert.match(await readFile(path.join(workspace, testFile), 'utf8'), /FIXTURE/);
+      await assert.rejects(readFile(path.join(workspace, removed)), { code: 'ENOENT' });
+      if (request === 'Cancel') await sleep(10000, undefined, { signal });
+      if (request === 'Outside scope') return writeFile(path.join(workspace, 'world/project.godot'), 'Bad change');
+      await writeFile(path.join(workspace, script), original + 'const NEW := true\n');
+      return 'Fixed the failing check.';
+    }
     assert.equal(await readFile(path.join(workspace, script), 'utf8'), original);
     if (request === 'Cancel') await sleep(10000, undefined, { signal });
     if (request === 'Outside scope') return writeFile(path.join(workspace, 'world/project.godot'), 'Bad change');
     onProgress('Reading source and adding a test.\n');
     await mkdir(path.dirname(path.join(workspace, testFile)), { recursive: true });
     await writeFile(path.join(workspace, testFile), 'extends SceneTree\nconst FIXTURE := true\n');
-    await writeFile(path.join(workspace, script), original + 'const NEW := true\n');
+    await writeFile(path.join(workspace, script), original + 'const NEW := false\n');
     await rm(path.join(workspace, removed));
     return 'Updated the script and test.';
   };
@@ -341,10 +358,52 @@ test('source agent stages isolated changes, requires checks, and can cancel', as
   workbench = connect();
   assert.equal((await call('state')).draft.diff, reviewed.diff);
   await call('check', { id: reviewed.id });
-  await until('passed');
+  const failed = await until('failed');
   assert.equal(checked, 1);
-  assert.equal((await call('play', { id: reviewed.id })).playing, true);
-  await call('apply', { id: reviewed.id, message: 'Apply checked agent changes' });
+  const first = { id: failed.id, version: failed.version };
+  const revising = await call('revise', { ...first, prompt: 'Cancel' });
+  assert.equal(revising.draft.status, 'revising');
+  assert.equal(revising.draft.diff, reviewed.diff);
+  await assert.rejects(call('discard', first), /Cancel the revision before discarding/);
+  const preserved = (await call('discard', { ...first, cancel_revision: true })).draft;
+  assert.equal(preserved.status, 'failed');
+  assert.match(preserved.revision_notice, /Revision cancelled/);
+  await assert.rejects(call('discard', { ...first, cancel_revision: true }), /no revision running/);
+  await call('revise', { ...first, prompt: 'Outside scope' });
+  const rejectedRevision = await until('failed');
+  assert.equal(rejectedRevision.diff, failed.diff);
+  assert.match(rejectedRevision.revision_notice, /outside the draft scope/);
+  assert.equal(rejectedRevision.log, failed.log);
+
+  await call('revise', { ...first, prompt: 'Fix the failing check' });
+  const revised = await until('staged');
+  assert.equal(revised.id, reviewed.id);
+  assert.notEqual(revised.version, reviewed.version);
+  assert.equal(revised.has_previous, true);
+  assert.match(revised.revision_diff, /-const NEW := false\n\+const NEW := true/);
+  assert.doesNotMatch(revised.revision_diff, /example_test\.gd|old\.gd/);
+  assert.deepEqual(revised.files, reviewed.files);
+  const second = { id: revised.id, version: revised.version };
+  await assert.rejects(call('check', first), /current source draft version/);
+  await assert.rejects(call('play', second), /pass the project checks/);
+  await assert.rejects(call('apply', { ...second, message: 'Unchecked version' }), /pass the project checks/);
+
+  workbench = connect();
+  assert.equal((await call('state')).draft.revision_diff, revised.revision_diff);
+  await call('check', second);
+  await until('passed');
+  assert.equal((await call('play', second)).playing, true);
+  const restored = await call('previous', second);
+  assert.equal(restored.playing, false);
+  assert.equal(restored.draft.status, 'staged');
+  assert.equal(restored.draft.version, first.version);
+  assert.match(restored.draft.revision_diff, /-const NEW := true\n\+const NEW := false/);
+  await call('previous', first);
+  await assert.rejects(call('play', second), /pass the project checks/);
+  await call('check', second);
+  await until('passed');
+  assert.equal((await call('play', second)).playing, true);
+  await call('apply', { ...second, message: 'Apply checked agent changes' });
   assert.notEqual(git('rev-parse', 'HEAD'), base);
   assert.equal(await readFile(path.join(root, testFile), 'utf8'), 'extends SceneTree\nconst FIXTURE := true\n');
   assert.equal(git('status', '--porcelain'), '');

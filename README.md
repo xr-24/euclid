@@ -4,7 +4,7 @@ A first-person desktop prototype: applications have places, and agent work can h
 
 ## Run it
 
-Double-click **Start Euclid.cmd**. This starts a local gateway and opens the world in borderless fullscreen with a 1920×1080 launch size. On this machine Godot is already downloaded into `.tools/godot/`; Node 22 is already installed. There are no npm dependencies to install.
+Double-click **Start Euclid.cmd**. This starts the local gateway and opens the world in borderless fullscreen with a 1920×1080 launch size. Press **F4** in that session to open Workbench. On this machine Godot is already downloaded into `.tools/godot/`. Node 22 is already installed, and there are no npm dependencies to install.
 
 For another Windows machine, install Node 22 or later, then run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1` once. The setup script downloads the pinned Godot build from its official release and verifies its SHA512 checksum. It does not install Godot system-wide.
 
@@ -21,13 +21,14 @@ Allow about 2.25 GiB for the temporary art copy. Startup logs are under
 | C | Dive while swimming |
 | 1, 2, 3 | Shift the world around you to The Grid, the villa or the shore |
 | E while near and facing an object | Open an application preview, inspect an agent |
+| E while near and facing the Codex avatar | Open the Codex uplink |
 | Tab | Open the menu |
 | Escape | Open the menu, or return from an application preview |
 | B in The Grid | Open Grid tools at the crosshair |
 | F2 | Open or minimize the Codex uplink |
 | F11 | Toggle fullscreen |
 | F3 | Toggle live performance statistics |
-| F4 in Workbench mode | Edit Euclid source and review a preview |
+| F4 | Open or close Workbench |
 | Save and quit | Save your location and close the world |
 
 The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone in the menu) and the world is rewritten around you in place. A sphere expands from your eyes, the old zone unravels into a blue lattice with streams of 1s and 0s pouring down it, and the new zone climbs up out of the same lattice while the sky, sun and atmosphere blend across. There are no portals. Zones are built on a worker thread and global illumination re-settles while the effect still covers the change, so a shift neither freezes the game nor flashes at the end. If the spot you are standing on would leave you inside a hill or out in deep water in the new zone, you arrive at its usual starting point instead. The villa, Villa Aurelia, is modelled on the Getty Villa and stands on a sandstone bluff about 80 m above a sandy cove on a Laguna Beach-style coast, with rocky headlands either side, coastal sage scrub and ice plant on the bluffs and rolling hills behind. You arrive in the outer peristyle: a long garden court with fluted limestone colonnades under coffered ceilings, Pompeian red frescoes, clipped box hedges (built leaf by leaf), olive trees, a reflecting pool fed by bronze lion-head fountains and an open south end looking out over the sea. North of it is the house: an entrance hall between two sculpture galleries, an inner peristyle with a long narrow pool and bronzes, an atrium open to the sky over its rain pool, the hall of Herakles, and the library, where the study terminal and the example worker now sit. Doors lead on to a walled east garden with a round fountain and a lion-head wall fountain, terraced herb and fruit gardens stepping down toward the bluff, and an outdoor theatre facing the house's west door. The reflecting pool runs its own shallow-water simulation, so the fountains keep a ripple moving down it and you can wade in from the ramp at its south end. The shore is a sheltered cove at golden hour, with wind-rippled sand that darkens and turns glossy toward the waterline, real simulated surf (a GPU shallow-water solver: waves shoal over the seabed, break, run up the sand and drain back, leaving wet sand and foam lines that dry over time) that you can walk and swim out into; you leave a wake and splash, and barrels, a crate and a buoy float and drift on it, rocky headlands, windswept trees and a weathered pier. Materials and most models are CC0 scans from [Poly Haven](https://polyhaven.com) (see `world/assets/thirdparty/polyhaven/CREDITS.md`). The villa's statues, busts and sarcophagi are museum and artist scans from Sketchfab under Creative Commons licences; they live in a licence-sorted asset library with generated credits (`world/assets/library/`, credits in `world/assets/library/CREDITS.md`), and where they stand is plain data in `world/data/dressing/villa.json`. Some of them are non-commercial only; see `world/assets/library/README.md` before selling or open-sourcing Euclid. Each zone has its own HDRI sky with a matched sun, and Forward+ adds SDFGI bounce light, SSR, SSAO/SSIL, volumetric fog and AgX tonemapping. The surf uses the MIT-licensed [Realistic Shoreline Waves](https://reboot16.itch.io/godot-rsw) solver by Reboot16, vendored in `world/thirdparty/shorewaves`. It needs Forward+ with a GPU; otherwise the shore falls back to the shader ocean. The Grid is a dark digital workshop. Other zones fall back to blockout geometry if their art is missing. Location, zone and viewing direction save automatically and restore on restart. Application identities and anchor assignments live in `world/data/world.json` independently of scene geometry.
@@ -56,7 +57,9 @@ Codex can propose one cone with a color and scale. Euclid places it at the cross
 
 ## Codex uplink
 
-Press **F2** in any environment. Type at the prompt and press **Enter**. The terminal’s square and dash expand and minimize the dock. The arrow opens the interactive Codex CLI in a native Windows terminal. Use Alt+Tab to switch between Euclid and the running terminal.
+Press **F2** in any environment. Type at the prompt and press **Enter**. Use the square and dash to expand and minimize the dock. Press **↑** and **↓** to recall up to 100 submitted prompts. Euclid keeps up to 300 scrollback entries during the running session. The arrow opens the interactive Codex CLI in a native Windows terminal. Use **Alt+Tab** to switch between Euclid and that window. See the [embedded terminal proposal](docs/terminal-blueprint.md).
+
+When the Codex avatar is close and in view, **E: Command agent** opens the same uplink. The avatar uses a higher-contrast projection in the villa and on the beach.
 
 Try **Where can we go?**, **Take me to the Roman villa**, **Take me to the beach**, **Create a Grid space called Signal Lab**, **Follow me**, or **Stay here**. The uplink sends the live environment list to Codex. The native CLI discovers the same world operations through a session-scoped MCP connection and prompts before changing the world. Both report travel once Euclid finishes the shift.
 
@@ -164,11 +167,45 @@ separate rigged asset ID for `spawn_entity`.
 
 ## Develop from inside Euclid
 
-See the [in-Euclid development roadmap](docs/development-roadmap.md) for the remaining milestones.
+See the [in-Euclid development roadmap](docs/development-roadmap.md) for the current status and remaining milestones.
+
+### Workbench editor
+
+**F4** opens Euclid's source editor in your running session. Pick a file in the sidebar or
+press **Ctrl+P** and type part of its name. Each open file has a tab with its own undo
+history and scroll position. **●** marks unstaged edits. The editor has a minimap, code
+folding, word completion, and highlighting for GDScript, shaders, JSON, and occurrences
+of the word under the cursor.
+
+| Keys | Action |
+| --- | --- |
+| Ctrl+P | Go to file |
+| Ctrl+F / Ctrl+H | Find / replace in this file (Enter next, Shift+Enter previous) |
+| Ctrl+G | Go to line |
+| Ctrl+/ or Ctrl+K | Toggle line comments |
+| Alt+↑ / Alt+↓ | Move lines |
+| Ctrl+Shift+D / Ctrl+Shift+K | Duplicate / delete lines |
+| Ctrl+D | Add a cursor at the next occurrence |
+| Ctrl+Space | Complete a word (also offered while you type) |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous file tab |
+| Ctrl+W | Close the file tab and discard its unstaged edits |
+| Ctrl+S | Keep unstaged edits on this PC so they survive a restart |
+| Ctrl+= / Ctrl+- | Text size |
+| Ctrl+B | Show or hide the sidebar |
+
+**Ask Codex** in F4 applies each proposal as one undoable step in each affected file.
+Unstaged edits save locally about every five seconds and restore when you reopen the
+same file at the same on-disk version. **Ctrl+S** saves immediately. To drop a restored
+edit, press **Ctrl+Z**, then **Ctrl+S**.
+
+The **Diff** and **Checks** tabs have their own highlighting. Double-click a `res://…:line`
+location in **Checks** to jump to a matching open source file. While a draft is active,
+use **Diff** to review its changed or added lines. The **FX** button toggles Workbench's
+typing and deletion effects, caret trail, file reveal, and panel glow.
 
 ### Ask from the beach
 
-Launch **Start Euclid Workbench.cmd**, go to the beach, and press **F2**. Ask
+Go to the beach and press **F2**. Ask
 **Make the shoreline foam softer**. Codex drafts an edit to the shoreline
 appearance file and starts the Workbench checks. **Review draft** opens the
 diff and logs. When checks pass, **Preview live** applies the look to the
@@ -180,7 +217,7 @@ uses the same Git draft, check, and revert commands as the rest of Workbench.
 
 ### Ask from The Grid
 
-In Workbench mode, press **F2** and ask **Spread the Grid floor lines farther
+Press **F2** and ask **Spread the Grid floor lines farther
 apart** or **Make the distant Grid walls taller**. After checks pass, **Preview
 Grid reload** replaces the scenery in place. Your position, agent, and placed
 objects stay in the world. These settings apply to the shared Grid template.
@@ -204,18 +241,25 @@ for future sessions.
 
 ### Edit source in Workbench
 
-For an agent-authored code change, ask in **F2** while in Workbench mode. For
+For an agent-authored code change, ask in **F2**. For
 example, ask **Add undoable group duplication to the Grid palette and write a
 regression test**. Codex searches and edits a separate source workspace. When
 the draft is ready, **Review draft** opens its diff in F4. **Run checks** starts
 the isolated checks, then **Preview build** opens the checked build with its
 own saves. Commit through F4 if you want to install it.
 
+To iterate on that draft, ask F2 **Fix the failing check** or **Adjust this
+preview**, or describe the change with **Revise draft** in F4. Codex starts
+from the existing patch and receives the latest check output. F4's
+**Revision** tab shows what changed since the previous version, while **Diff**
+shows the full patch. **Restore previous** swaps the two versions. Run fresh
+checks after either action before previewing or committing.
+
 The source workspace supports one active task and up to 24 changed Godot
 source or test files. The checks and preview run code from the reviewed draft
 with your local account permissions.
 
-Launch **Start Euclid Workbench.cmd** and press **F4**. Open existing Godot
+Press **F4** and open existing Godot
 scripts, shaders, the main scene, or project data files. Open each file you want
 Codex to see. For example, open `world/scripts/workshop/entity_types.gd` and
 `world/scripts/ui/grid_palette.gd`, then ask Codex to make the default traffic
@@ -262,6 +306,7 @@ Graphics default to **Balanced**, which retains the existing visual effects and 
 - `powershell -File scripts/start.ps1 -Compatibility` uses OpenGL for graphics troubleshooting.
 - `powershell -File scripts/start.ps1 -Quality balanced` overrides the graphics preference for that launch. In the villa, Balanced uses simpler distant meshes, lighter shadows, and FSR 2 to reconstruct the 3D view at window resolution. Cinematic renders at native resolution.
 - `powershell -File scripts/check.ps1` runs the content/save/ownership checks, world smoke test and gateway tests.
+- `python scripts/background-render.py --text-tools --output .local/text-tools-check` captures Workbench and F2 on the GPU with a read-only gateway stand-in. The output directory holds the captures, log, and any fixture editor buffers.
 - `python scripts/background-render.py --output .local/water-check` checks pool motion and coastal rendering on the GPU without a visible window or desktop input. See [water validation](docs/water.md) for its scope.
 - `python scripts/background-render.py --coast --warmup 90 --output .local/coast-check` checks the normal game's coastal boundary/foam over a longer run, plus pool reflection visibility and cleanup. The normal water now uses the bounded pool settings and a shared offshore wave surface; the pool also reflects the surrounding villa.
 - `powershell -File scripts/benchmark.ps1 -MinimumFps 60 -MaximumP95Ms 16.67` measures the three villa views in a real rendered window and fails if either budget is missed.

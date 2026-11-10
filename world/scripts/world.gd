@@ -15,6 +15,7 @@ const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
+const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
@@ -78,6 +79,7 @@ var codex_console: Control
 var cli_process := -1
 var console_busy := false
 var voice_enabled := false
+const CONSOLE_SCROLLBACK := 300
 var console_lines := PackedStringArray()
 var _workbench_capability := ""
 var _workbench_panel: Control
@@ -91,12 +93,12 @@ var _development_status := ""
 func _ready() -> void:
 	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
 	var args := OS.get_cmdline_user_args()
-	if "--workbench" in args:
-		_workbench_capability = OS.get_environment("EUCLID_WORKBENCH_TOKEN")
-	OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
 	var water_check := "--water-check" in args or "--coast-check" in args
 	var benchmark := "--benchmark" in args
 	smoke_mode = "--smoke" in args or "--capture" in args or water_check or benchmark
+	if not smoke_mode and "--workbench-preview" not in args:
+		_workbench_capability = OS.get_environment("EUCLID_WORKBENCH_TOKEN")
+	OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
 	environment_library = EnvironmentLibrary.new("" if smoke_mode else "user://environments.json")
 	manifest.zones.append_array(environment_library.environments())
 	prefab_library = PrefabLibrary.new("" if smoke_mode else "user://grid-prefabs.json")
@@ -225,12 +227,18 @@ func _setup_ui() -> void:
 	var ui := Control.new()
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.theme = TerminalTheme.make_theme()
 	canvas.add_child(ui)
 	hud = _ui_label(ui, Vector2(36, 30), 22)
 	hud.modulate.a = 0.0
 	gateway_label = _ui_label(ui, Vector2(36, 62), 13)
 	gateway_label.visible = false
-	hint = _ui_label(ui, Vector2(32, 850), 17)
+	hint = _ui_label(ui, Vector2.ZERO, 17)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	hint.offset_left = 32
+	hint.offset_top = -52
+	hint.add_theme_color_override("font_outline_color", TerminalTheme.BACKGROUND)
+	hint.add_theme_constant_override("outline_size", 6)
 	underwater = ColorRect.new()
 	underwater.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	underwater.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -250,20 +258,15 @@ func _setup_ui() -> void:
 	overlay.offset_top = 170
 	overlay.offset_right = -80
 	overlay.offset_bottom = -70
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("111d2c")
-	style.content_margin_left = 38
-	style.content_margin_top = 32
-	style.content_margin_right = 38
-	style.content_margin_bottom = 32
-	style.corner_radius_top_left = 16
-	style.corner_radius_top_right = 16
-	style.corner_radius_bottom_left = 16
-	style.corner_radius_bottom_right = 16
+	var style := TerminalTheme.frame_style()
+	style.content_margin_left = 24
+	style.content_margin_top = 20
+	style.content_margin_right = 24
+	style.content_margin_bottom = 20
 	overlay_panel_style = style
 	overlay.add_theme_stylebox_override("panel", overlay_panel_style)
 	overlay_content = VBoxContainer.new()
-	overlay_content.add_theme_constant_override("separation", 18)
+	overlay_content.add_theme_constant_override("separation", 10)
 	overlay.add_child(overlay_content)
 	overlay.hide()
 	_show_menu()
@@ -273,19 +276,21 @@ func _ui_label(parent: Node, at: Vector2, font_size: int) -> Label:
 	parent.add_child(label)
 	label.position = at
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color("f5f8ff"))
-	label.add_theme_color_override("font_shadow_color", Color("142137"))
+	label.add_theme_color_override("font_color", TerminalTheme.BRIGHT)
+	label.add_theme_color_override("font_shadow_color", TerminalTheme.BACKGROUND)
 	label.add_theme_constant_override("shadow_offset_x", 0)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 
-func _panel(title: String, description: String) -> void:
+func _panel(title: String, description: String, height := 500.0) -> void:
 	overlay.add_theme_stylebox_override("panel", overlay_panel_style)
-	overlay.offset_left = 520
-	overlay.offset_top = 190
-	overlay.offset_right = -520
-	overlay.offset_bottom = -190
+	var viewport_size := get_viewport().get_visible_rect().size
+	var side_margin := maxf((viewport_size.x - 680.0) * 0.5, 24.0)
+	overlay.offset_left = side_margin
+	overlay.offset_right = -side_margin
+	overlay.offset_top = maxf((viewport_size.y - height) * 0.5, 24.0)
+	overlay.offset_bottom = -overlay.offset_top
 	for child in overlay_content.get_children():
 		if child == codex_console:
 			codex_console = null
@@ -296,23 +301,28 @@ func _panel(title: String, description: String) -> void:
 	if not title.is_empty():
 		var heading := Label.new()
 		heading.text = title
-		heading.add_theme_font_size_override("font_size", 34)
+		heading.add_theme_font_size_override("font_size", 25)
+		heading.add_theme_color_override("font_color", TerminalTheme.BRIGHT)
 		overlay_content.add_child(heading)
 	if not description.is_empty():
 		var text := Label.new()
 		text.text = description
 		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		text.add_theme_font_size_override("font_size", 18)
-		text.modulate.a = 0.75
+		text.add_theme_color_override("font_color", TerminalTheme.INK)
 		overlay_content.add_child(text)
+	_show_panel()
+
+func _show_panel() -> void:
+	hint.text = ""
 	overlay.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _button(title: String, callback: Callable) -> void:
 	var button := Button.new()
 	button.text = title
-	button.custom_minimum_size.y = 46
-	button.add_theme_font_size_override("font_size", 20)
+	button.custom_minimum_size.y = 36
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.pressed.connect(callback)
 	overlay_content.add_child(button)
 
@@ -325,8 +335,7 @@ func _show_menu() -> void:
 	if _is_workshop(zone_id) and not shifting:
 		_button("Grid tools  [B]", _request_grid_palette)
 	_button("Codex  [F2]", _open_codex_console)
-	if not _workbench_capability.is_empty():
-		_button("Workbench  [F4]", _open_workbench)
+	_button("Workbench  [F4]", _open_workbench)
 	if manifest.zones.size() > 3:
 		var spaces := OptionButton.new()
 		spaces.add_item("Custom spaces")
@@ -343,14 +352,17 @@ func _close_panel() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _open_workbench() -> void:
-	if _workbench_capability.is_empty() or shifting:
+	if shifting:
+		return
+	if _workbench_capability.is_empty() or gateway_url.is_empty() or gateway_token.is_empty():
+		_panel("Workbench", "Workbench needs the local gateway. Open your main Euclid session with Start Euclid.cmd.", 240)
+		_button("Back", _close_panel)
 		return
 	if is_instance_valid(_workbench_panel):
 		if overlay.visible:
 			_close_panel()
 		else:
-			overlay.show()
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			_show_panel()
 		return
 	_panel("", "")
 	overlay.offset_left = 68
@@ -481,10 +493,11 @@ func _show_grid_palette() -> void:
 			at = hit.position
 	at = Vector3(clampf(at.x, -60.0, 60.0), 0, clampf(at.z, -60.0, 60.0))
 	_panel("Grid tools", "")
-	overlay.offset_left = 850
-	overlay.offset_top = 110
+	var viewport_size := get_viewport().get_visible_rect().size
+	overlay.offset_left = maxf(24.0, viewport_size.x * 0.44)
+	overlay.offset_top = minf(110.0, viewport_size.y * 0.1)
 	overlay.offset_right = -30
-	overlay.offset_bottom = -100
+	overlay.offset_bottom = -overlay.offset_top
 	var palette := GridPalette.new()
 	overlay_content.add_child(palette)
 	palette.setup(world_tools, at, selected, _workshop_action_catalog, _run_palette_action)
@@ -513,8 +526,7 @@ func _open_codex_console() -> void:
 		if codex_console.is_visible_in_tree():
 			_close_panel()
 		else:
-			overlay.show()
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			_show_panel()
 			codex_console.focus_entry()
 		return
 	_panel("", "")
@@ -550,21 +562,33 @@ func _refresh_development_actions() -> void:
 func _development_changed() -> void:
 	var draft := _development.draft
 	var status: String = draft.get("status", "")
-	var stamp := "%s/%s" % [draft.get("id", ""), status]
+	var notice: String = draft.get("revision_notice", "")
+	var stamp := "%s/%s/%s/%s" % [draft.get("id", ""), draft.get("version", ""), status, notice]
 	if stamp != _development_status:
 		_development_status = stamp
-		match status:
-			"staged":
-				if draft.get("agent_source", false):
-					_console_notice(draft.summary if not draft.summary.is_empty() else "Codex prepared the source draft.")
-					_console_notice("Review the diff, then run checks to prepare a playable build.")
-			"passed": _console_notice("Draft checks passed. Preview the change or review the diff.")
-			"failed":
-				if draft.get("has_patch", false):
-					_console_notice("The draft failed checks. Open the draft to inspect the results.")
-				else:
-					_console_notice("Source authoring failed. " + draft.error)
+		if not notice.is_empty():
+			_console_notice(notice)
+		elif status == "revising":
+			_console_notice("Codex is revising a copy of the active draft. Open Workbench to see progress.")
+		else:
+			_announce_development_status(draft, status)
 	_refresh_development_actions()
+
+func _announce_development_status(draft: Dictionary, status: String) -> void:
+	match status:
+		"staged":
+			if draft.get("agent_source", false):
+				_console_notice(draft.summary if not draft.summary.is_empty() else "Codex prepared the source draft.")
+				_console_notice("Review the diff, then run checks to prepare a playable build.")
+		"passed": _console_notice("Draft checks passed. Preview the change or review the diff.")
+		"failed":
+			if draft.get("has_patch", false):
+				var guidance := "Open Workbench to inspect the results."
+				if draft.get("can_revise", false):
+					guidance = "Ask Codex to fix the failing check, or open Workbench to inspect it."
+				_console_notice("The draft failed checks. " + guidance)
+			else:
+				_console_notice("Source authoring failed. " + draft.error)
 
 func _codex_development_action(action: String) -> void:
 	if not _development or _development.draft.is_empty() or _development_action_busy or shifting:
@@ -572,9 +596,10 @@ func _codex_development_action(action: String) -> void:
 	if action == "review":
 		_open_workbench()
 		if is_instance_valid(_workbench_panel):
-			_workbench_panel.show_review(not _development.draft.get("has_patch", false))
+			_workbench_panel.show_review(_development.draft.status in ["failed", "authoring", "revising"])
 		return
 	var id: String = _development.draft.id
+	var revising: bool = _development.draft.status == "revising"
 	if action == "live" and _development.draft.get("agent_source", false):
 		action = "play" if _development.draft.status == "passed" else "check"
 	_development_action_busy = true
@@ -589,7 +614,7 @@ func _codex_development_action(action: String) -> void:
 		_console_notice("Opened the checked build in a separate Euclid window.")
 	elif action == "check":
 		_console_notice("Running checks in the isolated preview project.")
-	elif action == "discard":
+	elif action == "discard" and not revising:
 		var finished := _finish_live_change("discard", id)
 		_console_notice("Discarded the draft and restored the previous version." if finished.live else "Discarded the draft.")
 	_development_action_busy = false
@@ -603,7 +628,7 @@ func _layout_codex_console(expanded: bool) -> void:
 
 func _console_notice(line: String) -> void:
 	console_lines.append(line)
-	if console_lines.size() > 22:
+	if console_lines.size() > CONSOLE_SCROLLBACK:
 		console_lines.remove_at(0)
 	if is_instance_valid(codex_console):
 		codex_console.update_display(console_lines, console_busy)
@@ -665,6 +690,8 @@ func _submit_codex_command(prompt: String) -> void:
 	context["shoreline_preview"] = zone_id == "beach"
 	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
 	context["source_development"] = _development != null
+	var reviewed: Dictionary = _development.draft.duplicate() if _development else {}
+	context["source_revision"] = reviewed.get("can_revise", false) and reviewed.get("status") in ["staged", "failed", "passed"]
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _is_workshop(zone_id) and not shifting:
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
@@ -679,7 +706,11 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice(str(response.error))
 		return
 	console_busy = true
-	if response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source"]:
+	if response.plan.tool == "revise_source":
+		var result := await _development.revise(prompt, reviewed)
+		if result.has("error"):
+			_console_notice(result.error)
+	elif response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source"]:
 		await _request_development_draft(response.plan.tool, prompt, requested_zone)
 	elif response.plan.tool == "run_workshop_tool":
 		for entry in context.workshop_tools:
@@ -696,7 +727,7 @@ func _submit_codex_command(prompt: String) -> void:
 
 func _request_development_draft(tool: String, prompt: String, requested_zone: int) -> void:
 	if not _development:
-		_console_notice("Open Start Euclid Workbench.cmd to develop and preview changes from F2.")
+		_console_notice("Workbench needs the local gateway. Open your main Euclid session with Start Euclid.cmd.")
 		return
 	var available := _shoreline.available() if tool == "draft_shoreline" else _grid_scenery.available()
 	if tool != "draft_source" and (not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not available):
@@ -894,7 +925,7 @@ func _load_zone(destination: String) -> void:
 	pitch = 0
 	camera.rotation.x = 0
 	if is_instance_valid(companion):
-		companion.arrive(zone_id, player)
+		companion.arrive(zone_id, player, not _is_workshop(zone_id))
 	_update_agent_labels()
 	_announce_zone()
 
@@ -1025,7 +1056,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	_shift_log("commit", us)
 	await _land_in(destination)
 	if is_instance_valid(companion):
-		companion.arrive(zone_id, player)
+		companion.arrive(zone_id, player, not _is_workshop(zone_id))
 	var old_lights := old_root.find_children("*", "Light3D", true, false)
 	var new_lights := zone_root.find_children("*", "Light3D", true, false)
 	for light in old_lights + new_lights:
@@ -1146,7 +1177,7 @@ func _add_anchor(anchor: Dictionary) -> void:
 			screen.material_override = _material(Color("36737a"), true)
 			_box(at + Vector3(0,0.902,0.2), Vector3(0.58,0.018,0.2), Color("768088"), false)
 	else:
-		var avatar := BinaryAvatar.projection(Color("8aaeff"))
+		var avatar := BinaryAvatar.projection(Color("8aaeff"), not _is_workshop(anchor.zone))
 		avatar.position = at + Vector3(0, 1.2, 0)
 		build_root.add_child(avatar)
 		build_agent_labels[anchor.agent_id] = _label3d(anchor.label, at + Vector3(0,2.2,0), Color("d8e7ff"), 30)
@@ -1192,15 +1223,7 @@ func _physics_process(delta: float) -> void:
 		player.position = spawn.position
 		player.velocity = Vector3.ZERO
 	underwater.visible = water.has and camera.global_position.y < water.level - 0.05
-	nearest = {}
-	var best := 3.0
-	for item in interactables:
-		var distance: float = player.position.distance_to(item.position)
-		var eye_target: Vector3 = item.position + Vector3(0,1.5,0) - camera.global_position
-		if distance < best and -camera.global_basis.z.dot(eye_target.normalized()) > 0.55:
-			best = distance
-			nearest = item
-	hint.text = "E    " + str(nearest.label) if not overlay.visible and not nearest.is_empty() else ""
+	_update_interaction_hint()
 	if grid_palette_requested:
 		grid_palette_requested = false
 		_show_grid_palette()
@@ -1209,16 +1232,35 @@ func _physics_process(delta: float) -> void:
 		save_clock = 0
 		_save()
 
+func _update_interaction_hint() -> void:
+	nearest = {}
+	if overlay.visible or shifting:
+		hint.text = ""
+		return
+	if is_instance_valid(companion) and companion.can_command(camera, player):
+		nearest = {"kind": "companion"}
+		hint.text = "E: Command agent"
+		return
+	var best := 3.0
+	for item in interactables:
+		var distance: float = player.position.distance_to(item.position)
+		var eye_target: Vector3 = item.position + Vector3(0,1.5,0) - camera.global_position
+		if distance < best and -camera.global_basis.z.dot(eye_target.normalized()) > 0.55:
+			best = distance
+			nearest = item
+	hint.text = "E: " + str(nearest.label) if not nearest.is_empty() else ""
+
+func _input(event: InputEvent) -> void:
+	if smoke_mode or not is_instance_valid(overlay) or not event is InputEventKey or not event.pressed or event.echo:
+		return
+	match event.keycode:
+		KEY_F2: _open_codex_console()
+		KEY_F4: _open_workbench()
+		_: return
+	get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if smoke_mode: # automated smoke and capture runs must not react to stray input
-		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
-		_open_codex_console()
-		get_viewport().set_input_as_handled()
-		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F4:
-		_open_workbench()
-		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
 		var window := get_window()
@@ -1241,7 +1283,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif not overlay.visible and _zone_key(event) >= 0:
 		_shift(str(manifest.zones[_zone_key(event)].id))
 	elif event.is_action_pressed("interact") and not overlay.visible and not nearest.is_empty():
-		if nearest.kind == "application":
+		if nearest.kind == "companion":
+			_open_codex_console()
+		elif nearest.kind == "application":
 			if zone_id == "construct" and nearest.app_id == "terminal":
 				_open_codex_console()
 			else:

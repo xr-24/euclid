@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--timeout', type=float, default=180)
     parser.add_argument('--coast', action='store_true')
+    parser.add_argument('--text-tools', action='store_true', help='Capture the Workbench and console text effects')
     parser.add_argument('--baseline', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--warmup', type=float, default=18.0, help='Coast warm-up seconds')
@@ -36,7 +37,8 @@ def main():
         0x80000000, 0, 0, 1440, 900, None, None, None, None)
     if not host or user.IsWindowVisible(host):
         raise RuntimeError('Could not create an invisible render host')
-    env = dict(os.environ, CONSTRUCT_WATER_CHECK_DIR=str(output), CONSTRUCT_COAST_WARMUP=str(args.warmup))
+    env = dict(os.environ, CONSTRUCT_WATER_CHECK_DIR=str(output), CONSTRUCT_COAST_WARMUP=str(args.warmup),
+        EUCLID_CAPTURE_DIR=str(output))
     binary = os.environ.get('GODOT_BIN', str(root / '.tools/godot/Godot_v4.7.2-stable_win64.exe'))
     startup = subprocess.STARTUPINFO()
     startup.dwFlags = subprocess.STARTF_USESHOWWINDOW
@@ -44,8 +46,10 @@ def main():
     process = None
     try:
         with (output / 'run.log').open('w', encoding='utf-8') as log:
+            script = ('res://scripts/diagnostics/text_tools_capture.gd' if args.text_tools
+                else 'res://scripts/diagnostics/background_render.gd')
             process = subprocess.Popen([binary, '--path', str(root / 'world'), '--windowed', '--wid', str(host),
-                '--audio-driver', 'Dummy', '--script', 'res://scripts/diagnostics/background_render.gd',
+                '--audio-driver', 'Dummy', '--script', script,
                 # --smoke is a second save-protection guard if an older controller is restored:
                 # it will run its isolated smoke check and fail our water marker, never a normal session.
                 '--', '--smoke', '--coast-check' if args.coast else '--water-check', '--quality=balanced',
@@ -74,9 +78,10 @@ def main():
                 time.sleep(0.02)
         report = (output / 'run.log').read_text(encoding='utf-8')
         print(report[-5000:])
-        marker = 'CONSTRUCT_COAST_CHECK_OK' if args.coast else 'CONSTRUCT_WATER_CHECK_OK'
+        marker = ('CONSTRUCT_TEXT_TOOLS_CAPTURE_OK' if args.text_tools
+            else 'CONSTRUCT_COAST_CHECK_OK' if args.coast else 'CONSTRUCT_WATER_CHECK_OK')
         if process.returncode or marker not in report or 'SCRIPT ERROR:' in report or '\nERROR:' in report:
-            raise RuntimeError('Background water check failed; see run.log')
+            raise RuntimeError('Background capture failed; see run.log')
     finally:
         if process is not None and process.poll() is None:
             subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],

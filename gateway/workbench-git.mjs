@@ -18,6 +18,8 @@ async function git(cwd, ...args) {
 }
 
 export function createWorkbenchGit(root) {
+  const stageAll = worktree => git(worktree, 'add', '--all', '--', '.');
+
   async function primary() {
     try {
       const [head, branch, status] = await Promise.all([git(root, 'rev-parse', 'HEAD'),
@@ -53,6 +55,17 @@ export function createWorkbenchGit(root) {
     assertPrimary,
     review,
     add: (worktree, base) => git(root, 'worktree', 'add', '--detach', worktree, base),
+    apply: (worktree, file) => git(worktree, 'apply', '--whitespace=nowarn', '--', file),
+    async changedPaths(worktree, base) {
+      const changed = await git(worktree, 'diff', '--name-only', '--no-renames', '-z', base, '--');
+      const added = await git(worktree, 'ls-files', '--others', '--exclude-standard', '-z');
+      return [...new Set((changed + added).split('\0').filter(Boolean))].sort();
+    },
+    async snapshot(worktree) {
+      await stageAll(worktree);
+      return (await git(worktree, 'write-tree')).trim();
+    },
+    diffTrees: (before, after) => git(root, 'diff', ...diffOptions, before, after, '--'),
     intent: (worktree, names) => git(worktree, 'add', '--intent-to-add', '--', ...names),
     remove: (worktree) => git(root, 'worktree', 'remove', '--force', worktree),
     async headRevision() {
@@ -62,11 +75,11 @@ export function createWorkbenchGit(root) {
       } catch { return ''; }
     },
     async commit(draft, message) {
-      const { worktree, base, branch, names, diff, id } = draft;
+      const { worktree, base, branch, diff, id } = draft;
       await assertPrimary(base, branch);
       const head = (await git(worktree, 'rev-parse', 'HEAD')).trim();
       if (head === base) {
-        await git(worktree, 'add', '--', ...names);
+        await stageAll(worktree);
         if (await git(worktree, 'diff', '--cached', ...diffOptions, base, '--') !== diff) throw new Error('The Git index differs from the reviewed draft.');
         await git(worktree, 'commit', '-m', message, '-m', `Euclid-Workbench-Draft: ${id}`);
       }

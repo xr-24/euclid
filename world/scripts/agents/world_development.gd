@@ -32,7 +32,11 @@ func request(tool: String, prompt: String, context: Dictionary) -> Dictionary:
 func command(action: String) -> Dictionary:
 	if draft.is_empty():
 		return {"error": "There is no development draft to review."}
-	return await _send(action, {"id": draft.id})
+	return await _send(action, {"id": draft.id, "version": draft.version,
+		"cancel_revision": action == "discard" and draft.status == "revising"})
+
+func revise(prompt: String, reviewed: Dictionary) -> Dictionary:
+	return await _send("revise", {"id": reviewed.id, "version": reviewed.version, "prompt": prompt})
 
 func refresh() -> void:
 	if not _busy:
@@ -56,6 +60,8 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 			next = {"id": item.id, "status": item.status, "summary": item.summary, "error": item.error,
 				"activation": item.activation, "subject": item.subject, "preview_zone": item.preview_zone,
 				"agent_source": item.get("agent_source", false), "has_patch": not item.files.is_empty(),
+				"version": item.get("version", ""), "can_revise": item.get("can_revise", false),
+				"revision_notice": item.get("revision_notice", ""),
 				"playing": response.get("playing", false)}
 		if next != draft:
 			draft = next

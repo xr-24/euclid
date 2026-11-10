@@ -40,7 +40,7 @@ async function readText(file) {
   return decoder.decode(bytes);
 }
 
-export async function writeAgentDraft({ worktree, request, author, onProgress, signal, intent }) {
+export async function writeAgentDraft({ worktree, request, context, author, onProgress, signal, intent }) {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'euclid-source-'));
   try {
     // The worker gets source bytes from the pinned checkout. Its writable directory
@@ -50,7 +50,7 @@ export async function writeAgentDraft({ worktree, request, author, onProgress, s
       return path.relative(worktree, source) !== '.git';
     } });
     const before = await inventory(workspace, signal);
-    const summary = await author({ workspace, request, onProgress, signal });
+    const summary = await author({ workspace, request, context, onProgress, signal });
     const after = await inventory(workspace, signal);
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter(name => before.get(name) !== after.get(name)).sort();
     if (changed.length > sourceDraftLimit) throw new Error(`Split the request into drafts of up to ${sourceDraftLimit} files.`);
@@ -73,7 +73,7 @@ export async function writeAgentDraft({ worktree, request, author, onProgress, s
       names.push(name);
     }
     if (!names.length) throw new Error('Codex returned without a source change.');
-    if (added.length) await intent(added);
+    if (added.length) await intent?.(added);
     return { names, summary: typeof summary === 'string' ? summary.slice(0, 320) : '' };
   } finally {
     await rm(workspace, { recursive: true, force: true });

@@ -1,29 +1,75 @@
-extends VBoxContainer
+extends MarginContainer
+## F4 Workbench: a small IDE for Euclid's own source. Files open in tabs from the sidebar or
+## Ctrl+P, and every edit stays a buffer until it is staged as a Git draft, checked, previewed
+## and committed through the gateway.
 
 signal close_requested
 signal restart_requested
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
-const Console = preload("res://scripts/ui/codex_console.gd")
+const Look = preload("res://scripts/ui/terminal_theme.gd")
+const Highlighters = preload("res://scripts/ui/code_highlighters.gd")
+const CodeEditor = preload("res://scripts/ui/code_editor.gd")
+const Effects = preload("res://scripts/ui/code_fx.gd")
+const FindBar = preload("res://scripts/ui/find_bar.gd")
+const QuickOpen = preload("res://scripts/ui/quick_open.gd")
+const GlowLayer = preload("res://scripts/ui/glow_layer.gd")
 const PREVIEW_ACTIONS := ["live", "check", "play", "stop", "apply", "discard", "restore"]
+
+## Unstaged buffers are kept here between sessions. Diagnostics point it elsewhere so they never
+## touch the user's own edits.
+static var saved_buffers_path := "user://workbench-buffers.json"
+static var font_size := Look.FONT_SIZE
+static var _location := RegEx.create_from_string("res://([\\w./-]+?\\.(?:gd|gdshader|gdshaderinc|json|tscn)):(\\d+)")
+
 var _client: Client
-var _files: OptionButton
-var _editor: CodeEdit
-var _diff: TextEdit
-var _log: TextEdit
-var _tabs: TabContainer
-var _request: LineEdit
-var _status: Label
+var _skin: Theme
+var _body := VBoxContainer.new()
+var _sidebar := VBoxContainer.new()
+var _filter := LineEdit.new()
+var _tree := Tree.new()
+var _tree_items := {}
+var _expanded := {"world/": true, "world/scripts/": true}
+var _tree_updating := false
+var _file_tabs := TabBar.new()
+var _tabs_updating := false
+var _editor_host := VBoxContainer.new()
+var _empty := Label.new()
+var _diff: CodeEditor
+var _log: CodeEditor
+var _revision_diff: CodeEditor
+var _tabs := TabContainer.new()
+var _find := FindBar.new()
+var _quick_open := QuickOpen.new()
+var _request := LineEdit.new()
+var _status := Label.new()
+var _cursor := Label.new()
+var _chip := Label.new()
 var _buttons := {}
+var _catalog := PackedStringArray()
 var _source := ""
+## name -> {"hash", "original", "editor"}
 var _buffers := {}
-var _message: LineEdit
+var _message := LineEdit.new()
 var _busy := false
+var _save_pending := false
 var _state := {}
 var _preview_behavior: Callable
 var _finish_behavior: Callable
 var _behavior_status: Callable
 var _plugin_context: Callable
+
+## Source locations named in a check log, as {"path": "world/...", "line": zero-based line}.
+static func error_locations(log: String) -> Array:
+	var found := []
+	var seen := {}
+	for hit in _location.search_all(log):
+		var entry := {"path": "world/" + hit.get_string(1), "line": hit.get_string(2).to_int() - 1}
+		var key := "%s:%d" % [entry.path, entry.line]
+		if not seen.has(key):
+			seen[key] = true
+			found.append(entry)
+	return found
 
 func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
 		behavior_status: Callable, plugin_context: Callable) -> void:
@@ -34,86 +80,150 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
-	var mono := SystemFont.new()
-	mono.font_names = ["Cascadia Mono", "Consolas", "DejaVu Sans Mono"]
-	var skin := Theme.new()
-	skin.default_font = mono
-	skin.default_font_size = 16
-	theme = skin
-	add_theme_constant_override("separation", 8)
+	_skin = Look.make_theme(font_size)
+	theme = _skin
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body.add_theme_constant_override("separation", 8)
+	add_child(_body)
+
 	var title := HBoxContainer.new()
-	add_child(title)
+	title.add_theme_constant_override("separation", 10)
+	_body.add_child(title)
 	var heading := Label.new()
-	heading.text = "Workbench"
-	heading.add_theme_font_size_override("font_size", 24)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.text = "◆ WORKBENCH"
+	heading.add_theme_color_override("font_color", Look.ACCENT)
+	heading.add_theme_font_size_override("font_size", 20)
 	title.add_child(heading)
-	_button(title, "×", func() -> void: close_requested.emit())
+	_chip.add_theme_color_override("font_color", Look.MUTED)
+	_chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_child(_chip)
+	var fx := _button(title, "FX", func() -> void: pass)
+	fx.toggle_mode = true
+	fx.button_pressed = Effects.enabled
+	fx.tooltip_text = "Text effects and glow"
+	fx.toggled.connect(func(on: bool) -> void: Effects.enabled = on)
+	_button(title, "×", func() -> void: close_requested.emit()).tooltip_text = "Close (F4)"
 
-	var files_row := HBoxContainer.new()
-	add_child(files_row)
-	_files = OptionButton.new()
-	_files.fit_to_longest_item = false
-	_files.custom_minimum_size.y = 34
-	_files.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_files.add_item("Choose a source file")
-	_files.item_selected.connect(_select_file)
-	files_row.add_child(_files)
-	_buttons["reload"] = _button(files_row, "Reload", func() -> void: _open_file(_source))
-	_buttons.reload.tooltip_text = "Reload the selected file from disk and reset the editor buffer"
-	_buttons["close_file"] = _button(files_row, "Close file", _close_file)
-	_buttons.close_file.tooltip_text = "Close the selected file and discard its unreviewed edits"
+	var split := HSplitContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	split.split_offset = 0
+	_body.add_child(split)
+	_sidebar.custom_minimum_size.x = 250
+	_sidebar.add_theme_constant_override("separation", 6)
+	split.add_child(_sidebar)
+	_filter.placeholder_text = "Filter files   Ctrl+P"
+	_filter.text_changed.connect(func(_text: String) -> void: _build_tree())
+	_sidebar.add_child(_filter)
+	_tree.hide_root = true
+	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tree.item_selected.connect(_on_tree_selected)
+	_tree.item_collapsed.connect(func(item: TreeItem) -> void:
+		if _tree_updating:
+			return
+		var key: String = item.get_metadata(0)
+		if item.collapsed:
+			_expanded.erase(key)
+		else:
+			_expanded[key] = true)
+	_sidebar.add_child(_tree)
 
-	_tabs = TabContainer.new()
+	var main := VBoxContainer.new()
+	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 6)
+	split.add_child(main)
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tabs.custom_minimum_size.y = 220
-	add_child(_tabs)
-	_editor = CodeEdit.new()
-	_editor.name = "Source"
-	_editor.gutters_draw_line_numbers = true
-	_editor.indent_use_spaces = false
-	_editor.text_changed.connect(_sync_controls)
-	_tabs.add_child(_editor)
-	_diff = _output_tab("Diff")
-	_log = _output_tab("Checks")
+	_tabs.tab_changed.connect(func(_index: int) -> void: _update_cursor())
+	main.add_child(_tabs)
+	var source := VBoxContainer.new()
+	source.name = "Source"
+	source.add_theme_constant_override("separation", 0)
+	_tabs.add_child(source)
+	var file_row := HBoxContainer.new()
+	source.add_child(file_row)
+	_file_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_file_tabs.clip_tabs = true
+	_file_tabs.tab_close_display_policy = TabBar.CLOSE_BUTTON_SHOW_ACTIVE_ONLY
+	_file_tabs.tab_changed.connect(func(index: int) -> void:
+		if not _tabs_updating:
+			_select_file(_file_tabs.get_tab_metadata(index)))
+	_file_tabs.tab_close_pressed.connect(_close_tab)
+	file_row.add_child(_file_tabs)
+	_buttons["reload"] = _button(file_row, "Reload", _reload)
+	_buttons.reload.tooltip_text = "Reload the file from disk and discard its unreviewed edits"
+	_buttons["close_file"] = _button(file_row, "Close", _close_file)
+	_buttons.close_file.tooltip_text = "Close the file and discard its unreviewed edits (Ctrl+W)"
+	_editor_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	source.add_child(_editor_host)
+	_empty.text = "Choose a file from the sidebar, or press Ctrl+P.\n\nCtrl+F find · Ctrl+H replace · Ctrl+G go to line\nCtrl+/ comment · Alt+↑↓ move lines · Ctrl+Shift+D duplicate\nCtrl+Space complete · Ctrl+S keep edits · Ctrl+B sidebar"
+	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_empty.add_theme_color_override("font_color", Look.DIM)
+	_editor_host.add_child(_empty)
+	_diff = _output_tab("Diff", Highlighters.diff())
+	_log = _output_tab("Checks", Highlighters.check_log())
+	_log.gui_input.connect(_on_log_input)
+	_revision_diff = _output_tab("Revision", Highlighters.diff())
+	_tabs.set_tab_hidden(3, true)
+	main.add_child(_find)
 
 	var prompt_row := HBoxContainer.new()
-	add_child(prompt_row)
-	_request = LineEdit.new()
+	_body.add_child(prompt_row)
 	_request.placeholder_text = "Describe a plugin or an edit to the open files"
 	_request.max_length = 600
 	_request.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_request.text_changed.connect(func(_text: String) -> void: _sync_controls())
-	_request.text_submitted.connect(func(_text: String) -> void: _propose())
+	_request.text_submitted.connect(func(_text: String) -> void:
+		if _buttons.revise.visible:
+			_revise()
+		else:
+			_propose())
 	prompt_row.add_child(_request)
 	_buttons["propose"] = _button(prompt_row, "Ask Codex", _propose)
 	_buttons["author"] = _button(prompt_row, "Create plugin", _author)
 	_buttons.author.tooltip_text = "Draft a new behavior for entities in this Grid space"
-	_buttons.propose.tooltip_text = "Codex can edit up to six open files. Use the file picker to open each one first."
+	_buttons.propose.tooltip_text = "Codex can edit up to six open files. Open each one first."
 	_buttons["stage"] = _button(prompt_row, "Review diff", _stage)
+	_buttons["revise"] = _button(prompt_row, "Revise draft", _revise)
+	_buttons["previous"] = _button(prompt_row, "Restore previous", _command.bind("previous"))
+	_buttons.previous.tooltip_text = "Restore the previous patch and run fresh checks before previewing"
 
 	var controls := HBoxContainer.new()
-	add_child(controls)
+	_body.add_child(controls)
 	var labels := ["Preview live", "Run checks", "Play preview", "Stop preview", "Commit", "Discard", "Revert last"]
 	for index in PREVIEW_ACTIONS.size():
 		var action: String = PREVIEW_ACTIONS[index]
 		_buttons[action] = _button(controls, labels[index], _command.bind(action))
 	_buttons["restart"] = _button(controls, "Restart Euclid", func() -> void: restart_requested.emit())
-	_message = LineEdit.new()
 	_message.placeholder_text = "Commit message"
 	_message.max_length = 100
 	_message.text_changed.connect(func(_text: String) -> void: _sync_controls())
-	add_child(_message)
-	_status = Label.new()
+	_body.add_child(_message)
+	var status_row := HBoxContainer.new()
+	status_row.add_theme_constant_override("separation", 16)
+	_body.add_child(status_row)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.modulate = Console.INK
-	add_child(_status)
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status.add_theme_color_override("font_color", Look.INK)
+	status_row.add_child(_status)
+	_cursor.add_theme_color_override("font_color", Look.MUTED)
+	status_row.add_child(_cursor)
+	add_child(_quick_open)
+	_quick_open.chosen.connect(_select_file)
+	add_child(GlowLayer.new())
 	var timer := Timer.new()
 	timer.wait_time = 2.0
 	timer.timeout.connect(_poll)
 	add_child(timer)
 	timer.start()
+	var autosave := Timer.new()
+	autosave.wait_time = 5.0
+	autosave.timeout.connect(func() -> void:
+		if _save_pending:
+			_save_buffers(false))
+	add_child(autosave)
+	autosave.start()
 	_load_catalog()
 
 func _button(parent: Control, label: String, callback: Callable) -> Button:
@@ -124,90 +234,338 @@ func _button(parent: Control, label: String, callback: Callable) -> Button:
 	parent.add_child(button)
 	return button
 
-func _output_tab(title: String) -> TextEdit:
-	var view := TextEdit.new()
+func _output_tab(title: String, colors: SyntaxHighlighter) -> CodeEditor:
+	var view := CodeEditor.new()
 	view.name = title
 	view.editable = false
-	view.add_theme_color_override("font_readonly_color", Console.INK)
+	view.minimap_draw = false
+	view.gutters_draw_fold_gutter = false
+	view.syntax_highlighter = colors
+	view.command_requested.connect(_on_editor_command)
 	_tabs.add_child(view)
 	return view
+
+func _make_editor(file: String) -> CodeEditor:
+	var editor := CodeEditor.new()
+	editor.use_language_of(file)
+	editor.visible = false
+	editor.extra_words = _other_words.bind(file)
+	editor.command_requested.connect(_on_editor_command)
+	editor.text_changed.connect(_on_buffer_edited)
+	editor.caret_changed.connect(_update_cursor)
+	_editor_host.add_child(editor)
+	return editor
+
+func _current_editor() -> CodeEditor:
+	return _buffers[_source].editor if _buffers.has(_source) else null
+
+func _active_editor() -> CodeEditor:
+	match _tabs.current_tab:
+		1:
+			return _diff
+		2:
+			return _log
+		3:
+			return _revision_diff
+	return _current_editor()
+
+func _other_words(except: String) -> PackedStringArray:
+	var words := PackedStringArray()
+	for name in _buffers:
+		if name != except:
+			words.append_array(_buffers[name].editor.document_words())
+	return words
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or not is_visible_in_tree():
+		return
+	var command := CodeEditor.command_for(key)
+	if command in ["find", "replace", "goto", "quick_open", "toggle_sidebar", "save", "next_file", "previous_file",
+			"close_file", "zoom_in", "zoom_out"]:
+		get_viewport().set_input_as_handled()
+		_on_editor_command(command)
+
+func _on_editor_command(command: String) -> void:
+	match command:
+		"find", "replace", "goto":
+			var target := _active_editor()
+			if target != null:
+				_find.open(command, target)
+		"quick_open":
+			if not _busy:
+				_quick_open.open(_catalog, _skin)
+		"toggle_sidebar":
+			_sidebar.visible = not _sidebar.visible
+		"save":
+			_save_buffers(true)
+		"close_file":
+			if not _buttons.close_file.disabled:
+				_close_file()
+		"next_file", "previous_file":
+			if _file_tabs.tab_count > 1:
+				var step := 1 if command == "next_file" else -1
+				_file_tabs.current_tab = posmod(_file_tabs.current_tab + step, _file_tabs.tab_count)
+		"zoom_in", "zoom_out":
+			font_size = clampi(font_size + (1 if command == "zoom_in" else -1), 11, 28)
+			_skin.default_font_size = font_size
 
 func _load_catalog() -> void:
 	_busy = true
 	_sync_controls()
 	var result := await _client.send("catalog")
-	for file in result.get("files", []):
-		_files.add_item(file)
+	_catalog = PackedStringArray(result.get("files", []))
+	_build_tree()
 	_busy = false
 	if result.has("error"):
 		_status.text = result.error
 		_sync_controls()
 		return
 	await _poll(true)
-	if _state.get("draft") is Dictionary:
+	if _state.get("draft") is Dictionary and _tabs.current_tab == 0:
 		_tabs.current_tab = 1
 
-func _select_file(index: int) -> void:
-	if _busy or index < 1:
+func _build_tree() -> void:
+	_tree_updating = true
+	_tree.clear()
+	_tree_items.clear()
+	var root := _tree.create_item()
+	var folders := {}
+	var filter := _filter.text.strip_edges()
+	for path in _catalog:
+		if not filter.is_empty() and QuickOpen.score(filter, path) < 0:
+			continue
+		var parts := path.split("/")
+		var parent := root
+		var key := ""
+		for index in parts.size() - 1:
+			key += parts[index] + "/"
+			if not folders.has(key):
+				var folder := _tree.create_item(parent)
+				folder.set_text(0, parts[index])
+				folder.set_metadata(0, key)
+				folder.set_custom_color(0, Look.DIM)
+				folder.collapsed = filter.is_empty() and not _expanded.has(key)
+				folders[key] = folder
+			parent = folders[key]
+		var item := _tree.create_item(parent)
+		item.set_metadata(0, path)
+		item.set_tooltip_text(0, path)
+		_tree_items[path] = item
+	_mark_tree()
+	_tree_updating = false
+
+func _mark_tree() -> void:
+	var edited := {}
+	for item in _changed_files():
+		edited[item.name] = true
+	for path in _tree_items:
+		var item: TreeItem = _tree_items[path]
+		item.set_text(0, ("● " if edited.has(path) else "") + path.get_file())
+		item.set_custom_color(0, Look.WARN if edited.has(path) else (Look.BRIGHT if path == _source else
+			(Look.INK if _buffers.has(path) else Look.MUTED)))
+
+func _on_tree_selected() -> void:
+	if _tree_updating:
 		return
-	_remember_buffer()
-	var file := _files.get_item_text(index)
+	var item := _tree.get_selected()
+	if item == null:
+		return
+	var key: String = item.get_metadata(0)
+	if key.ends_with("/"):
+		item.collapsed = not item.collapsed
+		item.deselect(0)
+		return
+	if _tree_locked():
+		_status.text = "Finish or discard the current draft before opening other files."
+		return
+	_select_file(key)
+
+func _tree_locked() -> bool:
+	return _busy or not str(_state.get("operation", "")).is_empty() or _state.get("draft") is Dictionary
+
+func _select_file(file: String) -> void:
+	if _busy or file.is_empty():
+		return
 	if _buffers.has(file):
-		_show_file(file, _buffers[file])
+		_show_file(file)
+	elif _tree_locked():
+		_status.text = "Finish or discard the current draft before opening other files."
 	else:
 		await _open_file(file)
+
+func _reload() -> void:
+	_forget_saved(_source)
+	await _open_file(_source)
 
 func _open_file(file: String) -> void:
 	_busy = true
 	_sync_controls()
 	var result := await _client.send("read", {"name": file})
 	_busy = false
-	if not result.has("error"):
-		var original: String = result.text.replace("\r\n", "\n")
-		_buffers[file] = {"hash": result.hash, "original": original, "text": original}
-		_show_file(file, _buffers[file])
-	else:
+	if result.has("error"):
 		_status.text = result.error
+		_sync_controls()
+		return
+	var original: String = result.text.replace("\r\n", "\n")
+	var editor: CodeEditor = _buffers[file].editor if _buffers.has(file) else _make_editor(file)
+	_buffers[file] = {"hash": result.hash, "original": original, "editor": editor}
+	if _tab_index(file) < 0:
+		_tabs_updating = true
+		_file_tabs.add_tab(file.get_file())
+		_file_tabs.set_tab_metadata(_file_tabs.tab_count - 1, file)
+		_file_tabs.set_tab_tooltip(_file_tabs.tab_count - 1, file)
+		_tabs_updating = false
+	editor.load_text(original)
+	_show_file(file)
+	editor.grab_focus()
+	var saved: Dictionary = _saved_buffers().get(file, {})
+	if saved.get("hash") == result.hash and saved.get("text", original) != original:
+		editor.replace_text(saved.text)
+		_status.text = "Restored your unstaged edits to %s. Ctrl+Z returns to the file on disk." % file.get_file()
 	_sync_controls()
 
-func _show_file(file: String, buffer: Dictionary) -> void:
+func _tab_index(file: String) -> int:
+	for index in _file_tabs.tab_count:
+		if _file_tabs.get_tab_metadata(index) == file:
+			return index
+	return -1
+
+func _show_file(file: String) -> void:
 	_source = file
-	_editor.text = buffer.text
+	for name in _buffers:
+		_buffers[name].editor.visible = name == file
+	_empty.visible = _buffers.is_empty() or not _buffers.has(file)
+	_tabs_updating = true
+	var index := _tab_index(file)
+	if index >= 0:
+		_file_tabs.current_tab = index
+	_tabs_updating = false
 	_tabs.current_tab = 0
-	_status.text = "%d open file(s) · %d edited" % [_buffers.size(), _changed_files().size()]
+	_status.text = "%s  ·  %d lines" % [file, _buffers[file].editor.get_line_count()]
+	_mark_errors()
+	_refresh_tabs()
+	_update_cursor()
 	_sync_controls()
+
+func _close_tab(index: int) -> void:
+	var file: String = _file_tabs.get_tab_metadata(index)
+	if file == _source:
+		_close_file()
+	elif not _tree_locked():
+		_close_buffer(file)
+		_refresh_tabs()
 
 func _close_file() -> void:
-	_buffers.erase(_source)
+	if _source.is_empty():
+		return
+	var index := _tab_index(_source)
+	_close_buffer(_source)
 	_source = ""
-	_files.select(0)
-	_editor.clear()
-	_status.text = "%d open file(s) · %d edited" % [_buffers.size(), _changed_files().size()]
+	if _file_tabs.tab_count > 0:
+		_show_file(_file_tabs.get_tab_metadata(clampi(index, 0, _file_tabs.tab_count - 1)))
+	else:
+		_empty.visible = true
+		_status.text = "No open files."
+		_update_cursor()
+		_mark_tree()
+		_sync_controls()
+
+func _close_buffer(file: String) -> void:
+	if not _buffers.has(file):
+		return
+	var editor: CodeEditor = _buffers[file].editor
+	_buffers.erase(file)
+	editor.queue_free()
+	var index := _tab_index(file)
+	if index >= 0:
+		_tabs_updating = true
+		_file_tabs.remove_tab(index)
+		_tabs_updating = false
+	_forget_saved(file)
+
+func _clear_buffers() -> void:
+	for file in _buffers.keys():
+		_close_buffer(file)
+	_source = ""
+	_empty.visible = true
+	if FileAccess.file_exists(saved_buffers_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(saved_buffers_path))
+
+func _refresh_tabs() -> void:
+	var edited := {}
+	for item in _changed_files():
+		edited[item.name] = true
+	for index in _file_tabs.tab_count:
+		var file: String = _file_tabs.get_tab_metadata(index)
+		_file_tabs.set_tab_title(index, ("● " if edited.has(file) else "") + file.get_file())
+	_mark_tree()
+
+func _on_buffer_edited() -> void:
+	_save_pending = true
+	_refresh_tabs()
 	_sync_controls()
+
+func _update_cursor() -> void:
+	var editor := _active_editor()
+	if editor == null:
+		_cursor.text = ""
+		return
+	var edited := _changed_files().size()
+	_cursor.text = "Ln %d, Col %d  ·  %s  ·  %d open%s" % [editor.get_caret_line() + 1, editor.get_caret_column() + 1,
+		Highlighters.display_name(editor.syntax_language) if editor != _log and editor != _diff else _tabs.get_tab_title(_tabs.current_tab),
+		_buffers.size(), " · %d edited" % edited if edited > 0 else ""]
 
 func show_error(message: String) -> void:
 	_status.text = message
-
-func _remember_buffer() -> void:
-	if not _source.is_empty():
-		_buffers[_source].text = _editor.text
 
 func _changed_files() -> Array:
 	var files := []
 	for name in _buffers:
 		var buffer: Dictionary = _buffers[name]
-		var text: String = _editor.text if name == _source else buffer.text
+		var text: String = buffer.editor.text
 		if text != buffer.original:
 			files.append({"name": name, "hash": buffer.hash, "text": text})
 	return files
 
+## Unstaged edits survive a restart in the user data folder, keyed to the file's hash on disk.
+func _saved_buffers() -> Dictionary:
+	if not FileAccess.file_exists(saved_buffers_path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(saved_buffers_path))
+	return parsed if parsed is Dictionary else {}
+
+func _save_buffers(announce: bool) -> void:
+	_save_pending = false
+	var saved := _saved_buffers()
+	for name in _buffers:
+		saved.erase(name)
+	var changed := _changed_files()
+	for item in changed:
+		saved[item.name] = {"hash": item.hash, "text": item.text}
+	var file := FileAccess.open(saved_buffers_path, FileAccess.WRITE)
+	if file == null:
+		if announce:
+			_status.text = "Could not keep the edits locally: %s" % error_string(FileAccess.get_open_error())
+		return
+	file.store_string(JSON.stringify(saved))
+	file.close()
+	if announce:
+		_status.text = "Kept %d edited file(s) on this PC. Review diff stages them as a Git draft." % changed.size()
+
+func _forget_saved(file: String) -> void:
+	var saved := _saved_buffers()
+	if saved.erase(file):
+		var stream := FileAccess.open(saved_buffers_path, FileAccess.WRITE)
+		if stream != null:
+			stream.store_string(JSON.stringify(saved))
+
 func _propose() -> void:
 	if _buttons.propose.disabled:
 		return
-	_remember_buffer()
 	var files := []
 	for name in _buffers:
-		files.append({"name": name, "hash": _buffers[name].hash, "text": _buffers[name].text})
+		files.append({"name": name, "hash": _buffers[name].hash, "text": _buffers[name].editor.text})
 	if files.size() > 6:
 		_status.text = "Codex can use six files per request. Close extra files before asking."
 		return
@@ -221,9 +579,10 @@ func _propose() -> void:
 		_status.text = result.error
 	else:
 		for item in result.files:
-			_buffers[item.name].text = item.text.replace("\r\n", "\n")
-		_show_file(_source, _buffers[_source])
-		_status.text = result.summary
+			if _buffers.has(item.name):
+				_buffers[item.name].editor.replace_text(item.text.replace("\r\n", "\n"))
+		_show_file(_source)
+		_status.text = result.summary + " Ctrl+Z undoes it."
 	_sync_controls()
 
 func _stage() -> void:
@@ -241,12 +600,19 @@ func _author() -> void:
 	_status.text = "Codex is drafting a plugin…"
 	await _command("author", {"context": context, "prompt": _request.text.strip_edges()})
 
+func _revise() -> void:
+	if not _buttons.revise.disabled:
+		await _command("revise", {"prompt": _request.text.strip_edges()})
+
 func _command(action: String, arguments := {}) -> void:
 	if _busy:
 		return
 	var draft: Variant = _state.get("draft")
 	if draft is Dictionary:
 		arguments["id"] = draft.id
+		arguments["version"] = draft.get("version", "")
+		if action == "discard" and draft.status == "revising":
+			arguments["cancel_revision"] = true
 	if action == "apply":
 		if _live_status() == "failed":
 			show_error("The live preview failed. Discard this draft and revise the behavior.")
@@ -275,15 +641,22 @@ func _command(action: String, arguments := {}) -> void:
 			_sync_controls()
 		"check":
 			_tabs.current_tab = 2
+		"revise":
+			_request.clear()
+			_tabs.current_tab = 2
+			_sync_controls()
+		"previous":
+			_tabs.current_tab = 3
 		"discard", "apply", "restore":
+			if action == "discard" and result.get("draft") is Dictionary:
+				return
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
 			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior", "workshop_tool": "workshop action"}
 			var live_subject: String = subjects.get(draft.get("subject"), "preview") if draft is Dictionary else "preview"
-			_buffers.clear()
+			var previous := _source
+			_clear_buffers()
 			_message.clear()
-			if not _source.is_empty():
-				var previous := _source
-				_source = ""
+			if not previous.is_empty():
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
 			var messages := {"discard": "Discarded the Git draft.",
@@ -305,17 +678,13 @@ func _refresh_catalog() -> void:
 	_busy = false
 	if result.has("error"):
 		return
-	_files.clear()
-	_files.add_item("Choose a source file")
-	for file in result.get("files", []):
-		_files.add_item(file)
-		if file == _source:
-			_files.select(_files.item_count - 1)
+	_catalog = PackedStringArray(result.get("files", []))
+	_build_tree()
 
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree():
 		return
-	if not force and not _state.get("playing", false) and _state.get("operation", "") not in ["checking", "authoring", "discarding"]:
+	if not force and _state.get("draft") == null and not _state.get("playing", false):
 		if _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 			_sync_controls()
@@ -327,47 +696,99 @@ func _poll(force := false) -> void:
 		_status.text = result.error
 		_sync_controls()
 		return
-	_show_state(result)
+	if force or result != _state:
+		_show_state(result)
 
 func show_review(logs := false) -> void:
-	_tabs.current_tab = 2 if logs else 1
+	_tabs.current_tab = 2 if logs else (1 if _tabs.is_tab_hidden(3) else 3)
 
 func _show_state(result: Dictionary) -> void:
+	var prior: Variant = _state.get("draft")
 	_state = result
 	var draft: Variant = result.get("draft")
+	var has_previous: bool = draft is Dictionary and draft.get("has_previous", false)
+	if not has_previous and _tabs.current_tab == 3:
+		_tabs.current_tab = 1
+	_tabs.set_tab_hidden(3, not has_previous)
+	var delta: String = draft.get("revision_diff", "") if has_previous else ""
+	if _revision_diff.text != delta:
+		_show_diff(_revision_diff, delta)
+	if has_previous and prior is Dictionary and prior.status == "revising" and draft.status == "staged":
+		_tabs.current_tab = 3
 	if draft is Dictionary:
 		if _diff.text != draft.diff:
-			_show_diff(draft.diff)
+			_show_diff(_diff, draft.diff)
 		if _log.text != draft.log:
-			_log.text = draft.log
+			# A growing log streams in; a replaced one scans in.
+			var growing: bool = not _log.text.is_empty() and draft.log.begins_with(_log.text)
+			_log.fx.show_text(draft.log, growing)
 			_log.set_caret_line(_log.get_line_count() - 1)
+			_mark_errors()
 		var messages := {"authoring": "Codex is working in a separate source workspace.", "staged": "Review the Git diff before running the edited code.",
+			"revising": "Codex is revising a copy of the active draft.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
 		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload", "restart": "Restart Euclid"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
 			draft.error if draft.status == "failed" else messages[draft.status]]
 		if draft.status == "staged" and not draft.get("summary", "").is_empty():
 			_status.text = draft.summary + " Review the diff before previewing."
-		if result.get("playing", false):
+		if not draft.get("revision_notice", "").is_empty():
+			_status.text = draft.revision_notice
+		elif result.get("playing", false) and draft.status != "revising":
 			_status.text = "The preview is open in a separate Euclid window."
 		elif _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 		elif _live_status() == "active" and draft.status != "checking":
 			_status.text += " Live preview active."
+		var chip_colors := {"failed": Look.ERROR, "passed": Look.GOOD, "checking": Look.WARN, "authoring": Look.WARN, "revising": Look.WARN}
+		_chip.text = "draft · %s" % draft.status
+		_chip.add_theme_color_override("font_color", chip_colors.get(draft.status, Look.ACCENT))
 	else:
-		_diff.text = ""
-		_log.text = ""
-		_status.text = "Choose a source file to start."
+		if not _diff.text.is_empty():
+			_diff.fx.show_text("")
+		if not _log.text.is_empty():
+			_log.fx.show_text("")
+		_mark_errors()
+		_chip.text = ""
+		if _buffers.is_empty():
+			_status.text = "Choose a source file to start."
 	_sync_controls()
 
-func _show_diff(text: String) -> void:
-	_diff.text = text
-	for line in _diff.get_line_count():
-		var row := _diff.get_line(line)
+func _show_diff(editor: CodeEditor, text: String) -> void:
+	editor.fx.show_text(text)
+	for line in editor.get_line_count():
+		var row := editor.get_line(line)
 		if row.begins_with("+") and not row.begins_with("+++"):
-			_diff.set_line_background_color(line, Color("17332b"))
+			editor.set_line_background_color(line, Look.ADDED_BG)
 		elif row.begins_with("-") and not row.begins_with("---"):
-			_diff.set_line_background_color(line, Color("392129"))
+			editor.set_line_background_color(line, Look.REMOVED_BG)
+
+func _mark_errors() -> void:
+	var by_file := {}
+	for entry in error_locations(_log.text):
+		if not by_file.has(entry.path):
+			by_file[entry.path] = []
+		by_file[entry.path].append(entry.line)
+	for name in _buffers:
+		_buffers[name].editor.mark_errors(by_file.get(name, []))
+
+func _on_log_input(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click != null and click.double_click and click.button_index == MOUSE_BUTTON_LEFT:
+		_open_log_location.call_deferred()
+
+## Double-clicking a res:// location in the check log opens that file at the line.
+func _open_log_location() -> void:
+	var found := error_locations(_log.get_line(_log.get_caret_line()))
+	if found.is_empty():
+		return
+	var entry: Dictionary = found[0]
+	if not _catalog.has(entry.path) and not _buffers.has(entry.path):
+		_status.text = "%s is outside the Workbench's editable files." % entry.path
+		return
+	await _select_file(entry.path)
+	if _buffers.has(entry.path):
+		_buffers[entry.path].editor.go_to_line(entry.line)
 
 func _sync_controls() -> void:
 	var draft: Variant = _state.get("draft")
@@ -375,11 +796,20 @@ func _sync_controls() -> void:
 	var playing: bool = _state.get("playing", false)
 	var blocked := _busy or not str(_state.get("operation", "")).is_empty()
 	var editing := not blocked and not staged and not _source.is_empty()
-	_files.disabled = blocked or staged
+	_sidebar.modulate.a = 0.55 if blocked or staged else 1.0
 	_buttons.reload.disabled = not editing
 	_buttons.close_file.disabled = not editing
-	_editor.editable = editing
-	_request.editable = not blocked and not staged
+	for name in _buffers:
+		_buffers[name].editor.editable = not blocked and not staged
+	var revisable: bool = staged and draft.get("can_revise", false)
+	_request.editable = not blocked and (not staged or revisable)
+	_request.placeholder_text = "Describe a change to this draft" if revisable else "Describe a plugin or an edit to the open files"
+	_buttons.revise.visible = revisable
+	_buttons.revise.disabled = blocked or not revisable or _request.text.strip_edges().is_empty()
+	_buttons.previous.visible = staged and draft.get("has_previous", false)
+	_buttons.previous.disabled = blocked
+	for action in ["propose", "author", "stage"]:
+		_buttons[action].visible = not revisable
 	_buttons.propose.disabled = not editing or _request.text.strip_edges().is_empty()
 	_buttons.author.disabled = blocked or staged or _request.text.strip_edges().is_empty() or not _changed_files().is_empty()
 	_buttons.stage.disabled = blocked or staged or _changed_files().is_empty()
@@ -396,8 +826,9 @@ func _sync_controls() -> void:
 	_message.visible = passed
 	_message.editable = not blocked
 	_buttons.apply.disabled = blocked or not passed or live == "failed" or _message.text.strip_edges().is_empty()
-	_buttons.discard.text = "Cancel authoring" if _state.get("operation") == "authoring" else "Discard"
-	_buttons.discard.disabled = _busy or not staged or (blocked and _state.get("operation") not in ["checking", "authoring"])
+	var operation: String = _state.get("operation", "")
+	_buttons.discard.text = {"authoring": "Cancel authoring", "revising": "Cancel revision"}.get(operation, "Discard")
+	_buttons.discard.disabled = _busy or not staged or (blocked and operation not in ["checking", "authoring", "revising"])
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or staged

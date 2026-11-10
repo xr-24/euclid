@@ -23,7 +23,7 @@ if (-not $NoGateway) {
     $health = $null
     try { $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2 } catch {}
     if ($health.service -eq 'construct-gateway') {
-        if ($health.version -ge 15) {
+        if ($health.version -ge 16) {
             $gatewayReady = $true
         } else {
             & (Join-Path $PSScriptRoot 'stop-gateway.ps1')
@@ -53,7 +53,6 @@ if (-not $NoGateway) {
     Remove-Item Env:CONSTRUCT_GATEWAY_TOKEN -ErrorAction SilentlyContinue
 }
 if ($Editor) {
-    if ($Workbench) { throw 'Workbench mode requires the game launcher.' }
     $editorArguments = @('--path', ('"' + $worldPath + '"'), '--editor')
     if ($Compatibility) { $editorArguments += @('--rendering-method', 'gl_compatibility') }
     Start-Process -FilePath $godotPath -ArgumentList $editorArguments -WorkingDirectory $projectRoot
@@ -66,12 +65,10 @@ if ($Windowed) {
     $godotArguments += '--fullscreen'
 }
 if ($Compatibility) { $godotArguments += @('--rendering-method', 'gl_compatibility') }
-if ($Workbench) {
-    if ($Editor -or $NoGateway -or -not $gatewayConfig.workbench_token) { throw 'Workbench mode requires the local gateway and game launcher.' }
+if (-not $NoGateway) {
+    # Workbench access belongs to the launched desktop app. Older shortcuts may still pass -Workbench.
     $env:EUCLID_WORKBENCH_TOKEN = $gatewayConfig.workbench_token
 }
-if ($Quality -or $Workbench) { $godotArguments += '--' }
-if ($Quality) { $godotArguments += "--quality=$Quality" }
-if ($Workbench) { $godotArguments += '--workbench' }
+if ($Quality) { $godotArguments += @('--', "--quality=$Quality") }
 & node $supervisor start $godotPath @godotArguments
 exit $LASTEXITCODE

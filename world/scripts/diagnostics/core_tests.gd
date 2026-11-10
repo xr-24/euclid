@@ -11,6 +11,13 @@ const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
+const TextEffects = preload("res://scripts/ui/code_fx.gd")
+const CodeEditor = preload("res://scripts/ui/code_editor.gd")
+const Highlighters = preload("res://scripts/ui/code_highlighters.gd")
+const FindBar = preload("res://scripts/ui/find_bar.gd")
+const QuickOpen = preload("res://scripts/ui/quick_open.gd")
+const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
+const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 var _failures := 0
 var _checks := 0
 
@@ -95,6 +102,7 @@ func _run() -> void:
 	_check_live_behaviors(path)
 	_check_linked_plugin(path)
 	_check_shoreline_look()
+	_check_text_tools()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -346,3 +354,56 @@ func _check_world_tools(path: String) -> void:
 	_check(not unwritable.execute("spawn", spawn).ok and unwritable.execute("list").entities.is_empty(), "failed save does not apply an edit")
 	zone.free()
 	DirAccess.remove_absolute(path)
+
+func _check_text_tools() -> void:
+	var typed := TextEffects.change_between(PackedStringArray(["var a = 1"]), PackedStringArray(["var ab = 1"]))
+	_check(typed.get("line") == 0 and typed.get("column") == 5 and typed.get("added") == "b" and typed.get("removed") == "",
+		"text effects locate a typed character")
+	var removed := TextEffects.change_between(PackedStringArray(["one", "two", "three"]), PackedStringArray(["one", "three"]))
+	_check(removed.get("line") == 0 and removed.get("column") == 3 and removed.get("removed") == "\ntwo" and removed.get("added") == "",
+		"text effects keep a removed line below its anchor")
+	var pasted := TextEffects.change_between(PackedStringArray(["a"]), PackedStringArray(["a", "b", "c"]))
+	_check(pasted.get("line") == 0 and pasted.get("column") == 1 and pasted.get("added") == "\nb\nc", "text effects follow a multi-line paste")
+	_check(TextEffects.change_between(PackedStringArray(["same"]), PackedStringArray(["same"])).is_empty(), "unchanged text has no effects")
+	var apart := TextEffects.changes_between(PackedStringArray(["a", "keep 1", "keep 2", "keep 3", "b"]),
+		PackedStringArray(["ax", "keep 1", "keep 2", "keep 3", "by"]))
+	_check(apart.size() == 2 and apart[0].line == 0 and apart[0].added == "x" and apart[1].line == 4 and apart[1].added == "y",
+		"separate edits animate separately and leave the lines between them alone")
+	var dropped := TextEffects.changes_between(PackedStringArray(["a", "gone", "keep", "b", "also gone", "c"]),
+		PackedStringArray(["a", "keep", "b", "c"]))
+	_check(dropped.size() == 2 and dropped[0].removed == "\ngone" and dropped[1].removed == "\nalso gone" and dropped[1].old_line == 3,
+		"removed lines keep their original positions")
+	_check(TextEffects.visual_column("\tx", 1, 4) == 4 and TextEffects.visual_column("abcd\te", 5, 4) == 8,
+		"tab stops expand to monospace cells")
+	var lines := PackedStringArray(["\tfunc a():", "\t\tpass", ""])
+	var commented := CodeEditor.toggle_comment_lines(lines, "#")
+	_check(commented[0] == "\t# func a():" and commented[1] == "\t# \tpass" and commented[2] == "", "comment at the shallowest indent")
+	_check(CodeEditor.toggle_comment_lines(commented, "#") == lines, "uncomment restores the original lines")
+	_check(Highlighters.language_for("world/shaders/ui_glow.gdshader") == "shader" and Highlighters.language_for("a.json") == "json",
+		"choose highlighting from the file extension")
+	var colors := Highlighters.for_language("gdscript") as CodeHighlighter
+	_check(colors != null and colors.get_keyword_color("func") == Highlighters.KEYWORD and colors.has_keyword_color("Node3D"),
+		"GDScript highlighting knows keywords and engine types")
+	_check(FindBar.count_matches("Aa aa AA", "aa", false) == 3 and FindBar.count_matches("Aa aa AA", "aa", true) == 1,
+		"find counts case-insensitive and exact matches")
+	var path := "world/scripts/ui/workbench_panel.gd"
+	_check(QuickOpen.score("wbpanel", path) > 0 and QuickOpen.score("zzz", path) < 0, "quick open matches path subsequences")
+	_check(QuickOpen.score("tools", "world/scripts/workshop/world_tools.gd") > QuickOpen.score("tools", "world/tools/scripts/zone.gd"),
+		"quick open prefers matches in the file name")
+	var found := WorkbenchPanel.error_locations("SCRIPT ERROR: Parse Error\n   at: GDScript::reload (res://scripts/ui/code_fx.gd:42)")
+	_check(found.size() == 1 and found[0].path == "world/scripts/ui/code_fx.gd" and found[0].line == 41, "check logs link back to source lines")
+	var editor := CodeEditor.new()
+	root.add_child(editor)
+	editor.use_language_of("probe.gd")
+	editor.load_text("func a():\n\tpass")
+	editor.toggle_comment()
+	_check(editor.get_line(0) == "# func a():" and "pass" in editor.document_words(), "editor comments the caret line and indexes words")
+	editor.undo()
+	_check(editor.get_line(0) == "func a():", "comment toggles are undoable")
+	editor.free()
+	var console := CodexConsole.new()
+	root.add_child(console)
+	console.setup(PackedStringArray(["> hello", "world"]), false, false)
+	console.update_display(PackedStringArray(["> hello", "world", "more output"]), false)
+	_check(console._history.visible_characters >= 0, "new console output types in")
+	console.free()

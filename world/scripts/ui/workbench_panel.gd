@@ -16,6 +16,7 @@ const Effects = preload("res://scripts/ui/code_fx.gd")
 const FindBar = preload("res://scripts/ui/find_bar.gd")
 const QuickOpen = preload("res://scripts/ui/quick_open.gd")
 const GlowLayer = preload("res://scripts/ui/glow_layer.gd")
+const Diagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const PREVIEW_ACTIONS := ["live", "check", "play", "stop", "apply", "discard", "restore"]
 
 ## Unstaged buffers are kept here between sessions. Diagnostics point it elsewhere so they never
@@ -40,6 +41,7 @@ var _empty := Label.new()
 var _diff: CodeEditor
 var _log: CodeEditor
 var _revision_diff: CodeEditor
+var _diagnostics := Diagnostics.new()
 var _tabs := TabContainer.new()
 var _find := FindBar.new()
 var _quick_open := QuickOpen.new()
@@ -60,6 +62,7 @@ var _preview_behavior: Callable
 var _finish_behavior: Callable
 var _behavior_status: Callable
 var _plugin_context: Callable
+var _benchmark: Callable
 var _view_ready := false
 var _requested_review := ""
 
@@ -76,11 +79,12 @@ static func error_locations(log: String) -> Array:
 	return found
 
 func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
-		behavior_status: Callable, plugin_context: Callable, saved_view := {}) -> void:
+		behavior_status: Callable, plugin_context: Callable, saved_view := {}, benchmark := Callable()) -> void:
 	_preview_behavior = preview_behavior
 	_finish_behavior = finish_behavior
 	_behavior_status = behavior_status
 	_plugin_context = plugin_context
+	_benchmark = benchmark
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
@@ -171,6 +175,8 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_log.gui_input.connect(_on_log_input)
 	_revision_diff = _output_tab("Revision", Highlighters.diff())
 	_tabs.set_tab_hidden(3, true)
+	_diagnostics.setup(_benchmark_command.bind("benchmark"), _benchmark_command.bind("cancelbenchmark"))
+	_tabs.add_child(_diagnostics)
 	main.add_child(_find)
 
 	var prompt_row := HBoxContainer.new()
@@ -272,6 +278,8 @@ func _active_editor() -> CodeEditor:
 			return _log
 		3:
 			return _revision_diff
+		4:
+			return null
 	return _current_editor()
 
 func _other_words(except: String) -> PackedStringArray:
@@ -333,6 +341,8 @@ func _load_catalog(saved_view: Dictionary) -> void:
 	var draft: Variant = _state.get("draft")
 	if not _requested_review.is_empty():
 		show_review(_requested_review == "Checks")
+	elif saved_view.get("tab") == "Diagnostics":
+		_tabs.current_tab = 4
 	elif draft is Dictionary:
 		var tab: int = ["Source", "Diff", "Checks", "Revision"].find(saved_view.get("tab", ""))
 		if tab < 0 or _tabs.is_tab_hidden(tab):
@@ -626,6 +636,25 @@ func _revise() -> void:
 	if not _buttons.revise.disabled:
 		await _command("revise", {"prompt": _request.text.strip_edges()})
 
+func _benchmark_command(action: String) -> void:
+	if _busy or not _benchmark.is_valid():
+		return
+	var draft: Variant = _state.get("draft")
+	var arguments := {}
+	if action == "cancelbenchmark":
+		arguments["id"] = _state.diagnostic_job.id
+	elif draft is Dictionary:
+		arguments = {"id": draft.id, "version": draft.version}
+	_busy = true
+	_sync_controls()
+	var result: Dictionary = await _benchmark.call(action, arguments)
+	_busy = false
+	if result.has("error"):
+		show_error(result.error)
+		_sync_controls()
+		return
+	_show_state(result)
+
 func _command(action: String, arguments := {}) -> void:
 	if _busy:
 		return
@@ -708,7 +737,7 @@ func _refresh_catalog() -> void:
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree():
 		return
-	if not force and _state.get("draft") == null and not _state.get("playing", false):
+	if not force and _state.get("draft") == null and _state.get("diagnostic_job") == null and not _state.get("playing", false):
 		if _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 			_sync_controls()
@@ -863,6 +892,7 @@ func _sync_controls() -> void:
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or playing or live == "active"
+	_diagnostics.update(_state, blocked or not _benchmark.is_valid())
 
 func _live_status() -> String:
 	var draft: Variant = _state.get("draft")

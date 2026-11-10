@@ -6,12 +6,14 @@ param(
     [int]$Height = 900,
     [double]$MinimumFps = 0,
     [double]$MaximumP95Ms = 0,
-    [long]$WindowId = 0
+    [long]$WindowId = 0,
+    [string]$ProjectPath
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $godotPath = Join-Path $projectRoot '.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
 if ($env:GODOT_BIN) { $godotPath = $env:GODOT_BIN }
+if (-not $ProjectPath) { $ProjectPath = Join-Path $projectRoot 'world' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot ".local\benchmarks\$Quality-$Zone" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -27,10 +29,11 @@ Remove-Item Env:CONSTRUCT_BENCHMARK_SUITE -ErrorAction SilentlyContinue
 try {
     $embedding = @()
     if ($WindowId -gt 0) { $embedding = @('--wid', "$WindowId", '--audio-driver', 'Dummy') }
-    $lines = @(& $godotPath --path (Join-Path $projectRoot 'world') --windowed --resolution "${Width}x${Height}" @embedding --quit-after 20000 -- --benchmark "--quality=$Quality" 2>&1 | ForEach-Object { Write-Host $_; "$_" })
+    $lines = @(& $godotPath --path $ProjectPath --windowed --resolution "${Width}x${Height}" @embedding --quit-after 20000 -- --benchmark "--quality=$Quality" 2>&1 | ForEach-Object { Write-Host $_; "$_" })
     $exitCode = $LASTEXITCODE
     $lines | Set-Content -LiteralPath (Join-Path $OutputDirectory 'run.log')
-    if ($exitCode -ne 0 -or (($lines -join "`n") -match '(?m)^(SCRIPT ERROR|ERROR):')) { throw 'Benchmark failed; inspect run.log.' }
+    if ($exitCode -ne 0) { throw "Benchmark exited with code $exitCode. Inspect run.log." }
+    if (($lines -join "`n") -match '(?m)^(SCRIPT ERROR|ERROR):') { throw 'Benchmark failed; inspect run.log.' }
     $results = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'results.json') | ConvertFrom-Json
     if ($results.run_id -ne $runId) { throw 'This run did not complete; refusing stale benchmark results.' }
     if (-not $results.samples.Count) { throw 'Benchmark produced no measurements.' }

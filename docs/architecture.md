@@ -146,6 +146,16 @@ The supervisor and launcher sit outside the Workbench source allowlist.
 
 ## In-world development requests
 
+The villa diagnostic uses `gateway/workbench-diagnostics.mjs` to pair the
+draft's pinned Git baseline with its reviewed patch. The preview runner
+prepares separate builds and invokes the existing rendered benchmark script
+with one fixed recipe. Reports and captures live under
+`.local/workbench/diagnostics` and are scoped to the measured patch version.
+Workbench serializes GPU jobs with checks and preview starts. The world
+releases its render loop while a benchmark started from that session runs.
+The preview runner also captures Godot's log for the active patch. The
+gateway returns its bounded tail to Diagnostics and to source revisions.
+
 The F2 planner routes shoreline appearance, Grid scenery, linked behaviors, and
 workshop actions to the privileged Workbench transport. These routes create Git
 drafts and start isolated checks. General source requests create a draft for the

@@ -261,6 +261,22 @@ failed draft can be revised from **F2** using that result. If the gateway
 restarted too, run checks again before previewing or committing a previously
 passing draft.
 
+### Measure villa performance in Euclid
+
+Open **F4 → Diagnostics → Benchmark villa** or ask **F2** to **Run the villa
+benchmark**. Euclid minimizes while a separate rendered window measures the
+arrival, pool and portico at 1920×1080 Balanced. Use a clean Git checkout for
+a baseline. With a checked draft, Euclid measures its pinned baseline and
+reviewed patch in sequence. Close any open preview before running the benchmark.
+
+Ask F2 for **the saved villa benchmark results** or reopen **Diagnostics** to
+see frame times, the 60 FPS and 16.67 ms p95 budgets, and the change per view.
+**Open captures and logs** opens the saved screenshots, run logs and raw
+measurements. Results follow the measured draft version. Codex can use
+matching desktop results when authoring or revising source.
+Diagnostics also shows output and errors from the current draft's playable
+preview. Codex can use that output when revising the patch.
+
 The source workspace supports one active task and up to 24 changed Godot
 source or test files. The checks and preview run code from the reviewed draft
 with your local account permissions.

@@ -69,12 +69,13 @@ export function validContext(context) {
       typeof zone.description === 'string' && zone.description.length <= 180);
 }
 
-const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool', 'draft_source', 'revise_source'];
+const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool', 'draft_source', 'revise_source', 'benchmark_villa', 'villa_results'];
 
 export function validWorldPlan(plan, context) {
   if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;
   if (plan.tool === 'travel') return idPattern.test(plan.target);
   if (plan.tool === 'revise_source') return context?.source_revision === true && plan.target === '';
+  if (['benchmark_villa', 'villa_results'].includes(plan.tool)) return context?.source_development === true && plan.target === '';
   if (developmentTools.includes(plan.tool)) return plan.target === '';
   if (plan.tool === 'run_workshop_tool') return Boolean(context?.workshop_tools?.some(tool => tool.name === plan.target));
   if (plan.tool === 'create_environment') return plan.target.trim().length > 0 && plan.target.length <= 96;

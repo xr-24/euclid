@@ -2,7 +2,7 @@ extends RefCounted
 ## Local presentation state. Git draft versions and check results live in the gateway.
 
 const Store = preload("res://scripts/persistence/world_state_store.gd")
-const TABS := ["Source", "Diff", "Checks", "Revision"]
+const TABS := ["Source", "Diff", "Checks", "Revision", "Diagnostics"]
 const MAX_LINES := 300
 const MAX_PROMPTS := 100
 const MAX_LINE_LENGTH := 2048

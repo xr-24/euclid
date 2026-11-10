@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { cp, lstat, mkdir, statfs, writeFile, readFile, rm } from 'node:fs/promises';
+import { access, cp, lstat, mkdir, open, statfs, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { fingerprint } from './workbench-source.mjs';
+
+const previewLogPath = draft => path.join(draft.directory, `preview-${fingerprint(draft.diff)}.log`);
 
 function childEnvironment(godot) {
   const env = { ...process.env, GODOT_BIN: godot };
@@ -29,7 +32,7 @@ function run(file, args, { cwd, env, timeout, onOutput, signal }) {
       } else child.kill();
     }
     const abort = () => stopChild(signal.reason);
-    const timer = setTimeout(() => stopChild(new Error('Preview checks timed out.')), timeout);
+    const timer = setTimeout(() => stopChild(new Error('The Godot job timed out.')), timeout);
     signal.addEventListener('abort', abort, { once: true });
     child.on('error', reject);
     child.on('close', code => {
@@ -41,55 +44,72 @@ function run(file, args, { cwd, env, timeout, onOutput, signal }) {
   });
 }
 
-export function createPreviewRunner(root) {
+export function createPreviewRunner(root, { benchmarkWindowId = 0 } = {}) {
   const godot = process.env.GODOT_BIN || path.join(root, '.tools/godot/Godot_v4.7.2-stable_win64_console.exe');
   const env = childEnvironment(godot);
   let preview = null;
+  async function prepare({ directory, worktree, id }, onOutput, signal) {
+    const tree = path.join(directory, 'preview');
+    await rm(tree, { recursive: true, force: true });
+    const disk = await statfs(directory);
+    if (disk.bavail * disk.bsize < 2.5 * 1024 ** 3) throw new Error('Free at least 2.5 GiB for the disposable preview project.');
+    await mkdir(tree);
+    onOutput('Preparing a preview from the reviewed Git worktree.\n');
+    const copyFilter = async source => {
+      signal.throwIfAborted();
+      if ((await lstat(source)).isSymbolicLink()) throw new Error('The preview project contains a symbolic link.');
+      return true;
+    };
+    for (const entry of ['world', 'gateway', 'scripts', 'package.json']) {
+      await cp(path.join(worktree, entry), path.join(tree, entry), { recursive: true, filter: async source => {
+        const parts = path.relative(worktree, source).split(path.sep);
+        if (parts.some(part => ['.local', '.tools', '.godot', 'override.cfg', 'node_modules', '__pycache__'].includes(part))) return false;
+        return copyFilter(source);
+      } });
+    }
+    onOutput('Copying the local art pack and import cache.\n');
+    await cp(path.join(root, 'world/assets'), path.join(tree, 'world/assets'), { recursive: true, force: false, filter: copyFilter });
+    for (const entry of ['imported', 'uid_cache.bin']) {
+      const cache = `world/.godot/${entry}`;
+      if (existsSync(path.join(root, cache))) await cp(path.join(root, cache), path.join(tree, cache), { recursive: true, filter: copyFilter });
+    }
+    const project = path.join(tree, 'world/project.godot');
+    const config = await readFile(project, 'utf8');
+    const settings = config.replace(/^config\/custom_user_dir_name=.*$/m, `config/custom_user_dir_name="Godot/app_userdata/Euclid-workbench-${id}"`);
+    if (settings === config || !/^config\/use_custom_user_dir=true\s*$/m.test(config)) throw new Error('The preview could not isolate its user data.');
+    await writeFile(project, settings.replace(/^config\/name=.*$/m, 'config/name="Euclid | Preview"'));
+    onOutput('Importing the isolated Godot project.\n');
+    let importFailed = false;
+    const importCode = await run(godot, ['--headless', '--path', path.join(tree, 'world'), '--editor', '--import'], {
+      cwd: tree, env, timeout: 180000, signal, onOutput: chunk => {
+        if (/^(?:SCRIPT ERROR|ERROR):/m.test(chunk)) importFailed = true;
+        onOutput(chunk);
+      },
+    });
+    if (importCode !== 0 || importFailed) throw new Error('Godot could not import the preview.');
+    return tree;
+  }
+
   return {
     async check(draft, onOutput, signal) {
-      const { directory, worktree, id } = draft;
-      const tree = path.join(directory, 'preview');
-      await rm(tree, { recursive: true, force: true });
-      const disk = await statfs(directory);
-      if (disk.bavail * disk.bsize < 2.5 * 1024 ** 3) throw new Error('Free at least 2.5 GiB for the disposable preview project.');
-      await mkdir(tree);
-      onOutput('Preparing a preview from the reviewed Git worktree.\n');
-      const copyFilter = async source => {
-        signal.throwIfAborted();
-        if ((await lstat(source)).isSymbolicLink()) throw new Error('The preview project contains a symbolic link.');
-        return true;
-      };
-      for (const entry of ['world', 'gateway', 'scripts', 'package.json']) {
-        await cp(path.join(worktree, entry), path.join(tree, entry), { recursive: true, filter: async source => {
-          const parts = path.relative(worktree, source).split(path.sep);
-          if (parts.some(part => ['.local', '.tools', '.godot', 'override.cfg', 'node_modules', '__pycache__'].includes(part))) return false;
-          return copyFilter(source);
-        } });
-      }
-      onOutput('Copying the local art pack and import cache.\n');
-      await cp(path.join(root, 'world/assets'), path.join(tree, 'world/assets'), { recursive: true, force: false, filter: copyFilter });
-      for (const entry of ['imported', 'uid_cache.bin']) {
-        const cache = `world/.godot/${entry}`;
-        if (existsSync(path.join(root, cache))) await cp(path.join(root, cache), path.join(tree, cache), { recursive: true, filter: copyFilter });
-      }
-      const project = path.join(tree, 'world/project.godot');
-      const config = await readFile(project, 'utf8');
-      const settings = config.replace(/^config\/custom_user_dir_name=.*$/m, `config/custom_user_dir_name="Godot/app_userdata/Euclid-workbench-${id}"`);
-      if (settings === config || !/^config\/use_custom_user_dir=true\s*$/m.test(config)) throw new Error('The preview could not isolate its user data.');
-      await writeFile(project, settings.replace(/^config\/name=.*$/m, 'config/name="Euclid | Preview"'));
-      onOutput('Importing the isolated Godot project.\n');
-      let importFailed = false;
-      const importCode = await run(godot, ['--headless', '--path', path.join(tree, 'world'), '--editor', '--import'], {
-        cwd: tree, env, timeout: 180000, signal, onOutput: chunk => {
-          if (/^(?:SCRIPT ERROR|ERROR):/m.test(chunk)) importFailed = true;
-          onOutput(chunk);
-        },
-      });
-      if (importCode !== 0 || importFailed) throw new Error('Godot could not import the preview.');
+      const tree = await prepare(draft, onOutput, signal);
       onOutput('Running Euclid project checks.\n');
       const code = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(tree, 'scripts/check.ps1')],
         { cwd: tree, env, timeout: 180000, onOutput, signal });
       if (code !== 0) throw new Error('The preview failed its project checks.');
+    },
+
+    async benchmark(source, output, settings, onOutput, signal) {
+      const tree = await prepare(source, onOutput, signal);
+      const code = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+        path.join(root, 'scripts/benchmark.ps1'), '-ProjectPath', path.join(tree, 'world'),
+        '-OutputDirectory', output, '-Zone', 'villa', '-Quality', settings.profile,
+        '-Width', String(settings.width), '-Height', String(settings.height), '-WindowId', String(benchmarkWindowId)],
+      { cwd: root, env, timeout: 150000, onOutput, signal });
+      if (code !== 0) throw new Error('The villa benchmark failed. See the run output.');
+      for (const view of ['arrival', 'pool', 'portico']) await access(path.join(output, `villa_${view}.png`));
+      const result = JSON.parse(await readFile(path.join(output, 'results.json'), 'utf8'));
+      return { ...result, mode: benchmarkWindowId ? 'embedded' : 'desktop' };
     },
 
     async play(draft) {
@@ -97,12 +117,28 @@ export function createPreviewRunner(root) {
       const world = path.join(draft.directory, 'preview/world');
       const application = godot.replace(/_console\.exe$/i, '.exe');
       const binary = existsSync(application) ? application : godot;
-      const child = spawn(binary, ['--path', world, '--windowed', '--resolution', '1280x720', '--', '--workbench-preview'],
+      const log = previewLogPath(draft);
+      await rm(log, { force: true });
+      const child = spawn(binary, ['--path', world, '--windowed', '--resolution', '1280x720', '--log-file', log,
+        '--', '--workbench-preview'],
         { cwd: world, env, stdio: 'ignore' });
       preview = child;
       child.on('exit', () => { if (preview === child) preview = null; });
       child.on('error', () => { if (preview === child) preview = null; });
       await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
+    },
+
+    async previewLog(draft) {
+      const file = await open(previewLogPath(draft), 'r').catch(error => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      if (!file) return '';
+      try {
+        const { size } = await file.stat();
+        const bytes = Buffer.alloc(Math.min(size, 12000));
+        const { bytesRead } = await file.read(bytes, 0, bytes.length, size - bytes.length);
+        return bytes.toString('utf8', 0, bytesRead);
+      } finally { await file.close(); }
     },
 
     async stop() {

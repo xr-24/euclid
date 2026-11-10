@@ -8,6 +8,7 @@ import path from 'node:path';
 import { createGateway } from './server.mjs';
 import { createWorkbench } from './workbench.mjs';
 import { fingerprint } from './workbench-source.mjs';
+import { createPreviewRunner } from './workbench-runner.mjs';
 import { shorelinePath } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 
@@ -284,7 +285,10 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
   git('commit', '-qm', 'Fixture');
   const base = git('rev-parse', 'HEAD');
   let checked = 0;
+  let benchmarks = 0;
+  let holdBenchmark = false;
   let played = false;
+  const previewLog = createPreviewRunner(root).previewLog;
   const runner = {
     async check(draft, log) {
       checked++;
@@ -295,11 +299,29 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
         throw new Error('The fixture failed.');
       }
     },
+    async benchmark(source, output, settings, log, signal) {
+      if (holdBenchmark) await sleep(10000, undefined, { signal });
+      benchmarks++;
+      const after = output.endsWith(path.sep + 'after');
+      const text = await readFile(path.join(source.worktree, script), 'utf8');
+      assert.equal(text, after ? original + 'const NEW := true\n' : original);
+      log('Rendered fixed views.\n');
+      return { schema_version: 1, profile: settings.profile, resolution: [settings.width, settings.height], vsync: false,
+        device: 'Fixture GPU', renderer: 'forward_plus', mode: 'desktop',
+        samples: ['arrival', 'pool', 'portico'].map(view => ({ view, zone: 'villa', variant: 'default', frames: 420,
+          fps: after ? 70 : 55, p95_ms: after ? 15 : 20, p99_ms: 22, gpu_ms: 10, cpu_process_ms: 2,
+          draw_calls: 80, primitives: 10000 })) };
+    },
     playing: () => played,
-    async play() { played = true; },
+    previewLog,
+    async play(draft) {
+      await writeFile(path.join(draft.directory, `preview-${fingerprint(draft.diff)}.log`),
+        'old output\n'.repeat(2000) + 'SCRIPT ERROR: Fixture preview error\n');
+      played = true;
+    },
     async stop() { played = false; },
   };
-  const editSource = async ({ workspace, request, context, signal, onProgress }) => {
+  const editSource = async ({ workspace, request, context, evidence, signal, onProgress }) => {
     await assert.rejects(readFile(path.join(workspace, '.git')), { code: 'ENOENT' });
     await assert.rejects(readFile(path.join(workspace, '.local/fixture')), { code: 'ENOENT' });
     if (context) {
@@ -318,6 +340,7 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
     assert.equal(await readFile(path.join(workspace, script), 'utf8'), original);
     if (request === 'Cancel') await sleep(10000, undefined, { signal });
     if (request === 'Outside scope') return writeFile(path.join(workspace, 'world/project.godot'), 'Bad change');
+    assert.equal(evidence.before.samples[1].fps, 55);
     onProgress('Reading source and adding a test.\n');
     await mkdir(path.dirname(path.join(workspace, testFile)), { recursive: true });
     await writeFile(path.join(workspace, testFile), 'extends SceneTree\nconst FIXTURE := true\n');
@@ -336,6 +359,31 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
     }
     assert.fail('Draft did not reach ' + status);
   }
+  async function finishedBenchmark() {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const result = await call('state');
+      if (!result.diagnostic_job) return result;
+      await sleep(20);
+    }
+    assert.fail('The villa benchmark did not finish.');
+  }
+  async function benchmark(args) {
+    const started = await call('benchmark', args);
+    assert.equal(started.operation, 'diagnosing');
+    const { diagnostic } = await finishedBenchmark();
+    assert.equal(diagnostic.status, 'complete', diagnostic.error);
+    return diagnostic;
+  }
+  const baseline = await benchmark({});
+  assert.equal(baseline.base, base);
+  assert.equal(baseline.after, null);
+  holdBenchmark = true;
+  const activeBenchmark = await call('benchmark');
+  await call('cancelbenchmark', { id: activeBenchmark.diagnostic_job.id });
+  const afterCancel = await finishedBenchmark();
+  assert.equal(afterCancel.diagnostic.id, baseline.id);
+  assert.equal(afterCancel.diagnostic_notice, 'Benchmark cancelled.');
+  holdBenchmark = false;
   const rejected = await call('source', { prompt: 'Outside scope' });
   assert.equal(rejected.draft.status, 'authoring');
   assert.match((await until('failed')).error, /outside the draft scope/);
@@ -354,6 +402,7 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
   assert.equal(git('rev-parse', 'HEAD'), base);
   assert.equal(git('status', '--porcelain'), '');
   await assert.rejects(call('play', { id: reviewed.id }), /pass the project checks/);
+  await assert.rejects(call('benchmark', { id: reviewed.id, version: reviewed.version }), /pass checks before benchmarking/);
 
   workbench = connect();
   assert.equal((await call('state')).draft.diff, reviewed.diff);
@@ -399,21 +448,33 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
   assert.equal((await call('state')).draft.revision_diff, revised.revision_diff);
   await call('check', second);
   await until('passed');
+  const comparison = await benchmark(second);
+  assert.equal(comparison.base, base);
+  assert.equal(comparison.version, second.version);
+  assert.equal(comparison.before.samples[1].p95_ms, 20);
+  assert.equal(comparison.after.samples[1].p95_ms, 15);
+  assert.equal(benchmarks, 3);
   workbench = connect();
+  assert.equal((await call('state')).diagnostic.id, comparison.id);
   const previousPass = (await call('state')).draft;
   assert.equal(previousPass.status, 'staged');
   assert.equal(previousPass.check_status, 'passed');
   await assert.rejects(call('play', second), /pass the project checks/);
   await call('check', second);
   await until('passed');
-  assert.equal((await call('play', second)).playing, true);
+  const preview = await call('play', second);
+  assert.equal(preview.playing, true);
+  assert.match(preview.preview_log, /SCRIPT ERROR: Fixture preview error/);
+  assert.equal(Buffer.byteLength(preview.preview_log), 12000);
   const restored = await call('previous', second);
   assert.equal(restored.playing, false);
+  assert.equal(restored.diagnostic, null);
+  assert.equal(restored.preview_log, '');
   assert.equal(restored.draft.status, 'staged');
   assert.equal(restored.draft.check_status, '');
   assert.equal(restored.draft.version, first.version);
   assert.match(restored.draft.revision_diff, /-const NEW := true\n\+const NEW := false/);
-  await call('previous', first);
+  assert.equal((await call('previous', first)).diagnostic.id, comparison.id);
   await assert.rejects(call('play', second), /pass the project checks/);
   await call('check', second);
   await until('passed');

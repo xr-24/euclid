@@ -9,6 +9,7 @@ import { shorelineAppearance } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
+import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { fingerprint, isAgentSourcePath, isSourcePath, listSources, normalizeEdit, readSource } from './workbench-source.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
 import { authorSource } from './workbench-source-agent.mjs';
@@ -59,11 +60,14 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
   designTool = proposeWorkshopTool, editSource = authorSource } = {}) {
   const git = createWorkbenchGit(root);
+  const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
   let draft = null;
   let sourceJob = null;
   let operation = '';
   let planning = false;
   let checks = null;
+  let diagnosticJob = null;
+  let diagnosticNotice = '';
   let recovery;
 
   function checkoutPath(directory, name) {
@@ -120,27 +124,39 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   }
 
   async function state() {
-    const revision = await git.headRevision();
-    if (sourceJob && !sourceJob.revising) {
-      const { id, status, error, log } = sourceJob;
-      return { operation, playing: false, revision, draft: { id, status, error, log, diff: '', files: [],
+    const change = draft;
+    const authoring = sourceJob;
+    const pending = { operation, playing: runner.playing(), diagnostic_notice: diagnosticNotice,
+      diagnostic_job: diagnosticJob && { id: diagnosticJob.id, log: diagnosticJob.log } };
+    const version = change ? fingerprint(change.diff) : '';
+    const [revision, diagnostic, previewLog] = await Promise.all([
+      git.headRevision(), diagnostics.state(change, version).catch(() => null), readPreviewLog(change),
+    ]);
+    const state = { ...pending, revision, diagnostic, preview_log: previewLog };
+    if (authoring && !authoring.revising) {
+      const { id, status, error, log } = authoring;
+      return { ...state, draft: { id, status, error, log, diff: '', files: [],
         name: 'Source workspace', summary: '', subject: 'source', activation: 'restart', live: false,
         preview_zone: '', checked_preview: true, from_world: true, agent_source: true } };
     }
-    const appearance = draft && !draft.agentSource && appearanceFor(draft.names);
-    const tool = draft && !draft.agentSource && workshopToolFile(draft.names);
-    return { operation, playing: runner.playing(), revision, draft: draft && {
-      id: draft.id, name: draft.names.length === 1 ? draft.names[0] : `${draft.names.length} files`, files: draft.names,
-      diff: draft.diff, status: sourceJob?.revising ? 'revising' : draft.status,
-      log: sourceJob?.revising ? sourceJob.log : draft.log, error: draft.error,
-      check_status: draft.check?.status ?? '',
-      version: fingerprint(draft.diff), can_revise: draft.agentSource === true,
-      revision_diff: draft.revisionDiff ?? '', revision_notice: draft.revisionNotice ?? '', has_previous: Boolean(draft.previous),
-      live: Boolean(draft.plugin || appearance || tool), activation: appearance?.activation ?? (draft.plugin || tool ? 'live' : 'restart'),
-      subject: appearance?.payload ?? (tool ? 'workshop_tool' : draft.plugin ? 'behavior' : 'source'),
-      checked_preview: Boolean(appearance || tool || draft.fromWorld), from_world: draft.fromWorld === true,
-      preview_zone: draft.binding?.zone ?? '', summary: draft.summary ?? '', agent_source: draft.agentSource === true,
+    const appearance = change && !change.agentSource && appearanceFor(change.names);
+    const tool = change && !change.agentSource && workshopToolFile(change.names);
+    return { ...state, draft: change && {
+      id: change.id, name: change.names.length === 1 ? change.names[0] : `${change.names.length} files`, files: change.names,
+      diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
+      log: authoring?.revising ? authoring.log : change.log, error: change.error,
+      check_status: change.check?.status ?? '',
+      version, can_revise: change.agentSource === true,
+      revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
+      live: Boolean(change.plugin || appearance || tool), activation: appearance?.activation ?? (change.plugin || tool ? 'live' : 'restart'),
+      subject: appearance?.payload ?? (tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
+      checked_preview: Boolean(appearance || tool || change.fromWorld), from_world: change.fromWorld === true,
+      preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
     } };
+  }
+
+  async function readPreviewLog(change) {
+    return change && runner.previewLog ? runner.previewLog(change).catch(() => '') : '';
   }
 
   function requireDraft(id, version) {
@@ -181,6 +197,39 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     return { base, branch };
   }
 
+  async function benchmarkEvidence(change, base) {
+    const report = await diagnostics.state(change, change ? fingerprint(change.diff) : '').catch(() => null);
+    if (report?.status !== 'complete' || report.base !== base || report.before?.mode !== 'desktop') return undefined;
+    const { name, width, height, profile, before, after } = report;
+    return { name, width, height, profile, before, after };
+  }
+
+  async function startBenchmark(body) {
+    if (runner.playing()) throw new Error('Close the preview before benchmarking.');
+    const change = draft || body.id ? requireDraft(body.id, body.version) : null;
+    if (change && (body.version !== fingerprint(change.diff) || change.status !== 'passed')) {
+      throw new Error('Review the current draft and pass checks before benchmarking it.');
+    }
+    if (change?.names.includes('world/scripts/diagnostics/benchmark.gd')) {
+      throw new Error('Keep the fixed benchmark script the same in both builds to compare frame times.');
+    }
+    if (change) await verifyReview(change);
+    const base = change?.base ?? (await draftBase()).base;
+    const controller = new AbortController();
+    const job = { id: randomUUID(), controller, log: 'Preparing the villa benchmark.\n' };
+    diagnosticNotice = '';
+    diagnosticJob = job;
+    const timeout = setTimeout(() => controller.abort(new Error('The villa benchmark timed out.')), 9 * 60 * 1000);
+    diagnostics.run(job, change, change ? body.version : '', base, controller.signal, verifyReview)
+      .catch(error => { diagnosticNotice = 'Could not save the benchmark report. ' + error.message; })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (controller.signal.aborted) diagnosticNotice = controller.signal.reason.message;
+        diagnosticJob = null;
+        operation = '';
+      });
+  }
+
   async function stage(body) {
     const base = await draftBase();
     const changes = await readChanges(root, body.files);
@@ -202,6 +251,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await mkdir(directory, { recursive: true });
         await git.add(worktree, base);
         const { names, summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), author: editSource,
+          evidence: await benchmarkEvidence(null, base),
           signal: controller.signal, intent: files => git.intent(worktree, files),
           onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         controller.signal.throwIfAborted();
@@ -236,8 +286,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await git.apply(worktree, patch);
         const context = { request: change.request ?? '', files: change.names, summary: change.summary,
           check_status: change.check?.status ?? change.status, check_error: change.check?.error ?? '',
-          check_output: change.check?.log ?? '' };
+          check_output: change.check?.log ?? '', preview_output: await readPreviewLog(change) };
         const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: editSource,
+          evidence: await benchmarkEvidence(change, base),
           signal: controller.signal, onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         const names = await git.changedPaths(worktree, base);
         if (!names.length || names.length > sourceDraftLimit || !names.every(isAgentSourcePath)) throw new Error('The revised draft must contain 1 to 24 eligible source files.');
@@ -448,6 +499,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     }
     if (action === 'state') return state();
     if (action === 'propose') return ask(body, signal);
+    if (action === 'cancelbenchmark') {
+      if (!diagnosticJob || body.id !== diagnosticJob.id) throw new Error('There is no matching benchmark running.');
+      diagnosticJob.controller.abort(new Error('Benchmark cancelled.'));
+      return state();
+    }
     if (action === 'discard' && body.cancel_revision === true && !sourceJob?.revising) throw new Error('There is no revision running.');
     if (action === 'discard' && sourceJob) {
       if (operation === 'discarding') throw new Error('The source workspace is already being discarded.');
@@ -475,6 +531,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     let live;
     try {
       switch (action) {
+        case 'benchmark': operation = 'diagnosing'; await startBenchmark(body); break;
         case 'source': operation = 'authoring'; await startSource(body); break;
         case 'revise': operation = 'revising'; await reviseSource(body); break;
         case 'previous': await restorePrevious(body); break;
@@ -558,7 +615,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         }
         default: throw new Error('Unknown workbench command.');
       }
-    } finally { if (operation !== 'checking' && (!['authoring', 'revising'].includes(operation) || !sourceJob)) operation = ''; }
+    } finally {
+      if (operation !== 'checking' && !diagnosticJob && (!['authoring', 'revising'].includes(operation) || !sourceJob)) operation = '';
+    }
     return { ...await state(), commit: revision ?? '', warning, ...(live ? { live } : {}) };
   };
 }

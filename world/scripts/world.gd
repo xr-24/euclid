@@ -19,6 +19,7 @@ const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
+const WorkbenchDiagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
@@ -86,6 +87,8 @@ var _workbench_capability := ""
 var _workbench_panel: Control
 var _development: WorldDevelopment
 var _development_session: DevelopmentSession
+var _benchmark_id := ""
+var _benchmark_display := {}
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
@@ -386,7 +389,7 @@ func _open_workbench() -> void:
 		saved_view = {"file": _development_session.file, "tab": _development_session.tab}
 		_workbench_panel.view_changed.connect(_development_session.save_view)
 	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_change,
-		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view)
+		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view, _run_workbench_benchmark)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
 	_workbench_panel.commit_recorded.connect(func(revision: String) -> void:
@@ -650,6 +653,40 @@ func _resume_development(path: String) -> void:
 	console_lines = _development_session.lines
 	CodexConsole.prompts = _development_session.prompts
 
+func _run_workbench_benchmark(action: String, arguments: Dictionary) -> Dictionary:
+	if not _development or shifting:
+		return {"error": "Wait for the current environment to finish loading."}
+	var result := await _development.benchmark(action, arguments)
+	if action != "benchmark" or result.has("error"):
+		return result
+	var job: Variant = result.get("diagnostic_job")
+	if job is Dictionary:
+		_benchmark_id = job.id
+		_console_notice("Running the villa benchmark. Euclid will return when the measurements finish.")
+		if DisplayServer.get_name() != "headless":
+			_benchmark_display = {"mode": get_window().mode, "fps": Engine.max_fps,
+				"rendering": RenderingServer.render_loop_enabled}
+			get_window().mode = Window.MODE_MINIMIZED
+			RenderingServer.render_loop_enabled = false
+			Engine.max_fps = 15
+	return result
+
+func _benchmark_changed() -> void:
+	if _benchmark_id.is_empty() or not _development.diagnostic_job.is_empty():
+		return
+	var report := _development.diagnostic
+	var notice := _development.diagnostic_notice
+	if report.get("id") == _benchmark_id:
+		notice = WorkbenchDiagnostics.summary(report)
+	_benchmark_id = ""
+	if not _benchmark_display.is_empty():
+		Engine.max_fps = _benchmark_display.fps
+		RenderingServer.render_loop_enabled = _benchmark_display.rendering
+		get_window().mode = _benchmark_display.mode
+		_benchmark_display.clear()
+	if not notice.is_empty():
+		_console_notice(notice)
+
 func _open_native_cli() -> void:
 	if OS.get_name() != "Windows" or not is_instance_valid(world_bridge):
 		_console_notice("Open the Windows Euclid launcher with its gateway to start the native CLI.")
@@ -708,6 +745,7 @@ func _submit_codex_command(prompt: String) -> void:
 	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
 	context["source_development"] = _development != null
 	var reviewed: Dictionary = _development.draft.duplicate() if _development else {}
+	var benchmark_target: Dictionary = _development.benchmark_target.duplicate() if _development else {}
 	context["source_revision"] = reviewed.get("can_revise", false) and reviewed.get("status") in ["staged", "failed", "passed"]
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _is_workshop(zone_id) and not shifting:
@@ -727,6 +765,16 @@ func _submit_codex_command(prompt: String) -> void:
 		var result := await _development.revise(prompt, reviewed)
 		if result.has("error"):
 			_console_notice(result.error)
+	elif response.plan.tool == "benchmark_villa":
+		var result := await _run_workbench_benchmark("benchmark", benchmark_target)
+		if result.has("error"):
+			_console_notice(result.error)
+	elif response.plan.tool == "villa_results":
+		await _development.refresh()
+		if _development.diagnostic_job.is_empty():
+			_console_notice(WorkbenchDiagnostics.summary(_development.diagnostic))
+		else:
+			_console_notice("The villa benchmark is still running.")
 	elif response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source"]:
 		await _request_development_draft(response.plan.tool, prompt, requested_zone)
 	elif response.plan.tool == "run_workshop_tool":
@@ -1377,6 +1425,7 @@ func _setup_gateway() -> void:
 		add_child(_development)
 		_development.configure(gateway_url, gateway_token, _workbench_capability)
 		_development.changed.connect(_development_changed)
+		_development.diagnostics_changed.connect(_benchmark_changed)
 		_development.refresh()
 	request = HTTPRequest.new()
 	request.timeout = 3

@@ -39,12 +39,13 @@ sessions, including a later gateway-hosted session that can reconnect after a re
 
 ## 3. Debugging and performance
 
-Workbench already shows check output with source locations for open files. Expose
-runtime errors, rendered captures, and frame timings alongside it. Let agents
-reproduce a problem, run named diagnostics, and attach
-before-and-after evidence to a draft. Use fixed camera views, resolution, and
-graphics profiles for rendering comparisons. A representative test is finding
-and verifying the cause of a villa frame-time regression from inside Euclid.
+F2 and F4 can run the fixed-view villa benchmark. Workbench keeps frame times,
+rendered captures, and benchmark logs with the Git baseline or measured draft
+version. Diagnostics also shows ordinary preview output and errors. Codex
+can use both kinds of evidence to inform a revision.
+
+**Remaining.** Add moving routes and repeatable transition measurements, then
+use them to isolate villa regressions from inside Euclid.
 
 ## 4. Scene and asset development
 

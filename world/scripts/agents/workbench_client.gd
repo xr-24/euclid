@@ -8,7 +8,7 @@ func configure(url: String, token: String, capability: String) -> void:
 	_url = url + "/v1/workbench/"
 	_headers = ["Authorization: Bearer " + token, "X-Euclid-Workbench: " + capability, "Content-Type: application/json"]
 	timeout = 85.0
-	body_size_limit = 1048576
+	body_size_limit = 2097152
 
 func send(action: String, arguments := {}) -> Dictionary:
 	if request(_url + action, _headers, HTTPClient.METHOD_POST, JSON.stringify(arguments)) != OK:

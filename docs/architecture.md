@@ -175,6 +175,15 @@ It hands the zone builder a profile snapshot and swaps only the floor visual
 and backdrop on the main thread. The collision, anchors, entity nodes, player,
 and agent bridge retain their identity during a scenery reload.
 
+`ui/grid_palette_host.gd` owns the Grid palette's version 1 reload contract.
+After checks pass, a palette-only draft can supply its exact reviewed script
+to this host. It builds the candidate offscreen with read-only Grid tools,
+restores the selected entity and unapplied controls, and swaps the panel only
+after setup succeeds. Script errors from the preview trigger a rollback and
+are available in Diagnostics and subsequent revisions. F2, F4, and recovery
+stay in the stable host. The reviewed script runs in the current process with
+normal local permissions.
+
 ## Workshop actions
 
 The Workbench tool authoring route produces a versioned definition under

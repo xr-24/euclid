@@ -7,7 +7,7 @@ const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const Grid = preload("res://scripts/zones/grid_zone.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
-const GridPalette = preload("res://scripts/ui/grid_palette.gd")
+const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 const GridAgentClient = preload("res://scripts/agents/grid_agent_client.gd")
 const AssetClient = preload("res://scripts/agents/asset_client.gd")
 const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
@@ -72,6 +72,7 @@ var prefab_library: PrefabLibrary
 var behavior_runtime: BehaviorRuntime
 var workshops := {}
 var grid_palette_requested := false
+var _palette_host := GridPaletteHost.new()
 var grid_agent: HTTPRequest
 var world_bridge: HTTPRequest
 var environment_library: RefCounted
@@ -229,6 +230,9 @@ func _setup_player() -> void:
 	camera.current = true
 
 func _setup_ui() -> void:
+	add_child(_palette_host)
+	_palette_host.agent_requested.connect(_run_grid_agent)
+	_palette_host.preview_failed.connect(_console_notice)
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 	var ui := Control.new()
@@ -290,7 +294,7 @@ func _ui_label(parent: Node, at: Vector2, font_size: int) -> Label:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 
-func _panel(title: String, description: String, height := 500.0) -> void:
+func _panel(title: String, description: String, height := 500.0, remember_palette := false) -> void:
 	overlay.add_theme_stylebox_override("panel", overlay_panel_style)
 	var viewport_size := get_viewport().get_visible_rect().size
 	var side_margin := maxf((viewport_size.x - 680.0) * 0.5, 24.0)
@@ -298,6 +302,7 @@ func _panel(title: String, description: String, height := 500.0) -> void:
 	overlay.offset_right = -side_margin
 	overlay.offset_top = maxf((viewport_size.y - height) * 0.5, 24.0)
 	overlay.offset_bottom = -overlay.offset_top
+	_palette_host.unmount(remember_palette)
 	for child in overlay_content.get_children():
 		if child == codex_console:
 			codex_console = null
@@ -371,7 +376,7 @@ func _open_workbench() -> void:
 		else:
 			_show_panel()
 		return
-	_panel("", "")
+	_panel("", "", 500.0, true)
 	overlay.offset_left = 68
 	overlay.offset_top = 55
 	overlay.offset_right = -68
@@ -389,7 +394,9 @@ func _open_workbench() -> void:
 		saved_view = {"file": _development_session.file, "tab": _development_session.tab}
 		_workbench_panel.view_changed.connect(_development_session.save_view)
 	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_change,
-		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view, _run_workbench_benchmark)
+		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view, _run_workbench_benchmark,
+		_palette_host.error_log)
+	_workbench_panel.draft_reviewed.connect(_palette_host.observe)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
 	_workbench_panel.commit_recorded.connect(func(revision: String) -> void:
@@ -399,6 +406,11 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
 	if shifting or building:
 		return {"ok": false, "message": "Wait for the environment to finish loading before starting a live preview."}
+	if candidate.has("grid_palette"):
+		if not _is_workshop(zone_id):
+			return {"ok": false, "message": "Enter The Grid to preview its palette."}
+		var palette: Dictionary = candidate.grid_palette.merged({"draft": candidate.draft, "version": candidate.version})
+		return _palette_host.preview(palette, zone_id, world_tools, _workshop_action_catalog, _run_palette_action)
 	if candidate.has("shoreline"):
 		return _shoreline.preview(candidate)
 	if candidate.has("grid"):
@@ -421,6 +433,9 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	return {"ok": true, "message": "Plugin and test link active. Try the interaction in The Grid."}
 
 func _live_change_status(draft_id: String) -> String:
+	var palette_status := _palette_host.status(draft_id)
+	if not palette_status.is_empty():
+		return palette_status
 	var action_status := _workshop_actions.status(draft_id)
 	if not action_status.is_empty():
 		return action_status
@@ -431,16 +446,21 @@ func _live_change_status(draft_id: String) -> String:
 	return grid_status if not grid_status.is_empty() else behavior_runtime.preview_status(draft_id)
 
 func _finish_live_change(action: String, draft_id: String) -> Dictionary:
+	if action == "stop_palette":
+		return {"live": _palette_host.finish(draft_id, false)}
 	if action in ["apply", "restore"]:
 		_workshop_actions.reload_committed()
 	if action == "restore":
 		behavior_runtime.reload_committed()
 		_shoreline.reload_committed()
 		_grid_scenery.reload_committed()
+		_palette_host.reload_committed()
 		return {"live": false}
 	var keep := action == "apply"
 	if _development:
 		_development.forget(draft_id)
+	if _palette_host.finish(draft_id, keep):
+		return {"live": true}
 	if _shoreline.finish(draft_id, keep) or _grid_scenery.finish(draft_id, keep) or _workshop_actions.finish(draft_id, keep):
 		return {"live": true}
 	var was_live := behavior_runtime.finish(draft_id, keep)
@@ -511,10 +531,7 @@ func _show_grid_palette() -> void:
 	overlay.offset_top = minf(110.0, viewport_size.y * 0.1)
 	overlay.offset_right = -30
 	overlay.offset_bottom = -overlay.offset_top
-	var palette := GridPalette.new()
-	overlay_content.add_child(palette)
-	palette.setup(world_tools, at, selected, _workshop_action_catalog, _run_palette_action)
-	palette.agent_requested.connect(_run_grid_agent.bind(palette))
+	_palette_host.mount(overlay_content, zone_id, at, selected, world_tools, _workshop_action_catalog, _run_palette_action)
 	_button("Back to The Grid  [Esc]", _close_panel)
 
 func _run_grid_agent(prompt: String, placement: Array, palette: Control) -> void:
@@ -542,7 +559,7 @@ func _open_codex_console() -> void:
 			_show_panel()
 			codex_console.focus_entry()
 		return
-	_panel("", "")
+	_panel("", "", 500.0, true)
 	overlay.add_theme_stylebox_override("panel", CodexConsole.frame_style())
 	codex_console = CodexConsole.new()
 	codex_console.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -566,13 +583,16 @@ func _refresh_development_actions() -> void:
 		match draft.get("subject", ""):
 			"shoreline": available = _shoreline.available()
 			"grid": available = _grid_scenery.available()
+			"grid_palette": available = draft.get("status") != "passed" or _is_workshop(zone_id)
 			"behavior", "workshop_tool": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
-		if draft.get("agent_source", false):
+		if draft.get("agent_source", false) and draft.get("subject") != "grid_palette":
 			available = true
 		codex_console.update_development(draft, available and not shifting and not _development_action_busy,
 			_live_change_status(draft.get("id", "")) == "active")
 
 func _development_changed() -> void:
+	var reviewed := _development.benchmark_target
+	_palette_host.observe(reviewed.get("id", ""), reviewed.get("version", ""))
 	var draft := _development.draft
 	var status: String = draft.get("status", "")
 	var notice: String = draft.get("revision_notice", "")
@@ -614,7 +634,10 @@ func _codex_development_action(action: String) -> void:
 	var id: String = _development.draft.id
 	var revising: bool = _development.draft.status == "revising"
 	if action == "live" and _development.draft.get("agent_source", false):
-		action = "play" if _development.draft.status == "passed" else "check"
+		if _development.draft.status != "passed":
+			action = "check"
+		elif _development.draft.get("subject") != "grid_palette":
+			action = "play"
 	_development_action_busy = true
 	_refresh_development_actions()
 	var result := await _development.command(action)
@@ -762,7 +785,8 @@ func _submit_codex_command(prompt: String) -> void:
 		return
 	console_busy = true
 	if response.plan.tool == "revise_source":
-		var result := await _development.revise(prompt, reviewed)
+		var output := _palette_host.error_log(reviewed.id, reviewed.version)
+		var result := await _development.revise(prompt, reviewed, output)
 		if result.has("error"):
 			_console_notice(result.error)
 	elif response.plan.tool == "benchmark_villa":
@@ -1058,6 +1082,8 @@ func _build_zone_async(destination: String) -> Dictionary:
 func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	if scene_animations:
 		scene_animations.leave_workshop()
+	if zone_id != built.id:
+		_palette_host.clear_view()
 	zone_id = built.id
 	zone_root = built.root
 	_grid_scenery.attach(zone_root)

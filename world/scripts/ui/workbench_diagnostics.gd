@@ -51,6 +51,9 @@ func update(state: Dictionary, busy: bool) -> void:
 	var preview_log: String = state.get("preview_log", "")
 	if not preview_log.is_empty():
 		text += "\n\nPreview output\n" + preview_log
+	var live_output: String = state.get("live_preview_log", "")
+	if not live_output.is_empty():
+		text += "\n\nGrid palette preview\n" + live_output
 	if text != _output.text:
 		_output.text = text
 

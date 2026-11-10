@@ -116,8 +116,13 @@ func update_development(draft: Dictionary, can_preview: bool, live: bool) -> voi
 	if draft.get("agent_source", false):
 		var can_check: bool = status in ["staged", "failed"] and draft.get("has_patch", false)
 		var playing: bool = draft.get("playing", false)
-		_preview_draft.disabled = not can_preview or playing or (not can_check and status != "passed")
-		_preview_draft.text = "Preview open" if playing else ("Run checks" if can_check else "Preview build")
+		var palette: bool = draft.get("subject") == "grid_palette"
+		_preview_draft.disabled = not can_preview or playing or live or (not can_check and status != "passed")
+		_preview_draft.text = "Run checks" if can_check else ("Preview palette" if palette else "Preview build")
+		if playing:
+			_preview_draft.text = "Preview open"
+		elif live:
+			_preview_draft.text = "Preview active"
 		return
 	_preview_draft.disabled = not can_preview or draft.get("status") != "passed" or live
 	var label := "Preview Grid reload" if draft.get("activation") == "reload_grid" else "Preview live"

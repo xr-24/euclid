@@ -30,9 +30,13 @@ Euclid reopens the active draft and its last completed checks, the F2
 conversation, and the selected F4 file and review tab. The launcher verifies
 boot and retains a separate last-known-good launch path.
 
-Define reload boundaries for plugins, UI, scenes, and other replaceable
-subsystems. Test save migrations on copies before activation and extend
-independent fallback coverage for launcher, gateway, and runtime failures.
+The Grid palette now has a live reload boundary for checked palette-only
+drafts. It carries the view into the preview, restores the working panel on
+failure or discard, and keeps a committed preview active.
+
+Expand reload boundaries to other UI and scene subsystems. Test save
+migrations on copies before activation and extend independent fallback
+coverage for launcher, gateway, and runtime failures.
 
 The [embedded terminal proposal](terminal-blueprint.md) covers interactive shell
 sessions, including a later gateway-hosted session that can reconnect after a restart.

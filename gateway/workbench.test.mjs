@@ -12,6 +12,60 @@ import { createPreviewRunner } from './workbench-runner.mjs';
 import { shorelinePath } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 
+test('checked palette-only revisions expose the exact source for live preview', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'euclid-palette-test-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = 'world/scripts/ui/grid_palette.gd';
+  const base = 'extends VBoxContainer\n';
+  const changed = base + '# Reset rotation\n';
+  await mkdir(path.join(root, 'world/scripts/ui'), { recursive: true });
+  await writeFile(path.join(root, '.gitignore'), '.local/\n');
+  await writeFile(path.join(root, file), base);
+  const git = (...args) => execFileSync('git', args, { cwd: root, windowsHide: true });
+  git('init', '-q');
+  git('config', 'core.autocrlf', 'false');
+  git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Palette base');
+  const workbench = createWorkbench(root, path.join(root, '.local'), {
+    runner: { async check() {}, playing: () => false, async stop() {} },
+    async editSource({ workspace, context }) {
+      if (context) {
+        assert.match(context.preview_output, /Fixture palette error/);
+        await writeFile(path.join(workspace, 'world/scripts/ui/other.gd'), 'extends Control\n');
+      } else {
+        await writeFile(path.join(workspace, file), changed);
+      }
+    },
+  });
+  const call = (action, body = {}) => workbench(action, body, new AbortController().signal);
+  async function until(status) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const { draft } = await call('state');
+      if (draft?.status === status) return draft;
+      await sleep(20);
+    }
+    assert.fail('Expected palette status ' + status);
+  }
+  await call('source', { prompt: 'Add a Reset rotation button' });
+  const reviewed = await until('staged');
+  const identity = { id: reviewed.id, version: reviewed.version };
+  assert.equal(reviewed.activation, 'reload_palette');
+  assert.equal(reviewed.checked_preview, true);
+  await assert.rejects(call('live', identity), /pass checks/);
+  await call('check', identity);
+  await until('passed');
+  await assert.rejects(call('live', { id: reviewed.id }), /palette revision/);
+  const { live } = await call('live', identity);
+  assert.deepEqual(live, { draft: identity.id, version: identity.version,
+    grid_palette: { source: changed, digest: fingerprint(changed) } });
+  await call('revise', { ...identity, prompt: 'Fix the palette error', live_preview_output: 'Fixture palette error' });
+  const broader = await until('staged');
+  assert.equal(broader.activation, 'restart');
+  assert.equal(broader.live, false);
+  await assert.rejects(call('live', identity), /current source draft version/);
+  await call('discard', { id: broader.id, version: broader.version });
+});
+
 test('workbench checks and commits an isolated two-file Git draft, and reverts it', async t => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'euclid-workbench-test-'));
   const root = path.join(folder, 'project');

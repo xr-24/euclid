@@ -21,6 +21,8 @@ const revisionFolder = /^revision-[a-f0-9-]{36}$/;
 const maxFiles = 6;
 const maxBytes = 128 * 1024;
 const maxDiff = 256 * 1024;
+const paletteSource = 'world/scripts/ui/grid_palette.gd';
+const isPalette = names => names.length === 1 && names[0] === paletteSource;
 const appearanceFor = names => names.length === 1 && [shorelineAppearance, gridAppearance].find(item => item.file === names[0]);
 
 function readAppearance(text, appearance) {
@@ -141,6 +143,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     }
     const appearance = change && !change.agentSource && appearanceFor(change.names);
     const tool = change && !change.agentSource && workshopToolFile(change.names);
+    const palette = change && isPalette(change.names);
     return { ...state, draft: change && {
       id: change.id, name: change.names.length === 1 ? change.names[0] : `${change.names.length} files`, files: change.names,
       diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
@@ -148,9 +151,10 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       check_status: change.check?.status ?? '',
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
-      live: Boolean(change.plugin || appearance || tool), activation: appearance?.activation ?? (change.plugin || tool ? 'live' : 'restart'),
-      subject: appearance?.payload ?? (tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
-      checked_preview: Boolean(appearance || tool || change.fromWorld), from_world: change.fromWorld === true,
+      live: Boolean(change.plugin || appearance || tool || palette),
+      activation: appearance?.activation ?? (palette ? 'reload_palette' : change.plugin || tool ? 'live' : 'restart'),
+      subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
+      checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
     } };
   }
@@ -284,9 +288,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await git.add(worktree, base);
         await writeFile(patch, change.diff, { flag: 'wx' });
         await git.apply(worktree, patch);
+        const liveOutput = isPalette(change.names) && typeof body.live_preview_output === 'string' ? body.live_preview_output.slice(-12000) : '';
+        const previewOutput = [await readPreviewLog(change), liveOutput].filter(Boolean).join('\n');
         const context = { request: change.request ?? '', files: change.names, summary: change.summary,
           check_status: change.check?.status ?? change.status, check_error: change.check?.error ?? '',
-          check_output: change.check?.log ?? '', preview_output: await readPreviewLog(change) };
+          check_output: change.check?.log ?? '', preview_output: previewOutput };
         const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: editSource,
           evidence: await benchmarkEvidence(change, base),
           signal: controller.signal, onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
@@ -541,7 +547,17 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         case 'shoreline': await developAppearance(body, signal, shorelineAppearance, designShoreline); break;
         case 'grid': await developAppearance(body, signal, gridAppearance, designGrid); break;
         case 'live': {
-          const change = requireDraft(body.id);
+          const change = requireDraft(body.id, body.version);
+          if (isPalette(change.names)) {
+            if (body.version !== fingerprint(change.diff) || change.status !== 'passed') {
+              throw new Error('Review and pass checks for this palette revision before previewing.');
+            }
+            await verifyReview(change);
+            const { text, hash } = await readSource(change.worktree, paletteSource);
+            await verifyReview(change);
+            live = { draft: change.id, version: body.version, grid_palette: { source: text, digest: hash } };
+            break;
+          }
           if (change.agentSource) throw new Error('Use the separate preview build for agent-authored source changes.');
           const appearance = appearanceFor(change.names);
           const tool = workshopToolFile(change.names);

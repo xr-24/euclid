@@ -20,6 +20,7 @@ const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
+const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 var _failures := 0
 var _checks := 0
 
@@ -118,6 +119,7 @@ func _run() -> void:
 	_check_text_tools()
 	_check_development_session()
 	await _check_development_refresh()
+	_check_palette_reload()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -448,3 +450,50 @@ func _check_development_refresh() -> void:
 	_check(client.revised and not result.has("error"), "an F2 revision waits for the draft refresh")
 	await process_frame
 	development.free()
+
+func _check_palette_reload() -> void:
+	var zone := Node3D.new()
+	var overlay := VBoxContainer.new()
+	var host := GridPaletteHost.new()
+	root.add_child(zone)
+	root.add_child(overlay)
+	root.add_child(host)
+	var tools := WorldTools.new("")
+	tools.attach(zone)
+	var cone := tools.execute("spawn", {"type": "traffic_cone", "position": [2, 0, -2], "yaw": 30.0})
+	var other := tools.execute("spawn", {"type": "traffic_cone", "position": [4, 0, -2]})
+	var catalog := func() -> Array: return []
+	var action := func(_entry: Dictionary) -> Dictionary: return {}
+	host.mount(overlay, "construct", Vector3(3, 0, -2), cone.id, tools, catalog, action)
+	host.panel._fields.Yaw.value = 50.0
+	host.panel._fields.X.get_line_edit().text = "3.25"
+	host.panel._prefab_name.text = "Unsaved name"
+	var old := host.panel
+	host.unmount(true)
+	overlay.remove_child(old)
+	old.queue_free()
+	var source := FileAccess.get_file_as_string(GridPaletteHost.SOURCE_PATH)
+	var changed := source.replace("Spawn orange cone", "Preview cone")
+	var candidate := {"draft": "fixture", "version": "first", "source": changed, "digest": changed.sha256_text()}
+	_check(host.preview(candidate, "construct", tools, catalog, action).ok, "load a checked palette without replacing the world")
+	host.mount(overlay, "construct", Vector3.ZERO, other.id, tools, catalog, action)
+	var view: Dictionary = host.panel.capture_view()
+	_check(view.selected == cone.id and view.spawn_at == Vector3(3, 0, -2), "keep the selection and placement through palette reload")
+	_check(view.fields.Yaw.value == 50.0 and view.fields.X.text == "3.25" and view.prefab_name == "Unsaved name",
+		"keep unsaved palette values and text through reload")
+	host.observe("fixture", "next")
+	_check(host.status("fixture").is_empty() and host.panel.get_script() == GridPaletteHost.Builtin and host.panel._fields.Yaw.value == 50.0,
+		"restore the working panel when the reviewed draft version changes")
+	_check(host.preview(candidate, "construct", tools, catalog, action).ok and host.finish("fixture", false)
+		and host.panel.get_script() == GridPaletteHost.Builtin, "stop a palette preview and restore the working panel")
+	var rejected := source.replace("\t_refresh_prefabs()\n\treturn true",
+		"\t_tools.execute(\"delete\", {\"id\": _selected})\n\t_refresh_prefabs()\n\treturn true")
+	var bad := {"draft": "fixture", "version": "bad", "source": rejected, "digest": rejected.sha256_text()}
+	var previous := host.panel
+	_check(not host.preview(bad, "construct", tools, catalog, action).ok and host.panel == previous,
+		"keep the working palette when candidate setup fails")
+	_check(host.error_log("fixture", "bad").contains("world edit during setup") and tools.execute("inspect", {"id": cone.id}).ok,
+		"record the rejected setup and preserve the selected entity")
+	host.free()
+	overlay.free()
+	zone.free()

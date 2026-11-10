@@ -87,3 +87,33 @@ func _submit() -> void:
 	if _target.visible and _target.selected > 0:
 		behavior["target"] = _target.get_selected_metadata()
 	submitted.emit(behavior)
+
+func capture_view() -> Dictionary:
+	var settings := {}
+	for key in _inputs:
+		var input: SpinBox = _inputs[key]
+		settings[key] = {"value": input.value, "text": input.get_line_edit().text}
+	var id: String = _definitions[_choices.selected - 1].id if _choices.selected > 0 else ""
+	return {"id": id, "settings": settings,
+		"target": _target.get_selected_metadata() if _target.visible and _target.selected > 0 else ""}
+
+func restore_view(view: Dictionary) -> void:
+	if view.is_empty():
+		return
+	var choice := 0
+	for index in _definitions.size():
+		if _definitions[index].id == view.get("id"):
+			choice = index + 1
+			break
+	_choices.select(choice)
+	_select(choice)
+	for key in view.get("settings", {}):
+		if _inputs.has(key):
+			var input: SpinBox = _inputs[key]
+			input.value = view.settings[key].value
+			input.get_line_edit().text = view.settings[key].text
+	if _target.visible:
+		for index in range(1, _target.item_count):
+			if _target.get_item_metadata(index) == view.get("target"):
+				_target.select(index)
+				break

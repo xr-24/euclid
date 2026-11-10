@@ -7,6 +7,7 @@ signal close_requested
 signal restart_requested
 signal view_changed(file: String, tab: String)
 signal commit_recorded(revision: String)
+signal draft_reviewed(id: String, version: String)
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
 const Look = preload("res://scripts/ui/terminal_theme.gd")
@@ -63,6 +64,7 @@ var _finish_behavior: Callable
 var _behavior_status: Callable
 var _plugin_context: Callable
 var _benchmark: Callable
+var _live_output: Callable
 var _view_ready := false
 var _requested_review := ""
 
@@ -79,12 +81,14 @@ static func error_locations(log: String) -> Array:
 	return found
 
 func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
-		behavior_status: Callable, plugin_context: Callable, saved_view := {}, benchmark := Callable()) -> void:
+		behavior_status: Callable, plugin_context: Callable, saved_view := {}, benchmark := Callable(),
+		live_output := Callable()) -> void:
 	_preview_behavior = preview_behavior
 	_finish_behavior = finish_behavior
 	_behavior_status = behavior_status
 	_plugin_context = plugin_context
 	_benchmark = benchmark
+	_live_output = live_output
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
@@ -662,11 +666,18 @@ func _command(action: String, arguments := {}) -> void:
 	if draft is Dictionary:
 		arguments["id"] = draft.id
 		arguments["version"] = draft.get("version", "")
+		if action == "revise" and _live_output.is_valid():
+			arguments["live_preview_output"] = _live_output.call(draft.id, arguments.version)
 		if action == "discard" and draft.status == "revising":
 			arguments["cancel_revision"] = true
+		if action == "stop" and draft.get("subject") == "grid_palette" and _live_status() == "active":
+			_finish_behavior.call("stop_palette", draft.id)
+			_status.text = "Restored the working Grid palette. The checked draft is still available."
+			_sync_controls()
+			return
 	if action == "apply":
 		if _live_status() == "failed":
-			show_error("The live preview failed. Discard this draft and revise the behavior.")
+			show_error("The live preview failed. Revise the draft before committing.")
 			return
 		arguments["message"] = _message.text.strip_edges()
 	elif action == "restore":
@@ -689,6 +700,8 @@ func _command(action: String, arguments := {}) -> void:
 			var activated: Dictionary = await _preview_behavior.call(result.live)
 			_busy = false
 			_status.text = activated.message
+			if not activated.ok and draft.get("subject") == "grid_palette":
+				_tabs.current_tab = 4
 			_sync_controls()
 		"check":
 			_tabs.current_tab = 2
@@ -702,7 +715,8 @@ func _command(action: String, arguments := {}) -> void:
 			if action == "discard" and result.get("draft") is Dictionary:
 				return
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
-			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior", "workshop_tool": "workshop action"}
+			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior",
+				"workshop_tool": "workshop action", "grid_palette": "Grid palette"}
 			var live_subject: String = subjects.get(draft.get("subject"), "preview") if draft is Dictionary else "preview"
 			var previous := _source
 			_clear_buffers()
@@ -761,6 +775,8 @@ func _show_state(result: Dictionary) -> void:
 	var prior: Variant = _state.get("draft")
 	_state = result
 	var draft: Variant = result.get("draft")
+	if draft is Dictionary:
+		draft_reviewed.emit(draft.id, draft.get("version", ""))
 	var has_previous: bool = draft is Dictionary and draft.get("has_previous", false)
 	if not has_previous and _tabs.current_tab == 3:
 		_tabs.current_tab = 1
@@ -782,7 +798,8 @@ func _show_state(result: Dictionary) -> void:
 		var messages := {"authoring": "Codex is working in a separate source workspace.", "staged": "Review the Git diff before running the edited code.",
 			"revising": "Codex is revising a copy of the active draft.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
-		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload", "restart": "Restart Euclid"}
+		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload",
+			"reload_palette": "Grid palette reload", "restart": "Restart Euclid"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
 			draft.error if draft.status == "failed" else messages[draft.status]]
 		if draft.status == "staged":
@@ -795,7 +812,7 @@ func _show_state(result: Dictionary) -> void:
 		elif result.get("playing", false) and draft.status != "revising":
 			_status.text = "The preview is open in a separate Euclid window."
 		elif _live_status() == "failed":
-			_status.text = "Live preview failed. The previous behavior is active."
+			_status.text = "Live preview failed. The previous version is active."
 		elif _live_status() == "active" and draft.status != "checking":
 			_status.text += " Live preview active."
 		var chip_colors := {"failed": Look.ERROR, "passed": Look.GOOD, "checking": Look.WARN, "authoring": Look.WARN, "revising": Look.WARN}
@@ -878,11 +895,14 @@ func _sync_controls() -> void:
 	_buttons.live.text = "Preview Grid reload" if staged and draft.get("activation") == "reload_grid" else "Preview live"
 	if staged and draft.get("subject") == "workshop_tool":
 		_buttons.live.text = "Preview tool"
+	if staged and draft.get("subject") == "grid_palette":
+		_buttons.live.text = "Preview palette"
 	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active" \
 		or (draft.get("checked_preview", false) and draft.status != "passed")
 	var passed: bool = staged and draft.status == "passed"
 	_buttons.play.disabled = blocked or not passed or playing
-	_buttons.stop.disabled = blocked or not playing
+	var palette_preview: bool = staged and draft.get("subject") == "grid_palette" and live == "active"
+	_buttons.stop.disabled = blocked or (not playing and not palette_preview)
 	_message.visible = passed
 	_message.editable = not blocked
 	_buttons.apply.disabled = blocked or not passed or live == "failed" or _message.text.strip_edges().is_empty()
@@ -892,7 +912,10 @@ func _sync_controls() -> void:
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or playing or live == "active"
-	_diagnostics.update(_state, blocked or not _benchmark.is_valid())
+	var diagnostic_state := _state.duplicate()
+	if staged and _live_output.is_valid():
+		diagnostic_state["live_preview_log"] = _live_output.call(draft.id, draft.get("version", ""))
+	_diagnostics.update(diagnostic_state, blocked or not _benchmark.is_valid())
 
 func _live_status() -> String:
 	var draft: Variant = _state.get("draft")

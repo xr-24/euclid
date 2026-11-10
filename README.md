@@ -277,6 +277,21 @@ matching desktop results when authoring or revising source.
 Diagnostics also shows output and errors from the current draft's playable
 preview. Codex can use that output when revising the patch.
 
+### Live-preview the Grid palette
+
+In The Grid, try asking F2 to **Add a Reset rotation button to the Grid palette**.
+For a draft that changes only the palette script, review the patch in F4 and
+run checks. Choose **Preview palette**, close Workbench, and press **B** to
+use it in the current world. The selection, placement, and unapplied fields
+carry over from the palette you left.
+
+**Stop preview** restores the working palette and keeps the checked draft
+available. **Discard** removes the draft and **Commit** keeps a successful
+preview active. A candidate that fails to load or reports a script error
+restores the working panel, and F4 **Diagnostics** shows the error. A new
+draft version requires fresh checks and its own preview. World edits made
+through the palette still use ordinary Grid undo.
+
 The source workspace supports one active task and up to 24 changed Godot
 source or test files. The checks and preview run code from the reviewed draft
 with your local account permissions.

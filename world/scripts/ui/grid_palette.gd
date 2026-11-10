@@ -5,6 +5,7 @@ signal agent_requested(prompt: String, placement: Array)
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const BehaviorInspector = preload("res://scripts/ui/behavior_inspector.gd")
+const API_VERSION := 1
 
 var _tools: RefCounted
 var _spawn_at: Array
@@ -29,7 +30,7 @@ var _action_catalog: Callable
 var _run_action: Callable
 var _action_entries: Array[Dictionary] = []
 
-func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Callable, run_action: Callable) -> void:
+func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Callable, run_action: Callable) -> bool:
 	_tools = tools
 	_spawn_at = [spawn_at.x, spawn_at.y, spawn_at.z]
 	_selected = selected
@@ -118,6 +119,32 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	add_child(_status)
 	_refresh()
 	_refresh_prefabs()
+	return true
+
+func capture_view() -> Dictionary:
+	var fields := {}
+	for key in _fields:
+		var input: SpinBox = _fields[key]
+		fields[key] = {"value": input.value, "text": input.get_line_edit().text}
+	return {"selected": _selected, "spawn_at": Vector3(_spawn_at[0], _spawn_at[1], _spawn_at[2]),
+		"fields": fields, "color": _color.color, "behavior": _behaviors.capture_view(),
+		"prefab": _prefabs.get_selected_metadata() if _prefabs.selected > 0 else "",
+		"prefab_name": _prefab_name.text, "prompt": _agent_input.text}
+
+func restore_view(view: Dictionary) -> bool:
+	if view.get("selected", "") == _selected:
+		var fields: Dictionary = view.get("fields", {})
+		for key in fields:
+			if _fields.has(key):
+				var input: SpinBox = _fields[key]
+				input.value = fields[key].value
+				input.get_line_edit().text = fields[key].text
+		_color.color = view.get("color", _color.color)
+		_behaviors.restore_view(view.get("behavior", {}))
+	_refresh_prefabs(view.get("prefab", ""))
+	_prefab_name.text = view.get("prefab_name", "")
+	_agent_input.text = view.get("prompt", "")
+	return true
 
 func _send_agent_request() -> void:
 	var prompt := _agent_input.text.strip_edges()

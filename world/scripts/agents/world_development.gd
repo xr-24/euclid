@@ -42,8 +42,9 @@ func command(action: String) -> Dictionary:
 	return await _send(action, {"id": draft.id, "version": draft.version,
 		"cancel_revision": action == "discard" and draft.status == "revising"})
 
-func revise(prompt: String, reviewed: Dictionary) -> Dictionary:
-	return await _send("revise", {"id": reviewed.id, "version": reviewed.version, "prompt": prompt})
+func revise(prompt: String, reviewed: Dictionary, preview_output := "") -> Dictionary:
+	return await _send("revise", {"id": reviewed.id, "version": reviewed.version, "prompt": prompt,
+		"live_preview_output": preview_output})
 
 func benchmark(action: String, arguments: Dictionary) -> Dictionary:
 	return await _send(action, arguments)
@@ -68,6 +69,7 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 	_busy = false
 	if not response.has("error"):
 		var item: Variant = response.get("draft")
+		var before := benchmark_target
 		benchmark_target = {"id": item.id, "version": item.get("version", "")} if item is Dictionary else {}
 		var next := {}
 		if item is Dictionary and item.get("from_world", false):
@@ -77,7 +79,7 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 				"version": item.get("version", ""), "can_revise": item.get("can_revise", false),
 				"revision_notice": item.get("revision_notice", ""),
 				"playing": response.get("playing", false)}
-		if next != draft:
+		if next != draft or before != benchmark_target:
 			draft = next
 			changed.emit()
 		var report: Variant = response.get("diagnostic")

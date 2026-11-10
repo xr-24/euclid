@@ -11,6 +11,7 @@ extends RefCounted
 const Water = preload("res://scripts/simulation/water_system.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const SceneDressing = preload("res://scripts/scene_dressing.gd")
+const Props = preload("res://scripts/zones/authored_props.gd")
 const Scatter = preload("res://scripts/scatter.gd")
 const TerrainField = preload("res://scripts/terrain_field.gd")
 
@@ -20,10 +21,10 @@ const SPAWN := {"position": Vector3(0, 0.05, 37.0), "yaw": 0.0}
 static func available() -> bool:
 	return ResourceLoader.exists(GEN + "villa_estate.glb") and FileAccess.file_exists(GEN + "villa_layout.json")
 
-static func build(world: Node3D) -> bool:
+static func build(context: RefCounted) -> bool:
 	if not available():
 		return false
-	var root: Node3D = world.build_root
+	var root: Node3D = context.build_root
 	var layout: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GEN + "villa_layout.json"))
 	_architecture(root)
 	var field := TerrainField.new()
@@ -284,7 +285,10 @@ static func _gardens(root: Node3D, layout: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1999
 	var rows := {}  # herb rows, instanced in bulk: id -> [Transform3D]
-	for bed in layout.get("beds", []):
+	var beds: Array = layout.get("beds", [])
+	for index in beds.size():
+		var bed: Dictionary = beds[index]
+		var key := "garden_bed_%d" % index
 		var r: Array = bed.rect
 		var x0 := float(r[0]); var x1 := float(r[1]); var z0 := float(r[2]); var z1 := float(r[3])
 		var y := float(bed.y)
@@ -292,21 +296,26 @@ static func _gardens(root: Node3D, layout: Dictionary) -> void:
 		var cz := (z0 + z1) * 0.5
 		match str(bed.zone):
 			"outer":  # olives toward the ends, shrubs between, the middle left for statuary
-				for zt in [z0 + 6.5, z1 - 6.5]:
+				for end in 2:
+					var zt := z0 + 6.5 if end == 0 else z1 - 6.5
 					var olive := "old_olive_tree" if rng.randf() < 0.5 else "olive_tree_portugal"
-					_tree(root, olive, Vector3(cx + rng.randf_range(-0.8, 0.8), y, zt), rng, 0.85, 1.0, "island_tree_01")
+					_tree(root, key + "_olive_%d" % end, olive, Vector3(cx + rng.randf_range(-0.8, 0.8), y, zt), rng, 0.85, 1.0, "island_tree_01")
 				for k in 5:
 					var zs := lerpf(z0 + 2.0, z1 - 2.0, (k + 0.5) / 5.0)
 					if absf(zs - cz) < 2.0:
 						continue
-					WorldArt.place(root, "searsia_lucida" if k % 2 else "shrub_01", Vector3(cx + rng.randf_range(-1.5, 1.5), y, zs), rng.randf_range(0, 360), 0.0, rng.randf_range(0.45, 0.6))
+					_garden_prop(root, key + "_shrub_%d" % k, "searsia_lucida" if k % 2 else "shrub_01",
+						Vector3(cx + rng.randf_range(-1.5, 1.5), y, zs), rng.randf_range(0, 360), rng.randf_range(0.45, 0.6))
 			"inner":  # lemon trees on a lawn
-				for zt in [z0 + 3.0, cz, z1 - 3.0]:
-					_tree(root, "lemon_tree", Vector3(cx, y, zt), rng, 0.9, 1.1, "tree_small_02")
+				var slots := [z0 + 3.0, cz, z1 - 3.0]
+				for slot in slots.size():
+					_tree(root, key + "_lemon_%d" % slot, "lemon_tree", Vector3(cx, y, slots[slot]), rng, 0.9, 1.1, "tree_small_02")
 			"east":  # a shade tree in each bed, flowers round it
-				_tree(root, "jacaranda_tree", Vector3(cx, y, cz), rng, 0.38, 0.45, "island_tree_02")
+				_tree(root, key + "_jacaranda", "jacaranda_tree", Vector3(cx, y, cz), rng, 0.38, 0.45, "island_tree_02")
 				for k in 6:
-					WorldArt.place(root, "flower_gazania", Vector3(rng.randf_range(x0 + 0.8, x1 - 0.8), y, rng.randf_range(z0 + 0.8, z1 - 0.8)), rng.randf_range(0, 360), 0.0, rng.randf_range(0.8, 1.2))
+					_garden_prop(root, key + "_flower_%d" % k, "flower_gazania",
+						Vector3(rng.randf_range(x0 + 0.8, x1 - 0.8), y, rng.randf_range(z0 + 0.8, z1 - 0.8)),
+						rng.randf_range(0, 360), rng.randf_range(0.8, 1.2))
 			_:  # herb terraces: rows of low shrubs, fruit trees down the middle of the upper beds
 				var herbs := ["shrub_04", "wild_rooibos_bush", "flower_gazania", "cheiridopsis_succulent"]
 				var kind: String = herbs[(int(cx) + int(cz)) % herbs.size()]
@@ -322,19 +331,31 @@ static func _gardens(root: Node3D, layout: Dictionary) -> void:
 					row += 2.2
 				if str(bed.zone) != "herb1":
 					var fruit := "lemon_tree" if str(bed.zone) == "herb2" else "olive_tree_portugal"
-					_tree(root, fruit, Vector3(cx, y, cz), rng, 0.9, 1.05, "island_tree_01")
+					_tree(root, key + "_fruit_tree", fruit, Vector3(cx, y, cz), rng, 0.9, 1.05, "island_tree_01")
 	for kind in rows:
 		Scatter.instance_many(root, kind, rows[kind], 90.0, false)
 	# Potted plants along the side porticoes, clear of the doors and statues.
 	for side in [-1.0, 1.0]:
-		for z in [-24.0, -1.0, 18.0, 32.0]:
-			WorldArt.place(root, "potted_plant_01" if int(z) % 4 else "potted_plant_02", Vector3(side * 19.0, float(layout.stylobate), z), rng.randf_range(0, 360))
+		var slots := [-24.0, -1.0, 18.0, 32.0]
+		for slot in slots.size():
+			var z: float = slots[slot]
+			var key := "%s_portico_planter_%d" % ["west" if side < 0 else "east", slot]
+			_garden_prop(root, key, "potted_plant_01" if int(z) % 4 else "potted_plant_02",
+				Vector3(side * 19.0, float(layout.stylobate), z), rng.randf_range(0, 360))
+
+static func _garden_prop(root: Node3D, key: String, asset: String, at: Vector3, yaw: float, scale := 1.0) -> void:
+	var model := WorldArt.place(root, asset, at, yaw, 0.0, scale)
+	if model:
+		Props.register(root, Props.stable_id("villa", key), model, asset, yaw)
 
 ## A garden tree from the library, falling back to a Poly Haven one; with a trunk collider.
-static func _tree(root: Node3D, id: String, at: Vector3, rng: RandomNumberGenerator, s0: float, s1: float, fallback: String) -> void:
-	var tree := WorldArt.place(root, id, at, rng.randf_range(0, 360), 0.0, rng.randf_range(s0, s1))
+static func _tree(root: Node3D, key: String, asset: String, at: Vector3, rng: RandomNumberGenerator, s0: float, s1: float, fallback: String) -> void:
+	var yaw := rng.randf_range(0, 360)
+	var tree := WorldArt.place(root, asset, at, yaw, 0.0, rng.randf_range(s0, s1))
 	if tree == null:
-		tree = WorldArt.place(root, fallback, at, rng.randf_range(0, 360), 0.0, rng.randf_range(0.8, 0.95))
+		asset = fallback
+		yaw = rng.randf_range(0, 360)
+		tree = WorldArt.place(root, asset, at, yaw, 0.0, rng.randf_range(0.8, 0.95))
 	if tree:
 		var body := StaticBody3D.new()
 		var shape := CollisionShape3D.new()
@@ -343,8 +364,10 @@ static func _tree(root: Node3D, id: String, at: Vector3, rng: RandomNumberGenera
 		cyl.height = 2.0
 		shape.shape = cyl
 		body.add_child(shape)
-		body.position = at + Vector3(0, 1.0, 0)
-		root.add_child(body)
+		body.position = Vector3.UP / tree.scale.y
+		body.scale = Vector3.ONE / tree.scale.y
+		tree.add_child(body)
+		Props.register(root, Props.stable_id("villa", key), tree, asset, yaw)
 
 ## Areas the coast's wild planting must leave alone: the buildings, gardens and terraces.
 static func keep_clear(layout: Dictionary) -> Array:

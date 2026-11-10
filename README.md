@@ -71,18 +71,20 @@ Press **B** while aiming at solid ground in either scene. Choose an installed
 model and select **Place asset**, or place a prefab from the shared library.
 Aim at a prop and press **B** to select it. You can also select it by
 name in the palette. **Apply** saves its name, position, rotation, scale, and
-color for placed props. In the villa, you can also move, rotate, resize, rename,
-or **Hide** the original statues and furnishings. Each keeps its original
-finish and moves with its plinth and collision. Select a hidden item from the
-list to **Restore defaults**. The palette and agent commands share each scene’s
-undo history, including after a restart.
+color for placed props. You can also move, rotate, resize, rename, or **Hide**
+authored props. These include the villa’s statues, planters and garden trees,
+the beach’s pier, lantern, shoreline scenery and floating props, and the
+workstations. Parts such as a plinth, collision, or a workstation’s app prompt
+follow the prop. Select a hidden item in the list to **Restore defaults**. The
+palette and agent commands share each scene’s undo history across restarts.
 
 In **F2**, try **Place an antique ceramic vase here and call it Garden vase**,
-**Rotate the original Nile River God statue to 90 degrees**, or **Undo the last scene edit**.
+**Rotate the wooden pier to 135 degrees**, or **Undo the last scene edit**.
 The native CLI can discover the installed library with `list_scene_assets`
-and prop IDs with `list_entities`. It can call `restore_dressing` on an original
-villa furnishing. Prop mutations require the active environment ID. Terrain,
-architecture, and the authored defaults live in the scene builders and data.
+and prop IDs with `list_entities`. It can call `restore_dressing` on an authored
+prop. Prop mutations require the active environment ID. Floating props keep
+simulating after edits. Their position fields set the release point, and the
+agent tools also report their current position.
 
 ## Live models
 

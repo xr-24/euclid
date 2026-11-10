@@ -13,7 +13,8 @@ All paths below are relative to `world/scripts/`.
 | `world.gd` | Startup, active zone, input routing and main-thread commits | Coordinates services; no asset authoring or HTTP parsing |
 | `zones/zone_catalog.gd` | Version 1 content validation | Zone and anchor identities remain data |
 | `zones/zone_build_context.gd` | One detached root and its interaction registry | Trusted builder registry; no live scene tree, player, UI or network access |
-| `zones/villa_zone.gd`, `zones/shore_zone.gd` | Zone-specific content | Each implements `build(context) -> bool`; false requests the fallback blockout |
+| `zones/villa.gd`, `zones/shore_zone.gd` | Zone-specific content | Each implements `build(context) -> bool`; false requests the fallback blockout |
+| `zones/authored_props.gd` | Stable IDs for builder-created props | Registers detached assemblies and their collision or editor pick volume |
 | `zones/workstations.gd` | Furniture for logical app anchors | Does not launch processes |
 | `assets/asset_library.gd` | Imported assets, immutable PBR templates, noise and collision geometry | Reuses resources across visits; resource-cache access is synchronized |
 | `rendering/zone_environment.gd` | Sky, sun, exposure, fog and GI | Receives explicit Environment and DirectionalLight3D resources |
@@ -61,12 +62,23 @@ The villa and beach use the same palette and command boundary. The coordinator
 attaches a separate prop layer to each finished zone on the main thread.
 `workshop/scene_placement.gd` owns scene bounds and camera-to-surface placement.
 The builder owns terrain, architecture, water, and the original dressing.
-`scene_dressing.gd` groups each authored villa model, its plinth and collision
-under a stable ID. On attachment, `workshop/dressing_layer.gd` applies sparse
-overrides for placement, name and visibility. Restoring defaults removes the
-override and uses the current authored values. After geometry changes, the
-coordinator refreshes the zone’s indirect lighting. Placed props store catalog IDs
-for installed or imported assets and use per-instance materials and collision.
+`zones/authored_props.gd` registers a direct child of the detached zone root
+with a stable ID derived from a namespace and a permanent key. Builders group
+all parts of an editable object before registering it. `scene_dressing.gd` uses
+the same registry and keeps its existing file-based IDs. Existing collision is
+tagged for crosshair selection. Visual-only objects get an editor pick volume
+on its own layer. Walkable props can remain placement surfaces.
+
+On attachment, `workshop/dressing_layer.gd` applies sparse overrides for
+placement, name and visibility. Scale is relative to the authored transform,
+including slope alignment. Workstations keep an interaction reference to
+their prop root. Floating props keep their rigid bodies and buoyancy. Their
+overrides store the release transform, while the water simulation owns the
+live pose. Resizing updates instance geometry and the box shape. Hiding
+suspends motion and collision. Restoring defaults removes the override.
+After geometry changes, the coordinator refreshes the zone’s indirect
+lighting. Placed props store catalog IDs for installed or imported assets and
+use per-instance materials and collision.
 
 `persistence/scene_edit_store.gd` stores placed props, authored overrides and a
 bounded undo journal in one atomic snapshot. Each scene retains up to 64

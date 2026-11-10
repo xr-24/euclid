@@ -7,6 +7,7 @@ const Assets = preload("res://scripts/assets/asset_library.gd")
 const WaterInteractions = preload("res://scripts/simulation/water_interactions.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const ScenePlacement = preload("res://scripts/workshop/scene_placement.gd")
+const AuthoredProps = preload("res://scripts/zones/authored_props.gd")
 const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
@@ -115,6 +116,7 @@ func _run() -> void:
 	_check_world_tools(path)
 	_check_scene_edits(path)
 	_check_authored_dressing(path + ".dressing")
+	_check_registered_props()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
@@ -427,9 +429,8 @@ func _check_authored_dressing(path: String) -> void:
 	statue.add_child(shape)
 	zone.add_child(statue)
 	var id := "a".repeat(32)
-	var authored := {"id": id, "authored": true, "type": "authored_dressing", "asset_id": "test",
-		"position": [0, 0, 0], "yaw": 0.0, "scale": 1.0, "name": "River statue", "color": "ffffff"}
-	zone.set_meta("authored_dressing", {id: {"record": authored, "node": statue, "shapes": {shape: false}}})
+	AuthoredProps.register(zone, id, statue, "test", 0.0, {"label": "River statue", "position": [0, 0, 0]})
+	var authored: Dictionary = zone.get_meta("authored_dressing")[id].record
 	var legacy := {"id": "b".repeat(32), "type": "traffic_cone", "position": [0.0, 0.0, -2.0],
 		"yaw": 0.0, "scale": 1.0, "color": "ff681d"}
 	_check(Store.write_json(path, {"schema_version": 1, "entities": [legacy]}) == OK, "seed a legacy placed prop save")
@@ -466,6 +467,55 @@ func _check_authored_dressing(path: String) -> void:
 		and statue.position.x == 3.0, "recover props and overrides even when history is invalid")
 	zone.free()
 	DirAccess.remove_absolute(path)
+
+func _check_registered_props() -> void:
+	var zone := Node3D.new()
+	var rock := MeshInstance3D.new()
+	rock.mesh = BoxMesh.new()
+	rock.basis = Basis(Vector3.RIGHT, 0.4).scaled(Vector3.ONE * 1.25)
+	zone.add_child(rock)
+	var rock_basis := rock.basis
+	var rock_id := AuthoredProps.stable_id("fixture", "rock")
+	AuthoredProps.register(zone, rock_id, rock, "rock", 0.0)
+	var picker := rock.get_child(0) as Area3D
+	_check(picker != null and picker.collision_layer == AuthoredProps.PICK_LAYER
+		and picker.get_meta("entity_id") == rock_id, "register visual props with an editor-only pick volume")
+
+	var floater := RigidBody3D.new()
+	var model := Node3D.new()
+	model.position.y = -0.5
+	var shape := CollisionShape3D.new()
+	var template := BoxShape3D.new()
+	shape.shape = template
+	floater.add_child(model)
+	floater.add_child(shape)
+	floater.position = Vector3(2, 1, 0)
+	zone.add_child(floater)
+	var floater_id := AuthoredProps.stable_id("fixture", "floater")
+	AuthoredProps.register(zone, floater_id, floater, "buoy", 0.0)
+	var tools := WorldTools.new()
+	tools.attach(zone)
+	_check(tools.execute("edit", {"id": rock_id, "changes": {"yaw": 90.0, "scale": 2.0}}).ok
+		and rock.basis.is_equal_approx(Basis(Vector3.UP, PI / 2.0) * rock_basis.scaled(Vector3.ONE * 2.0)),
+		"rotate and scale a sloped prop relative to its authored basis")
+	_check(tools.execute("restore_dressing", {"id": rock_id}).ok and rock.basis.is_equal_approx(rock_basis),
+		"restore the exact authored basis and scale")
+	floater.position.x += 3.0
+	var renamed := tools.execute("edit", {"id": floater_id, "changes": {"name": "Drifting buoy"}})
+	_check(renamed.ok and renamed.entity.position[0] == 2.0 and renamed.entity.live_position[0] == 5.0,
+		"keep the live physics pose separate from the saved release pose")
+	_check(tools.execute("edit", {"id": floater_id, "changes": {"scale": 2.0}}).ok
+		and floater.position.x == 5.0 and floater.scale == Vector3.ONE and model.position.y == -1.0
+		and shape.shape.size == Vector3.ONE * 2.0 and template.size == Vector3.ONE,
+		"resize a floating prop without scaling its rigid body or collision template")
+	_check(tools.execute("delete", {"id": floater_id}).ok and floater.freeze and shape.disabled,
+		"hide a floating prop and suspend its physics")
+	_check(tools.execute("undo").ok and floater.visible and not floater.freeze and not shape.disabled
+		and floater.position.x == 5.0 and shape.shape.size == Vector3.ONE * 2.0,
+		"undo a hide without teleporting the floater or losing its size")
+	_check(tools.execute("restore_dressing", {"id": floater_id}).ok and floater.position == Vector3(2, 1, 0)
+		and shape.shape.size == Vector3.ONE, "restore the floater's original release pose and collision")
+	zone.free()
 
 func _check_text_tools() -> void:
 	var typed := TextEffects.change_between(PackedStringArray(["var a = 1"]), PackedStringArray(["var ab = 1"]))

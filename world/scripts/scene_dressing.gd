@@ -20,6 +20,7 @@ extends RefCounted
 ## still loads after a licence folder is removed.
 
 const AssetLibrary = preload("res://scripts/asset_library.gd")
+const Props = preload("res://scripts/zones/authored_props.gd")
 
 ## Returns how many items were placed.
 static func apply(root: Node3D, path: String, materials := {}) -> int:
@@ -41,7 +42,7 @@ static func apply(root: Node3D, path: String, materials := {}) -> int:
 	return placed
 
 static func stable_id(path: String, key: String) -> String:
-	return ("dressing:" + path + ":" + key).sha256_text().left(32)
+	return Props.stable_id(path, key)
 
 static func place_item(root: Node3D, item: Dictionary, plinths := {}, materials := {}, identity := "") -> bool:
 	var id := str(item.get("asset", ""))
@@ -79,26 +80,8 @@ static func place_item(root: Node3D, item: Dictionary, plinths := {}, materials 
 		_collider(parts, height, natural * scale)
 	root.add_child(parts)
 	if not identity.is_empty():
-		_register(root, parts, item, identity)
+		Props.register(root, identity, parts, id, yaw, {"label": str(item.get("name", "")), "position": p})
 	return true
-
-static func _register(root: Node3D, parts: Node3D, item: Dictionary, id: String) -> void:
-	var entries: Dictionary = root.get_meta("authored_dressing", {})
-	if entries.has(id):
-		push_warning("Duplicate authored dressing ID: " + str(item.id))
-		return
-	var record := {"id": id, "type": "authored_dressing", "asset_id": item.asset, "authored": true,
-		"position": item.get("position", [0, 0, 0]).duplicate(), "yaw": item.get("yaw", 0.0), "scale": 1.0, "color": "ffffff"}
-	if item.has("name"):
-		record["name"] = item.name
-	var shapes := {}
-	for shape in parts.find_children("*", "CollisionShape3D", true, false):
-		shapes[shape] = shape.disabled
-		var body := shape.get_parent() as CollisionObject3D
-		if body:
-			body.set_meta("entity_id", id)
-	entries[id] = {"record": record, "node": parts, "shapes": shapes}
-	root.set_meta("authored_dressing", entries)
 
 static func _plinth(root: Node3D, size: Vector3, material: Material) -> void:
 	var mesh := MeshInstance3D.new()

@@ -35,7 +35,7 @@ static func scenery(appearance: Dictionary) -> Node3D:
 	Backdrop.build(root, float(appearance.wall_height))
 	return root
 
-static func workstation(root: Node3D, at: Vector3) -> void:
+static func workstation(root: Node3D, at: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.name = "GridTerminal"
 	body.position = at
@@ -50,6 +50,7 @@ static func workstation(root: Node3D, at: Vector3) -> void:
 	_box_mesh(body, Vector3(0, 1.27, 0.077), Vector3(1.27, 0.56, 0.012), display)
 	_box_mesh(body, Vector3(0, 1.52, 0.085), Vector3(1.18, 0.012, 0.01), light)
 	_box_collider(body, Vector3(0, 0.8, 0), Vector3(1.15, 1.6, 0.42))
+	return body
 
 static func _box_mesh(root: Node3D, at: Vector3, size: Vector3, material: Material) -> void:
 	var instance := MeshInstance3D.new()

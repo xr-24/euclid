@@ -76,6 +76,8 @@ func execute(tool: String, args := {}) -> Dictionary:
 					"behavior": _effective(item).get("behavior", {}).get("id", "")}
 				if item.get("authored", false):
 					entry.merge({"authored": true, "hidden": item.hidden, "overridden": item.overridden})
+				if item.has("live_position"):
+					entry["live_position"] = item.live_position
 				entities.append(entry)
 			return {"ok": true, "entities": entities}
 		"list_scene_assets":
@@ -163,7 +165,11 @@ func execute(tool: String, args := {}) -> Dictionary:
 		"restore_dressing":
 			if not authored:
 				return _error("Select a prop from the original scene dressing.")
-			return _edit_dressing(id, {})
+			var result := _edit_dressing(id, {})
+			if result.ok:
+				_dressing.reset_motion(id)
+				result["entity"] = _record(id)
+			return result
 		"undo":
 			if _history.is_empty():
 				return _error("There are no edits to undo.")
@@ -375,8 +381,9 @@ func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionar
 	for id in dressing:
 		if _dressing.has(id):
 			var override: Dictionary = overrides.get(id, {})
-			_dressing.apply(id, override)
-			geometry_changed = geometry_changed or DressingLayer.changes_geometry(previous_overrides.get(id, {}), override)
+			var old_override: Dictionary = previous_overrides.get(id, {})
+			_dressing.apply(id, override, old_override)
+			geometry_changed = geometry_changed or DressingLayer.changes_geometry(old_override, override)
 	if geometry_changed:
 		authored_geometry_changed.emit()
 	return true

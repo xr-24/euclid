@@ -1,6 +1,6 @@
 extends RefCounted
 ## A private detached root per build. No live player, UI, network or scene-tree ownership.
-const Villa = preload("res://scripts/zones/villa_zone.gd")
+const Villa = preload("res://scripts/zones/villa.gd")
 const Shore = preload("res://scripts/zones/shore_zone.gd")
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
@@ -14,17 +14,20 @@ var build_agent_labels: Dictionary = {}
 func _init(definitions: Dictionary) -> void:
 	manifest = definitions
 
-func build(destination: String) -> Dictionary:
+func begin(destination: String) -> void:
 	build_root = Node3D.new()
 	build_root.name = "Zone_" + destination
 	build_interactables = []
 	build_agent_labels = {}
-	var zone := _zone(destination)
-	var art := false
+
+func build_art(destination: String) -> bool:
 	var builder = BUILDERS.get(destination)
-	if builder != null:
-		art = builder.build(self)
-	if not art:
+	return builder != null and builder.build(self)
+
+func build(destination: String) -> Dictionary:
+	begin(destination)
+	var zone := _zone(destination)
+	if not build_art(destination):
 		var floor_y := -0.26 if destination == "villa" else -0.2
 		_box(Vector3(0,floor_y,0), Vector3(24,0.4,24), Color("69675c") if destination == "villa" else Color(zone.color))
 		# Low boundary walls preserve the horizon while keeping the player on the floor.
@@ -126,14 +129,7 @@ func _add_anchor(anchor: Dictionary) -> void:
 	item.position = at
 	build_interactables.append(item)
 	if anchor.kind == "application":
-		if not Workstations.workstation(self, at, str(anchor.zone)):
-			_box(at + Vector3(0,0.84,0), Vector3(1.9,0.09,0.85), Color("493b30"))
-			for x in [-0.82,0.82]:
-				_box(at + Vector3(x,0.41,0), Vector3(0.06,0.82,0.65), Color("252d34"))
-			_box(at + Vector3(0,1.27,-0.12), Vector3(1.4,0.77,0.07), Color("192a33"), false)
-			var screen := _box(at + Vector3(0,1.27,-0.075), Vector3(1.29,0.65,0.012), Color("3c7b82"), false)
-			screen.material_override = _material(Color("36737a"), true)
-			_box(at + Vector3(0,0.902,0.2), Vector3(0.58,0.018,0.2), Color("768088"), false)
+		item["prop"] = Workstations.build(build_root, at, anchor)
 	else:
 		var avatar := MeshInstance3D.new()
 		var capsule := CapsuleMesh.new()

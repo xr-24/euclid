@@ -356,9 +356,9 @@ static func tick(root: Node3D, player: CharacterBody3D, delta: float) -> Diction
 	return result
 
 static func _float(body: RigidBody3D, level: float, flow: Vector3) -> void:
-	if level == -INF:
+	if level == -INF or body.freeze:
 		return
-	var height: float = body.get_meta("float_height", 1.0)
+	var height: float = float(body.get_meta("float_height", 1.0)) * float(body.get_meta("authored_scale", 1.0))
 	var submerged := clampf((level - (body.global_position.y - height * 0.5)) / height, 0.0, 1.0)
 	if submerged <= 0.0:
 		return

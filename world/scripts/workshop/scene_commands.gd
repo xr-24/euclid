@@ -52,6 +52,8 @@ static func execute(tools: RefCounted, plan: Dictionary, placement: Array) -> Di
 				appearance += ", hidden"
 			result["message"] = "%s at %s, yaw %s°, scale %s, %s." % [
 				EntityTypes.label(item), str(item.position), str(item.yaw), str(item.scale), appearance]
+			if not item.get("live_position", []).is_empty():
+				result["message"] += " Current position %s." % str(item.live_position)
 		"delete_entity":
 			result["message"] = "Hid the authored prop. Use Restore defaults or Undo to bring it back." if result.entity.get("hidden", false) \
 				else "Deleted the prop. Undo is available in this scene."
@@ -67,7 +69,10 @@ static func planning_entities(entities: Array, request: String, player_at: Vecto
 	var ranked := []
 	for entry in entities:
 		var name: String = entry.name.to_lower()
-		var point := Vector3(entry.position[0], entry.position[1], entry.position[2])
+		var coords: Array = entry.get("live_position", [])
+		if coords.is_empty():
+			coords = entry.position
+		var point := Vector3(coords[0], coords[1], coords[2])
 		var matches := 0
 		for word in terms:
 			var term := word.strip_edges().trim_suffix(".").trim_suffix(",")

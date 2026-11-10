@@ -2,7 +2,8 @@ extends Node3D
 
 const SAVE_PATH := "user://world-state.json"
 const WorldArt = preload("res://scripts/world_art.gd")
-const Villa = preload("res://scripts/zones/villa.gd")
+const BuildContext = preload("res://scripts/zones/zone_build_context.gd")
+const Workstations = preload("res://scripts/zones/workstations.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const Grid = preload("res://scripts/zones/grid_zone.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
@@ -473,6 +474,7 @@ func _workbench_plugin_context() -> Dictionary:
 	if not _is_workshop(zone_id) or shifting:
 		return {}
 	var entities: Array = world_tools.execute("list_entities").get("entities", [])
+	entities = entities.filter(func(item: Dictionary) -> bool: return not item.get("authored", false))
 	return {"zone": zone_id, "entities": entities.slice(maxi(0, entities.size() - 64))}
 
 func _restart_workbench() -> void:
@@ -822,14 +824,8 @@ func _request_development_draft(tool: String, prompt: String, requested_zone: in
 			else "Enter a Grid space to draft this change.")
 		return
 	var context := {}
-	if tool == "draft_behavior":
+	if tool in ["draft_behavior", "draft_workshop_tool"]:
 		context = _workbench_plugin_context()
-	elif tool == "draft_workshop_tool":
-		var entities: Array = world_tools.execute("list").get("entities", [])
-		context = {"zone": zone_id, "entities": []}
-		for entity in entities.slice(maxi(0, entities.size() - 64)):
-			context.entities.append({"id": entity.id, "type": entity.type, "position": entity.position,
-				"yaw": entity.yaw, "scale": entity.scale, "color": entity.color})
 	var result := await _development.request(tool, prompt, context)
 	if result.has("error"):
 		_console_notice(result.error)
@@ -1049,14 +1045,14 @@ func _build_zone(destination: String, grid_appearance: Dictionary) -> Dictionary
 	return built
 
 func _build_zone_locked(destination: String, grid_appearance: Dictionary) -> Dictionary:
-	build_root = Node3D.new()
-	build_root.name = "Zone_" + destination
-	build_interactables = []
-	build_agent_labels = {}
+	var context := BuildContext.new(manifest)
+	context.begin(destination)
+	build_root = context.build_root
+	build_interactables = context.build_interactables
+	build_agent_labels = context.build_agent_labels
 	var zone := _zone(destination)
 	var is_grid: bool = destination == "construct" or zone.get("template") == "grid"
-	var art := (is_grid and Grid.build(build_root, grid_appearance)) \
-		or (destination == "villa" and Villa.build(self)) or (destination == "beach" and WorldArt.shore(self))
+	var art := (is_grid and Grid.build(build_root, grid_appearance)) or context.build_art(destination)
 	if not art:
 		var floor_y := -0.26 if destination == "villa" else -0.2
 		_box(Vector3(0,floor_y,0), Vector3(24,0.4,24), Color("69675c") if destination == "villa" else Color(zone.color))
@@ -1285,16 +1281,7 @@ func _add_anchor(anchor: Dictionary) -> void:
 	item.position = at
 	build_interactables.append(item)
 	if anchor.kind == "application":
-		if anchor.zone == "construct":
-			Grid.workstation(build_root, at)
-		elif not WorldArt.workstation(self, at, str(anchor.zone)):
-			_box(at + Vector3(0,0.84,0), Vector3(1.9,0.09,0.85), Color("493b30"))
-			for x in [-0.82,0.82]:
-				_box(at + Vector3(x,0.41,0), Vector3(0.06,0.82,0.65), Color("252d34"))
-			_box(at + Vector3(0,1.27,-0.12), Vector3(1.4,0.77,0.07), Color("192a33"), false)
-			var screen := _box(at + Vector3(0,1.27,-0.075), Vector3(1.29,0.65,0.012), Color("3c7b82"), false)
-			screen.material_override = _material(Color("36737a"), true)
-			_box(at + Vector3(0,0.902,0.2), Vector3(0.58,0.018,0.2), Color("768088"), false)
+		item["prop"] = Workstations.build(build_root, at, anchor)
 	else:
 		var avatar := BinaryAvatar.projection(Color("8aaeff"), not _is_workshop(anchor.zone))
 		avatar.position = at + Vector3(0, 1.2, 0)
@@ -1362,8 +1349,12 @@ func _update_interaction_hint() -> void:
 		return
 	var best := 3.0
 	for item in interactables:
-		var distance: float = player.position.distance_to(item.position)
-		var eye_target: Vector3 = item.position + Vector3(0,1.5,0) - camera.global_position
+		var prop := item.get("prop") as Node3D
+		if prop and not prop.is_visible_in_tree():
+			continue
+		var at: Vector3 = prop.global_position if prop else item.position
+		var distance := player.global_position.distance_to(at)
+		var eye_target := at + Vector3(0, 1.5, 0) - camera.global_position
 		if distance < best and -camera.global_basis.z.dot(eye_target.normalized()) > 0.55:
 			best = distance
 			nearest = item

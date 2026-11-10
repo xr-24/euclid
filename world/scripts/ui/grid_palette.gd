@@ -13,6 +13,7 @@ var _spawn_at: Array
 var _selected := ""
 var _entities: OptionButton
 var _fields := {}
+var _form_baseline := {}
 var _color: ColorPickerButton
 var _name: LineEdit
 var _library: OptionButton
@@ -258,13 +259,23 @@ func _refresh_prefabs(selected := "") -> void:
 	if not result.ok:
 		_status.text = result.error
 
-func _apply_changes() -> void:
+func _form_values() -> Dictionary:
 	var point := []
 	for axis in ["X", "Y", "Z"]:
 		point.append(_fields[axis].value)
 	var changes := {"position": point, "yaw": _fields.Yaw.value, "scale": _fields.Scale.value, "name": _name.text}
 	if not _color.disabled:
 		changes["color"] = _color.color.to_html(false)
+	return changes
+
+func _apply_changes() -> void:
+	var changes := _form_values()
+	for key in _form_baseline:
+		if changes.get(key) == _form_baseline[key]:
+			changes.erase(key)
+	if changes.is_empty():
+		_status.text = "No property changes."
+		return
 	_run("edit", {"changes": changes})
 
 func _run(tool: String, args: Dictionary) -> void:
@@ -355,3 +366,4 @@ func _select(index: int) -> void:
 	_fields.Yaw.value = record.yaw
 	_fields.Scale.value = record.scale
 	_color.color = Color.html(record.color)
+	_form_baseline = _form_values()

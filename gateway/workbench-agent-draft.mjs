@@ -72,7 +72,7 @@ export async function writeAgentDraft({ worktree, request, context, evidence, au
       }
       names.push(name);
     }
-    if (!names.length) throw new Error('Codex returned without a source change.');
+    if (!names.length) throw new Error('The agent returned without a source change.');
     if (added.length) await intent?.(added);
     return { names, summary: typeof summary === 'string' ? summary.slice(0, 320) : '' };
   } finally {

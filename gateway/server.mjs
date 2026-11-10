@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
 import { createAssetService, validAssetId } from './assets.mjs';
-import { planWithCodex, validGridPlan } from './codex-grid.mjs';
+import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
 
@@ -23,7 +23,7 @@ export function validateEvent(event) {
 }
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
-  worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWithCodex,
+  worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
   workbenchRoot = root, workbenchOptions } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
@@ -67,7 +67,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 22 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 23 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
@@ -110,7 +110,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
           const selection = await gridPlanner(`Choose one model for: ${body.query}`, AbortSignal.timeout(75000),
             { ...body.context, asset_catalog: candidates, rigged_import: body.preserve_rig === true });
           if (selection.tool !== 'spawn_asset' || !candidates.some(item => item.asset_id === selection.target)) {
-            return reply(res, 422, { error: 'Codex could not select a matching model from the search results.' });
+            return reply(res, 422, { error: 'The agent could not select a matching model from the search results.' });
           }
           return reply(res, 200, await assets.importAsset(selection.target, body.preserve_rig));
         } catch (error) { return reply(res, 400, { error: error.message }); }
@@ -145,14 +145,14 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const context = companion ? body?.context : null;
         if (!prompt || prompt.length > 240) return reply(res, 400, { error: 'Enter a request of 1 to 240 characters.' });
         if (companion && !validContext(context)) return reply(res, 400, { error: 'Invalid environment catalog.' });
-        if (gridBusy) return reply(res, 409, { error: 'Codex is already working on a Grid request.' });
+        if (gridBusy) return reply(res, 409, { error: 'The agent is already working on a Grid request.' });
         gridBusy = true;
         const controller = new AbortController();
         res.once('close', () => controller.abort());
         try {
           const plan = await gridPlanner(prompt, controller.signal, context);
           if (res.destroyed) return;
-          if (!(companion ? validWorldPlan(plan, context) : validGridPlan(plan))) return reply(res, 502, { error: 'Codex returned an invalid world plan.' });
+          if (!(companion ? validWorldPlan(plan, context) : validGridPlan(plan))) return reply(res, 502, { error: 'The agent returned an invalid world plan.' });
           return reply(res, 200, { agent_id: 'local-codex', plan });
         } catch (error) {
           if (!res.destroyed) return reply(res, 503, { error: error.message });

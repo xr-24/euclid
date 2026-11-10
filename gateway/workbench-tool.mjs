@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { structuredCodex } from './codex-grid.mjs';
+import { structuredAgent } from './agents/index.mjs';
 import { actionProperties, validActionProperty } from './command-registry.mjs';
 
 const schema = fileURLToPath(new URL('./workbench-tool.schema.json', import.meta.url));
@@ -52,7 +52,7 @@ export async function proposeWorkshopTool(input, signal) {
     'Choose a short lowercase id beginning with a letter, a human-readable label, and a description that says when the user would invoke this action. Give a short summary.',
     'Use supported false if the request is ambiguous or requires other capabilities. This drafts a tool for later invocation.',
   ].join(' ');
-  return structuredCodex(`${instructions}\n\n${JSON.stringify(input)}`, schema, signal);
+  return structuredAgent(`${instructions}\n\n${JSON.stringify(input)}`, schema, signal);
 }
 
 export function workshopToolPackage(proposal, context) {
@@ -60,12 +60,12 @@ export function workshopToolPackage(proposal, context) {
   if (proposal?.supported !== true) throw new Error(summary || 'Describe a reusable reset for objects in this Grid space.');
   const { id, label, description } = proposal;
   if (typeof id !== 'string' || !identifier.test(id) || !Array.isArray(proposal.targets) || proposal.targets.length > 12) {
-    throw new Error('Codex proposed an invalid workshop action.');
+    throw new Error('The agent proposed an invalid workshop action.');
   }
   const targets = proposal.targets.map(target => {
     const entity = context.entities.find(item => item.id === target?.id);
     if (!entity || !Array.isArray(target.fields) || target.fields.some(key => !Object.hasOwn(fields, key)) ||
-        (target.close_door && entity.type !== 'sliding_door')) throw new Error('Codex proposed an invalid workshop action target.');
+        (target.close_door && entity.type !== 'sliding_door')) throw new Error('The agent proposed an invalid workshop action target.');
     return { id: entity.id, changes: Object.fromEntries(target.fields.map(key => [key, entity[key]])), close_door: target.close_door };
   });
   const file = `world/data/workshop_tools/${id}.json`;

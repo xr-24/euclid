@@ -1,12 +1,10 @@
-import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
-import { signedInCodex } from './codex-grid.mjs';
+import { agentFor } from './agents/index.mjs';
 
 const timeout = 6 * 60 * 1000;
 
-export async function authorSource({ workspace, request, context, evidence, onProgress, signal }) {
-  const { binary, env } = await signedInCodex(signal);
-  signal.throwIfAborted();
+// Builds the provider-neutral brief. The selected adapter owns the process, its
+// sandbox flags, and progress events, and returns the agent's closing message.
+export async function authorSource({ workspace, request, context, evidence, onProgress, signal }, agent = agentFor('author')) {
   const input = [
     'You are implementing a user-requested Euclid source change in a writable source snapshot.',
     'Read README.md and docs/architecture.md for project context. Search the workspace and make the change in its normal entry points. Add or update a focused regression test when needed.',
@@ -19,52 +17,6 @@ export async function authorSource({ workspace, request, context, evidence, onPr
     ...(evidence ? ['The benchmark measurements are prior evidence for this Git base or draft. Use them when relevant to the user request.'] : []),
     JSON.stringify({ request, draft: context, benchmark: evidence }),
   ].join('\n');
-  const args = ['-a', 'never', 'exec', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check',
-    '--ephemeral', '--sandbox', 'workspace-write', '--disable', 'apps', '--disable', 'plugins',
-    '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'forced_login_method="chatgpt"',
-    '-c', 'sandbox_workspace_write.network_access=false', '-c', 'shell_environment_policy.inherit="core"',
-    ...(process.platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : []),
-    '--color', 'never', '--json', '-'];
-  return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { cwd: workspace, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    let failure;
-    let complete = false;
-    let summary = '';
-    let commands = 0;
-    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-    lines.on('line', line => {
-      let event;
-      try { event = JSON.parse(line); } catch { return; }
-      if (event.type === 'turn.completed') complete = true;
-      if (event.type !== 'item.completed') return;
-      if (event.item?.type === 'command_execution') {
-        onProgress(`Codex completed workspace command ${++commands}.\n`);
-      } else if (event.item?.type === 'agent_message' && typeof event.item.text === 'string') {
-        summary = event.item.text.replace(/\[([^\]\r\n]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim().slice(0, 320);
-      }
-    });
-    child.stderr.resume();
-    function stop(error) {
-      if (failure) return;
-      failure = error;
-      if (process.platform === 'win32' && child.pid) {
-        const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-        killer.once('error', () => child.kill());
-      } else child.kill();
-    }
-    const abort = () => stop(signal.reason);
-    signal.addEventListener('abort', abort, { once: true });
-    const timer = setTimeout(() => stop(new Error('The source agent timed out. Try a smaller change.')), timeout);
-    child.once('error', error => { failure ??= error; });
-    child.once('close', code => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', abort);
-      lines.close();
-      if (failure) reject(failure);
-      else if (code !== 0 || !complete) reject(new Error('Codex did not finish editing the workspace. Check CLI sign-in and local workspace permissions.'));
-      else resolve(summary);
-    });
-    child.stdin.on('error', () => {});
-    child.stdin.end(input);
-  });
+  const message = await agent.author(input, { workspace, onProgress, signal, timeout });
+  return message.replace(/\[([^\]\r\n]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim().slice(0, 320);
 }

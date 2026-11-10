@@ -65,6 +65,13 @@ Try **Where can we go?**, **Take me to the Roman villa**, **Take me to the beach
 
 Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. You can also ask **Create a new environment called Garden Annex using Villa Aurelia as its template**. The hovering avatar follows your position across environments and keeps its distance when you turn to look around. **Stay here** parks it in the current environment for the session. The musical note toggles spoken tool results through an installed English system voice.
 
+## Choose the agent
+
+Codex is the default agent. Set `EUCLID_AGENT=claude` before starting the
+gateway to use Claude Code for planning and source drafts, or set
+`EUCLID_AGENT_PLAN` and `EUCLID_AGENT_AUTHOR` separately. See the
+[agent adapter guide](docs/agents.md).
+
 ## Extend Euclid through shared definitions
 
 `world/data/commands` declares the built-in capabilities used by MCP, F2,

@@ -1,10 +1,6 @@
-import { execFile } from 'node:child_process';
-import { mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { entityTypesFor, normalizePlannerPlan, plannerCatalog, plannerCommands, plannerSchema } from './command-registry.mjs';
-import { resolveCodexBinary } from './codex-cli.mjs';
+import { structuredAgent } from './agents/index.mjs';
 
 const schemaPath = fileURLToPath(new URL('./grid-plan.schema.json', import.meta.url));
 const companionInstructions = [
@@ -36,65 +32,15 @@ export function validGridPlan(plan) {
     Number.isFinite(plan.scale) && plan.scale >= 0.25 && plan.scale <= 4;
 }
 
-function run(binary, args, options, input = '') {
-  return new Promise((resolve, reject) => {
-    const child = execFile(binary, args, { ...options, windowsHide: true, maxBuffer: 256 * 1024 },
-      (error, stdout, stderr) => error ? reject(error) : resolve({ stdout, stderr }));
-    child.stdin.on('error', () => {});
-    child.stdin.end(input);
-  });
-}
-
-export async function planWithCodex(prompt, signal, context = null) {
+export async function planWorld(prompt, signal, context = null, structured = structuredAgent) {
   const catalog = context ? plannerCommands(context) : null;
   const commands = context ? plannerCatalog(context) : null;
   const built_in_props = Object.entries(entityTypesFor(context)).filter(([, type]) => type.built_in)
     .map(([id, type]) => ({ id, name: type.label }));
   const input = context ? `${companionInstructions}\n\nInput: ${JSON.stringify({ prompt, context, commands, built_in_props })}`
     : `${instructions}\n\nUser request: ${JSON.stringify(prompt)}`;
-  const plan = await structuredCodex(input, catalog ? plannerSchema(catalog, context) : schemaPath, signal);
+  const plan = await structured(input, catalog ? plannerSchema(catalog, context) : schemaPath, signal);
   const validated = context ? normalizePlannerPlan(plan, context) : validGridPlan(plan) ? plan : null;
-  if (!validated) throw new Error('Codex returned an invalid world plan.');
+  if (!validated) throw new Error('The agent returned an invalid world plan.');
   return validated;
-}
-
-export async function signedInCodex(signal) {
-  const binary = await resolveCodexBinary();
-  const env = { ...process.env };
-  for (const key of ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN',
-    'CODEX_OPENAI_BASE_URL', 'CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'EUCLID_WORKBENCH_TOKEN', 'SKETCHFAB_API_TOKEN']) {
-    delete env[key];
-  }
-  let login;
-  try {
-    login = await run(binary, ['login', 'status'], { env, signal, timeout: 5000 });
-  } catch (error) {
-    if (error.code === 'ENOENT') throw new Error('Install the Codex CLI or set EUCLID_CODEX_BIN to its executable.');
-    throw new Error('Sign in to Codex with your ChatGPT account using codex login.');
-  }
-  if (!/^Logged in using ChatGPT\s*$/im.test(login.stdout + '\n' + login.stderr)) {
-    throw new Error('This adapter uses ChatGPT sign-in. Check codex login status.');
-  }
-  return { binary, env };
-}
-
-export async function structuredCodex(input, schema, signal) {
-  const { binary, env } = await signedInCodex(signal);
-  const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-grid-'));
-  const generated = typeof schema === 'string' ? null : path.join(cwd, 'output.schema.json');
-  try {
-    if (generated) await writeFile(generated, JSON.stringify(schema));
-    const { stdout } = await run(binary, [
-      '-a', 'never', 'exec', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check',
-      '--ephemeral', '--sandbox', 'read-only', '--disable', 'shell_tool', '--disable', 'apps',
-      '--disable', 'plugins', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0',
-      '-c', 'forced_login_method="chatgpt"', '--color', 'never', '--output-schema', generated ?? schema, '-',
-    ], { cwd, env, signal, timeout: 70000 }, input);
-    return JSON.parse(stdout);
-  } catch {
-    throw new Error('Codex could not complete the request. Check your CLI sign-in and plan limits.');
-  } finally {
-    if (generated) await unlink(generated).catch(() => {});
-    await rmdir(cwd).catch(() => {});
-  }
 }

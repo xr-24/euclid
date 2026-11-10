@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { structuredCodex } from './codex-grid.mjs';
+import { structuredAgent } from './agents/index.mjs';
 import { normalizeEdit } from './workbench-source.mjs';
 import { entityTypes } from './command-registry.mjs';
 
@@ -24,7 +24,7 @@ export async function proposePlugin(input, signal) {
     'For door_open, return 1.0 while the player is within settings.radius and 0.0 outside. Declare radius in metres with a useful default around 0.65. Declare speed in metres per second, default 2.0 and limits 0.2–8.0. The host uses speed to move the door and its collision together.',
     'Choose a new lower-case identifier. Manifest settings contain only numeric fields with finite min, max and default. Use a short display name and summary.',
   ].join(' ');
-  return structuredCodex(`${instructions}\n\n${JSON.stringify(input)}`, schema, signal);
+  return structuredAgent(`${instructions}\n\n${JSON.stringify(input)}`, schema, signal);
 }
 
 export function pluginContext(context) {
@@ -39,14 +39,14 @@ export function pluginContext(context) {
 
 export function pluginFiles(proposal, context) {
   const summary = typeof proposal?.summary === 'string' ? proposal.summary.slice(0, 320) : '';
-  if (proposal?.supported !== true) throw new Error(summary || 'Codex needs more detail to create the plugin.');
+  if (proposal?.supported !== true) throw new Error(summary || 'The agent needs more detail to create the plugin.');
   const { id, name, entity_type, output, source_entity, target_entity } = proposal;
   const source = context.entities.find(item => item.id === source_entity);
   const target = context.entities.find(item => item.id === target_entity);
   if (typeof id !== 'string' || !identifier.test(id) || !printable(name, 48) || !source || source.type !== entity_type ||
       !entityTypes[entity_type]?.behavior_outputs?.includes(output) ||
       (output === 'door_open' ? entityTypes[target?.type]?.factory !== 'door' : target_entity !== '')) {
-    throw new Error('Codex proposed an invalid plugin identity or scene binding.');
+    throw new Error('The agent proposed an invalid plugin identity or scene binding.');
   }
   if (!Array.isArray(proposal.settings) || proposal.settings.length > 6) throw new Error('The plugin settings are invalid.');
   const settings = Object.create(null);
@@ -61,7 +61,7 @@ export function pluginFiles(proposal, context) {
     throw new Error('A door plugin needs a positive radius and a door speed between 0.2 and 8 metres per second.');
   }
   const script = normalizeEdit('', proposal.source);
-  if (!script.trim()) throw new Error('Codex did not produce plugin source.');
+  if (!script.trim()) throw new Error('The agent did not produce plugin source.');
   const definition = { id, name: name.trim(), entity_type, output, settings };
   return { files: new Map([[scriptPath(id), script.endsWith('\n') ? script : script + '\n'],
     [manifestPath(id), JSON.stringify(definition, null, 2) + '\n']]),

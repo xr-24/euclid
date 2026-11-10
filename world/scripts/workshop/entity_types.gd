@@ -2,18 +2,23 @@ extends RefCounted
 
 ## Trusted entity factories. Persisted records choose a registered type, never a script path.
 const Assets = preload("res://scripts/assets/runtime_assets.gd")
+const Library = preload("res://scripts/asset_library.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const BehaviorRegistry = preload("res://scripts/plugins/behavior_registry.gd")
 const TYPES := {"traffic_cone": {"label": "Traffic cone", "color": "ff681d"},
 	"pressure_plate": {"label": "Pressure plate", "color": "2d8394"},
 	"sliding_door": {"label": "Sliding door", "color": "475567"},
-	"imported_model": {"label": "Imported model", "color": "ffffff"}}
+	"imported_model": {"label": "Imported model", "color": "ffffff"},
+	"library_model": {"label": "Library model", "color": "ffffff"}}
+const LIBRARY_CATEGORIES := ["bust", "fragment", "furniture", "plant", "prop", "rock", "sarcophagus", "statue", "tree"]
 
 static func valid_properties(record: Dictionary) -> bool:
 	var type: Variant = record.get("type")
 	var color: Variant = record.get("color")
 	return type is String and TYPES.has(type) \
 		and (type != "imported_model" or Assets.valid_id(record.get("asset_id"))) \
+		and (type != "library_model" or library_id(record.get("asset_id"))) \
+		and (not record.has("name") or valid_name(record.name)) \
 		and (not record.has("animation") or (MotionClip.valid(record.animation) and MotionClip.supports(record.animation, false))) \
 		and (not record.has("behavior") or BehaviorRegistry.valid_record(record.behavior)) \
 		and number_between(record.get("yaw"), -360.0, 360.0) \
@@ -24,9 +29,36 @@ static func number_between(value: Variant, minimum: float, maximum: float) -> bo
 	return (value is float or value is int) and is_finite(float(value)) and value >= minimum and value <= maximum
 
 static func label(record: Dictionary) -> String:
+	if record.has("name"):
+		return record.name
 	if record.type == "imported_model":
 		return str(Assets.metadata(record.get("asset_id", "")).get("title", "Imported model"))
+	if record.type == "library_model":
+		return str(Library.info(record.asset_id).get("title", record.asset_id.capitalize()))
 	return TYPES[record.type].label
+
+static func valid_name(value: Variant) -> bool:
+	if not value is String or value.length() > 64 or value.strip_edges().is_empty():
+		return false
+	for index in value.length():
+		if value.unicode_at(index) < 32 or value.unicode_at(index) == 127:
+			return false
+	return true
+
+static func library_id(id: Variant) -> bool:
+	return id is String and id.length() <= 96 and id.is_valid_identifier()
+
+static func library_available(id: Variant) -> bool:
+	return library_id(id) and Library.info(id).get("category") in LIBRARY_CATEGORIES and Library.has(id)
+
+static func library_catalog() -> Array[Dictionary]:
+	var available: Array[Dictionary] = []
+	for id in Library.ids():
+		if library_available(id):
+			var entry := Library.info(id)
+			available.append({"id": id, "name": str(entry.get("title", id)).left(64),
+				"category": entry.category, "license": entry.get("licence", "")})
+	return available
 
 static func create(record: Dictionary) -> AnimatableBody3D:
 	var body := AnimatableBody3D.new()
@@ -49,42 +81,50 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 			leaf.set_meta("entity_id", record.id)
 			_box_body(leaf, Vector3(1.55, 2.35, 0.18) * size, Color.html(record.color))
 			body.add_child(leaf)
-		"imported_model":
-			var packed := Assets.scene(record.get("asset_id", ""))
-			if packed:
-				var model := packed.instantiate() as Node3D
-				var placement := Node3D.new()
-				placement.scale = Vector3.ONE * size
-				body.add_child(placement)
-				placement.add_child(model)
-				var bounds := AABB()
-				var first := true
-				for child in placement.find_children("*", "MeshInstance3D", true, false):
-					var part := child as MeshInstance3D
-					var local := part.transform
-					var ancestor := part.get_parent()
-					while ancestor != placement:
-						local = (ancestor as Node3D).transform * local
-						ancestor = ancestor.get_parent()
-					var box := local * part.get_aabb()
-					bounds = box if first else bounds.merge(box)
-					first = false
-					if record.color != "ffffff":
-						for surface in part.mesh.get_surface_count():
-							var original := part.get_active_material(surface) as BaseMaterial3D
-							if original:
-								var material := original.duplicate() as BaseMaterial3D
-								material.albedo_color *= Color.html(record.color)
-								part.set_surface_override_material(surface, material)
-				var shape := BoxShape3D.new()
-				shape.size = bounds.size.max(Vector3.ONE * 0.02) * size
-				var collider := CollisionShape3D.new()
-				collider.shape = shape
-				collider.position = bounds.get_center() * size
-				body.add_child(collider)
+		"imported_model", "library_model":
+			var model: Node3D
+			if record.type == "library_model":
+				model = Library.instance(record.asset_id)
+			else:
+				var packed := Assets.scene(record.asset_id)
+				if packed:
+					model = packed.instantiate() as Node3D
+			if model:
+				_place_model(body, model, size, record.color)
 			else:
 				body.set_meta("asset_unavailable", true)
 	return body
+
+static func _place_model(body: AnimatableBody3D, model: Node3D, size: float, color: String) -> void:
+	var placement := Node3D.new()
+	placement.scale = Vector3.ONE * size
+	body.add_child(placement)
+	placement.add_child(model)
+	var bounds := AABB()
+	var first := true
+	for child in placement.find_children("*", "MeshInstance3D", true, false):
+		var part := child as MeshInstance3D
+		var local := part.transform
+		var ancestor := part.get_parent()
+		while ancestor != placement:
+			local = (ancestor as Node3D).transform * local
+			ancestor = ancestor.get_parent()
+		var box := local * part.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+		if color != "ffffff":
+			for surface in part.mesh.get_surface_count():
+				var original := part.get_active_material(surface) as BaseMaterial3D
+				if original:
+					var material := original.duplicate() as BaseMaterial3D
+					material.albedo_color *= Color.html(color)
+					part.set_surface_override_material(surface, material)
+	var shape := BoxShape3D.new()
+	shape.size = bounds.size.max(Vector3.ONE * 0.02) * size
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position = bounds.get_center() * size
+	body.add_child(collider)
 
 static func _box_body(body: StaticBody3D, size: Vector3, color: Color) -> MeshInstance3D:
 	var shape := BoxShape3D.new()

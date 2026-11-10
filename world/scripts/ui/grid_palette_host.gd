@@ -9,8 +9,9 @@ const SOURCE_PATH := "res://scripts/ui/grid_palette.gd"
 const METHODS := [&"setup", &"capture_view", &"restore_view", &"finish_agent_request"]
 
 class SetupTools extends RefCounted:
-	const READS := ["list", "inspect", "list_entities", "list_behaviors", "list_prefabs"]
+	const READS := ["list", "inspect", "list_entities", "list_behaviors", "list_prefabs", "list_scene_assets"]
 	var delegate: RefCounted
+	var bounds: AABB
 	var action: Callable
 	var ready := false
 	var denied := false
@@ -199,6 +200,7 @@ func _script_path() -> String:
 func _build(code: GDScript, parent: Node, context: Dictionary, view: Dictionary) -> VBoxContainer:
 	var tools := SetupTools.new()
 	tools.delegate = context.tools
+	tools.bounds = context.tools.bounds
 	tools.action = context.action
 	var result: Variant = code.new()
 	if not result is VBoxContainer:

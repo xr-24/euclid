@@ -1,0 +1,46 @@
+extends RefCounted
+## Editable scene bounds and the shared camera-to-surface placement rule.
+
+const GRID := AABB(Vector3(-60, 0, -60), Vector3(120, 12, 120))
+const VILLA := AABB(Vector3(-120, -90, -120), Vector3(240, 170, 225))
+const BEACH := AABB(Vector3(-74, -16, -94), Vector3(148, 61, 143))
+
+static func bounds_for(zone: String) -> AABB:
+	match zone:
+		"villa": return VILLA
+		"beach": return BEACH
+		_: return GRID
+
+static func contains(bounds: AABB, point: Vector3) -> bool:
+	return point.is_finite() and point == point.clamp(bounds.position, bounds.end)
+
+static func pick(player: CharacterBody3D, camera: Camera3D, bounds: AABB, grid: bool, aim: bool) -> Dictionary:
+	var direction := -camera.global_basis.z
+	var state := camera.get_world_3d().direct_space_state
+	var hit := _ray(state, player, camera.global_position, camera.global_position + direction * 24.0) if aim else {}
+	var selected := _entity(hit)
+	var ahead := player.global_position + Vector3(direction.x, 0, direction.z).normalized() * 3.0
+	if grid:
+		if not hit.is_empty() and hit.collider is Node and hit.collider.name == "GridFloor" and hit.normal.y > 0.9:
+			ahead = hit.position
+		ahead.y = 0.0
+		return {"selected": selected, "point": ahead.clamp(bounds.position, bounds.end)}
+	if not _floor(hit, bounds):
+		hit = _ray(state, player, ahead + Vector3.UP * 2.0, ahead + Vector3.DOWN * 8.0)
+	return {"selected": selected, "point": hit.position if _floor(hit, bounds) else Vector3.INF}
+
+static func coordinates(point: Vector3) -> Array:
+	return [point.x, point.y, point.z] if point.is_finite() else []
+
+static func _ray(state: PhysicsDirectSpaceState3D, player: CharacterBody3D, from: Vector3, to: Vector3) -> Dictionary:
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [player.get_rid()]
+	return state.intersect_ray(query)
+
+static func _entity(hit: Dictionary) -> String:
+	var collider := hit.get("collider") as Node
+	return str(collider.get_meta("entity_id")) if collider and collider.has_meta("entity_id") else ""
+
+static func _floor(hit: Dictionary, bounds: AABB) -> bool:
+	return not hit.is_empty() and hit.collider is StaticBody3D and _entity(hit).is_empty() \
+		and hit.normal.y >= 0.65 and contains(bounds, hit.position)

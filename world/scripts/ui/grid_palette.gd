@@ -5,6 +5,7 @@ signal agent_requested(prompt: String, placement: Array)
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const BehaviorInspector = preload("res://scripts/ui/behavior_inspector.gd")
+const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const API_VERSION := 1
 
 var _tools: RefCounted
@@ -13,6 +14,9 @@ var _selected := ""
 var _entities: OptionButton
 var _fields := {}
 var _color: ColorPickerButton
+var _name: LineEdit
+var _library: OptionButton
+var _place_asset: Button
 var _status: Label
 var _apply: Button
 var _delete: Button
@@ -32,7 +36,7 @@ var _action_entries: Array[Dictionary] = []
 
 func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Callable, run_action: Callable) -> bool:
 	_tools = tools
-	_spawn_at = [spawn_at.x, spawn_at.y, spawn_at.z]
+	_spawn_at = Placement.coordinates(spawn_at)
 	_selected = selected
 	_action_catalog = catalog
 	_run_action = run_action
@@ -42,13 +46,29 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_button(spawn_row, "Spawn orange cone", _spawn.bind("traffic_cone"))
 	_button(spawn_row, "Spawn plate", _spawn.bind("pressure_plate"))
 	_button(spawn_row, "Spawn door", _spawn.bind("sliding_door"))
+	var library_row := HBoxContainer.new()
+	add_child(library_row)
+	_library = OptionButton.new()
+	_library.fit_to_longest_item = false
+	_library.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	library_row.add_child(_library)
+	_place_asset = _button(library_row, "Place asset", _place_selected_asset)
+	_place_asset.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_library.item_selected.connect(func(index: int) -> void: _place_asset.disabled = index <= 0)
+	_load_library()
 	_entities = OptionButton.new()
 	add_child(_entities)
 	_entities.item_selected.connect(_select)
+	_name = LineEdit.new()
+	_name.max_length = 64
+	_name.placeholder_text = "Prop name"
+	add_child(_name)
 	var properties := GridContainer.new()
 	properties.columns = 3
 	add_child(properties)
-	for spec in [["X", -60.0, 60.0, 0.05], ["Y", 0.0, 12.0, 0.05], ["Z", -60.0, 60.0, 0.05],
+	var bounds: AABB = _tools.bounds
+	for spec in [["X", bounds.position.x, bounds.end.x, 0.05], ["Y", bounds.position.y, bounds.end.y, 0.05],
+			["Z", bounds.position.z, bounds.end.z, 0.05],
 			["Yaw", -360.0, 360.0, 1.0], ["Scale", 0.25, 4.0, 0.05]]:
 		var field := VBoxContainer.new()
 		properties.add_child(field)
@@ -75,7 +95,7 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	var actions := HBoxContainer.new()
 	add_child(actions)
 	_apply = _button(actions, "Apply", _apply_changes)
-	_duplicate = _button(actions, "Duplicate", _duplicate_entity)
+	_duplicate = _button(actions, "Duplicate", _run.bind("duplicate", {}))
 	_delete = _button(actions, "Delete", _run.bind("delete", {}))
 	_undo = _button(actions, "Undo", _run.bind("undo", {}))
 	_registered_actions = MenuButton.new()
@@ -126,8 +146,10 @@ func capture_view() -> Dictionary:
 	for key in _fields:
 		var input: SpinBox = _fields[key]
 		fields[key] = {"value": input.value, "text": input.get_line_edit().text}
-	return {"selected": _selected, "spawn_at": Vector3(_spawn_at[0], _spawn_at[1], _spawn_at[2]),
+	var point := Vector3.INF if _spawn_at.is_empty() else Vector3(_spawn_at[0], _spawn_at[1], _spawn_at[2])
+	return {"selected": _selected, "spawn_at": point, "name": _name.text,
 		"fields": fields, "color": _color.color, "behavior": _behaviors.capture_view(),
+		"library": _library.get_selected_metadata() if _library.selected > 0 else "",
 		"prefab": _prefabs.get_selected_metadata() if _prefabs.selected > 0 else "",
 		"prefab_name": _prefab_name.text, "prompt": _agent_input.text}
 
@@ -140,7 +162,13 @@ func restore_view(view: Dictionary) -> bool:
 				input.value = fields[key].value
 				input.get_line_edit().text = fields[key].text
 		_color.color = view.get("color", _color.color)
+		_name.text = view.get("name", _name.text)
 		_behaviors.restore_view(view.get("behavior", {}))
+	for index in range(1, _library.item_count):
+		if _library.get_item_metadata(index) == view.get("library"):
+			_library.select(index)
+			_place_asset.disabled = false
+			break
 	_refresh_prefabs(view.get("prefab", ""))
 	_prefab_name.text = view.get("prefab_name", "")
 	_agent_input.text = view.get("prompt", "")
@@ -150,8 +178,10 @@ func _send_agent_request() -> void:
 	var prompt := _agent_input.text.strip_edges()
 	if prompt.is_empty() or _agent_button.disabled:
 		return
+	if not _can_place():
+		return
 	_agent_button.disabled = true
-	_status.text = "Codex is planning a Grid edit…"
+	_status.text = "Codex is planning a scene edit…"
 	agent_requested.emit(prompt, _spawn_at.duplicate())
 
 func finish_agent_request(result: Dictionary) -> void:
@@ -173,7 +203,29 @@ func _button(parent: Control, text: String, action: Callable) -> Button:
 	return button
 
 func _spawn(type := "traffic_cone") -> void:
-	_run("spawn", {"type": type, "position": _spawn_at})
+	if _can_place():
+		_run("spawn", {"type": type, "position": _spawn_at})
+
+func _load_library() -> void:
+	_library.add_item("Choose an installed prop")
+	var result: Dictionary = _tools.execute("list_scene_assets")
+	for entry in result.get("assets", []):
+		_library.add_item(entry.name)
+		var index := _library.item_count - 1
+		_library.set_item_metadata(index, entry.id)
+		_library.get_popup().set_item_tooltip(index, entry.license)
+	_library.select(0)
+	_place_asset.disabled = true
+
+func _place_selected_asset() -> void:
+	if _can_place():
+		_run("spawn", {"type": "library_model", "asset_id": _library.get_selected_metadata(), "position": _spawn_at})
+
+func _can_place() -> bool:
+	if _spawn_at.is_empty():
+		_status.text = "Aim at solid ground and reopen the palette to place a prop."
+		return false
+	return true
 
 func _save_selected_prefab() -> void:
 	var result: Dictionary = _tools.execute("save_prefab", {"id": _selected, "name": _prefab_name.text})
@@ -185,7 +237,8 @@ func _save_selected_prefab() -> void:
 	_status.text = "Saved %s to the prefab library." % result.name
 
 func _place_selected_prefab() -> void:
-	_run("spawn_prefab", {"prefab_id": _prefabs.get_selected_metadata(), "position": _spawn_at})
+	if _can_place():
+		_run("spawn_prefab", {"prefab_id": _prefabs.get_selected_metadata(), "position": _spawn_at})
 
 func _refresh_prefabs(selected := "") -> void:
 	_prefabs.clear()
@@ -208,26 +261,7 @@ func _apply_changes() -> void:
 	for axis in ["X", "Y", "Z"]:
 		point.append(_fields[axis].value)
 	_run("edit", {"changes": {"position": point, "yaw": _fields.Yaw.value,
-		"scale": _fields.Scale.value, "color": _color.color.to_html(false)}})
-
-func _duplicate_entity() -> void:
-	var result: Dictionary = _tools.execute("inspect", {"id": _selected})
-	if not result.ok:
-		_status.text = result.error
-		return
-	var entity: Dictionary = result.entity
-	var position: Array = entity.position.duplicate()
-	var offset: float = 0.8 * entity.scale
-	position[0] += offset if position[0] + offset <= 60.0 else -offset
-	var args := {"type": entity.type, "position": position, "yaw": entity.yaw,
-		"scale": entity.scale, "color": entity.color}
-	if entity.has("asset_id"):
-		args["asset_id"] = entity.asset_id
-	if entity.has("animation"):
-		args["animation"] = entity.animation
-	if entity.has("behavior"):
-		args["behavior"] = entity.behavior
-	_run("spawn", args)
+		"scale": _fields.Scale.value, "color": _color.color.to_html(false), "name": _name.text}})
 
 func _run(tool: String, args: Dictionary) -> void:
 	var request := args.duplicate()
@@ -239,7 +273,7 @@ func _run(tool: String, args: Dictionary) -> void:
 	if not result.id.is_empty():
 		_selected = result.id if not result.entity.is_empty() else ""
 	_refresh()
-	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.",
+	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.", "duplicate": "Entity duplicated.",
 		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
 	_status.text = "Behavior preview updated." if result.get("preview", false) else messages[tool]
 
@@ -289,6 +323,8 @@ func _select(index: int) -> void:
 	_delete.disabled = not result.ok
 	_save_prefab.disabled = not result.ok
 	_color.disabled = not result.ok
+	_name.editable = result.ok
+	_name.text = result.get("entity", {}).get("name", "")
 	for field in _fields.values():
 		field.editable = result.ok
 	if not result.ok:

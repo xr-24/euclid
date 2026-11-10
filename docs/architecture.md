@@ -57,9 +57,22 @@ previews stay separate. Placement copies the properties into the existing spawn
 path, which owns scene instantiation, persistence and undo. Each instance gets
 its own identity and animation state. A model reference is a validated asset ID.
 
-The Grid palette sends a user-submitted prompt through `agents/grid_agent_client.gd`. The gateway runs Codex CLI under the local ChatGPT sign-in and returns a validated proposal. The coordinator owns the crosshair placement and applies the proposal through the same `spawn` command as the palette. It discards the result when the palette has closed or the zone has changed. The inspector reports success after the entity has been saved and placed.
+The villa and beach use the same palette and command boundary. The coordinator
+attaches a separate prop layer to each finished zone on the main thread.
+`workshop/scene_placement.gd` owns scene bounds and camera-to-surface placement.
+The underlying builder still owns terrain, architecture, water, and original
+dressing. New props store catalog IDs for installed or imported assets and
+use per-instance materials and collision. Existing Grid saves keep their
+paths and format.
+
+The palette sends a user-submitted prompt through `agents/grid_agent_client.gd`. The gateway runs Codex CLI under the local ChatGPT sign-in and returns a validated proposal. The coordinator owns the crosshair placement and applies the proposal through the same `spawn` command as the palette. It discards the result when the palette has closed or the zone has changed. The inspector reports success after the entity has been saved and placed.
 
 The F2 uplink uses the same client with the active environment catalog. It dispatches named world tools on the main thread. The native Codex terminal registers a loopback MCP server for that particular running world. The world publishes its catalog through `agents/world_tool_bridge.gd` and acknowledges a command after execution. The bridge serializes one mutation per world, scopes commands to the launching game, and expires unanswered commands.
+
+`workshop/scene_commands.gd` translates the agent's prop commands into
+`WorldTools` edits. F2 pins requests to the scene present when planning
+began. Native prop mutations carry the environment ID, and the world checks
+it again before dispatch.
 
 The environment library persists new Grid-template entries under stable IDs. The catalog feeds planning, MCP discovery, travel and the menu. The companion draws a stippled 3D body with a separate batch of hair fibres and projection streaks. It updates its own follow or parked position. Voice reads tool results through the OS voice service.
 

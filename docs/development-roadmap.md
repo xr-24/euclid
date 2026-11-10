@@ -53,7 +53,11 @@ use them to isolate villa regressions from inside Euclid.
 
 ## 4. Scene and asset development
 
-Extend scene editing beyond The Grid with stable entity IDs and undo. Let
-Workbench run named Blender exports and Godot imports in a draft, preserve
-source assets and licensing metadata, and preview the result in-world before
-commit. Keep the asset build, rendering, and gateway modules independent.
+The Grid, villa, and beach share a live prop editor, installed asset library,
+and agent commands. Each scene saves placed props by stable ID and has a
+separate undo history.
+
+**Remaining.** Extend editing to authored dressing. Let Workbench run named
+Blender exports and Godot imports in a draft, preserve source assets and
+licensing metadata, and preview the result in-world before commit. Keep the
+asset build, rendering, and gateway modules independent.

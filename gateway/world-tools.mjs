@@ -10,6 +10,14 @@ const animationTarget = /^(companion|[a-f0-9]{32})$/;
 const behaviorId = /^[a-z_][a-z0-9_]{0,39}$/;
 const workshopName = /^(grid_undo_edit|grid_action_[a-z][a-z0-9_]{0,31})$/;
 const workshopText = (value, length) => typeof value === 'string' && value.length <= length && Boolean(value.trim()) && !/[\x00-\x1f\x7f]/.test(value);
+const position = { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 };
+const sceneFields = { position, yaw: { type: 'number', minimum: -360, maximum: 360 },
+  scale: { type: 'number', minimum: 0.25, maximum: 4 }, color: text('Six RGB hex digits'), name: text('Display name, up to 64 characters') };
+const sceneZone = text('Exact active environment ID from list_environments');
+const sceneTarget = text('Exact entity ID from list_entities');
+const sceneMutations = ['spawn_prop', 'edit_entity', 'duplicate_entity', 'delete_entity', 'undo_scene'];
+const sceneScoped = new Set([...sceneMutations, 'inspect_entity', 'list_entities', 'spawn_asset', 'save_prefab', 'spawn_prefab',
+  'list_behaviors', 'set_behavior', 'inspect_animation', 'preview_animation', 'save_animation', 'discard_animation']);
 export const tools = [
   { name: 'list_environments', description: 'List the running Euclid world’s environments, their IDs, and the current environment.', inputSchema: object(), annotations: { readOnlyHint: true } },
   { name: 'travel', description: 'Shift the player to an existing Euclid environment. Discover the exact ID with list_environments.', inputSchema: object({ target: text('Exact environment ID') }, ['target']) },
@@ -23,14 +31,28 @@ export const tools = [
   { name: 'asset_status', description: 'Check whether a model import is queued, downloading, preparing, ready or failed.',
     inputSchema: object({ asset_id: text('Exact asset_id') }, ['asset_id']), annotations: { readOnlyHint: true } },
   { name: 'list_assets', description: 'List prepared models with author, source and license credits.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'spawn_entity', description: 'Place a prepared model near the player in The Grid or a custom Grid space. Models have a one-metre longest edge before scale. The edit supports undo.',
+  { name: 'spawn_entity', description: 'Place a prepared model in the active scene. Models have a one-metre longest edge before scale. The edit supports undo.',
     inputSchema: object({ asset_id: text('Exact ready asset_id'), scale: { type: 'number', minimum: 0.25, maximum: 4 },
-      position: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 } }, ['asset_id']) },
-  { name: 'list_entities', description: 'List existing entities and their IDs in the current Grid space.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'list_prefabs', description: 'List reusable prefabs shared across Grid spaces.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'save_prefab', description: 'Save an existing Grid entity as a named prefab, including its saved animation if present.',
+      position, zone: sceneZone }, ['asset_id']) },
+  { name: 'list_scene_assets', description: 'List installed scene assets and their exact IDs and licenses.', inputSchema: object(), annotations: { readOnlyHint: true } },
+  { name: 'spawn_prop', description: 'Place a built-in prop or installed asset in the active scene. Omit position to place on aimed ground.',
+    inputSchema: object({ zone: sceneZone, target: text('traffic_cone, pressure_plate, sliding_door or an exact ID from list_scene_assets'),
+      changes: object(sceneFields) }, ['zone', 'target']) },
+  { name: 'list_entities', description: 'List editable props and their IDs in the active scene.', inputSchema: object(), annotations: { readOnlyHint: true } },
+  { name: 'inspect_entity', description: 'Read a placed prop and its editable properties.',
+    inputSchema: object({ target: sceneTarget, zone: sceneZone }, ['target']), annotations: { readOnlyHint: true } },
+  { name: 'edit_entity', description: 'Move, rotate, scale, recolor or rename one placed prop. The edit supports undo.',
+    inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object(sceneFields) }, ['zone', 'target', 'changes']) },
+  { name: 'duplicate_entity', description: 'Place a copy of one prop with a new ID. Use changes.position to specify its placement.',
+    inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object({ position }) }, ['zone', 'target']) },
+  { name: 'delete_entity', description: 'Remove one explicitly requested placed prop. The edit supports undo.',
+    inputSchema: object({ zone: sceneZone, target: sceneTarget }, ['zone', 'target']), annotations: { destructiveHint: true } },
+  { name: 'undo_scene', description: 'Reverse the most recent player or agent prop edit in the active scene.',
+    inputSchema: object({ zone: sceneZone }, ['zone']) },
+  { name: 'list_prefabs', description: 'List reusable prefabs shared across scenes.', inputSchema: object(), annotations: { readOnlyHint: true } },
+  { name: 'save_prefab', description: 'Save a placed prop as a named prefab, including its saved animation if present.',
     inputSchema: object({ target: text('Exact entity ID from list_entities'), name: text('New prefab name, up to 48 characters') }, ['target', 'name']) },
-  { name: 'spawn_prefab', description: 'Place an independent copy of a saved prefab near the player in the current Grid space.',
+  { name: 'spawn_prefab', description: 'Place an independent copy of a saved prefab in the active scene.',
     inputSchema: object({ target: text('Exact prefab ID from list_prefabs') }, ['target']) },
   { name: 'list_behaviors', description: 'List registered entity behaviors and their editable settings. Supply an entity ID to filter compatible behaviors.',
     inputSchema: object({ target: text('Optional exact entity ID from list_entities') }), annotations: { readOnlyHint: true } },
@@ -73,6 +95,16 @@ const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'dr
 
 export function validWorldPlan(plan, context) {
   if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;
+  if (plan.zone !== undefined && (typeof plan.zone !== 'string' || !idPattern.test(plan.zone))) return false;
+  if (plan.changes != null && !validSceneChanges(plan.changes)) return false;
+  if (plan.tool === 'spawn_prop') return ['traffic_cone', 'pressure_plate', 'sliding_door'].includes(plan.target) ||
+    (/^[a-z_][a-z0-9_]{0,95}$/.test(plan.target) && (!context ||
+      (Array.isArray(context.scene_assets) && context.scene_assets.some(asset => asset?.id === plan.target))));
+  if (['inspect_entity', 'edit_entity', 'duplicate_entity', 'delete_entity'].includes(plan.tool)) {
+    if (!sessionPattern.test(plan.target)) return false;
+    const keys = Object.keys(plan.changes ?? {}).filter(key => plan.changes[key] != null);
+    return plan.tool === 'edit_entity' ? keys.length > 0 : plan.tool === 'duplicate_entity' ? keys.every(key => key === 'position') : !keys.length;
+  }
   if (plan.tool === 'travel') return idPattern.test(plan.target);
   if (plan.tool === 'revise_source') return context?.source_revision === true && plan.target === '';
   if (['benchmark_villa', 'villa_results'].includes(plan.tool)) return context?.source_development === true && plan.target === '';
@@ -98,7 +130,18 @@ export function validWorldPlan(plan, context) {
   if (['inspect_animation', 'save_animation', 'discard_animation'].includes(plan.tool)) {
     return plan.target === '' || animationTarget.test(plan.target);
   }
-  return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_entities', 'list_prefabs', 'list_workshop_tools', 'unsupported'].includes(plan.tool);
+  return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_scene_assets', 'list_entities', 'undo_scene', 'list_prefabs', 'list_workshop_tools', 'unsupported'].includes(plan.tool);
+}
+
+function validSceneChanges(changes) {
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
+  const { position: point, yaw, scale, color, name } = changes;
+  return Object.keys(changes).every(key => Object.hasOwn(sceneFields, key)) &&
+    (point == null || (Array.isArray(point) && point.length === 3 && point.every(value => Number.isFinite(value) && Math.abs(value) <= 1000))) &&
+    (yaw == null || (Number.isFinite(yaw) && Math.abs(yaw) <= 360)) &&
+    (scale == null || (Number.isFinite(scale) && scale >= 0.25 && scale <= 4)) &&
+    (color == null || (typeof color === 'string' && /^[a-f0-9]{6}$/i.test(color))) &&
+    (name == null || name === '' || workshopText(name, 64));
 }
 
 function validBehavior(behavior) {
@@ -156,7 +199,8 @@ export function createWorldBridge(assets) {
       };
       const abort = () => finish({ ok: false, message: 'World tool cancelled.' });
       const timer = setTimeout(() => finish({ ok: false, message: 'Euclid did not report a result. Inspect the current environment before retrying.' }), 35000);
-      const command = { id: randomUUID(), ...plan, expires_at: (Date.now() + 35000) / 1000 };
+      const scope = sceneScoped.has(plan.tool) ? { zone: session.context.current } : {};
+      const command = { id: randomUUID(), ...scope, ...plan, expires_at: (Date.now() + 35000) / 1000 };
       session.pending = { command, finish };
       signal.addEventListener('abort', abort, { once: true });
     });
@@ -206,6 +250,7 @@ export function createWorldBridge(assets) {
             if (name === 'list_assets') result = await assets.list();
             if (name === 'spawn_entity') {
               const plan = { tool: 'spawn_asset', target: args.asset_id,
+                ...(args.zone !== undefined || world?.context.current ? { zone: args.zone ?? world.context.current } : {}),
                 ...(args.scale === undefined ? {} : { scale: args.scale }),
                 ...(args.position === undefined ? {} : { position: args.position }) };
               if (!validAssetId(args.asset_id) || !validWorldPlan(plan)) return error(-32602, 'Invalid spawn arguments');
@@ -215,7 +260,10 @@ export function createWorldBridge(assets) {
           } catch (failure) { result = { ok: false, message: failure.message }; }
           return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
         }
+        if (sceneMutations.includes(name) && typeof args.zone !== 'string') return error(-32602, 'Specify the active environment ID.');
         const plan = { tool: name, target: args.target ?? '',
+          ...(args.zone !== undefined ? { zone: args.zone } : {}),
+          ...(args.changes !== undefined ? { changes: args.changes } : {}),
           ...(name === 'preview_animation' ? { clip: args.clip } : {}),
           ...(name === 'set_behavior' ? { behavior: args.behavior } : {}),
           ...(name === 'save_prefab' ? { name: args.name } : {}) };

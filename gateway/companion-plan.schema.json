@@ -1,16 +1,29 @@
 {
   "type": "object",
   "properties": {
-    "tool": { "type": "string", "enum": ["list_environments", "travel", "create_environment", "follow", "stay", "spawn_asset", "list_assets", "list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior", "inspect_animation", "preview_animation", "save_animation", "discard_animation", "draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source", "revise_source", "benchmark_villa", "villa_results", "list_workshop_tools", "run_workshop_tool", "unsupported"] },
-    "target": { "type": "string", "description": "Exact environment ID for travel, name for create_environment, search phrase or asset ID for spawn_asset, exact entity ID for save_prefab, exact prefab ID for spawn_prefab, animation target ID, exact registered name for run_workshop_tool, or an empty string" },
+    "tool": { "type": "string", "enum": ["list_environments", "travel", "create_environment", "follow", "stay", "spawn_asset", "list_assets", "list_scene_assets", "spawn_prop", "list_entities", "inspect_entity", "edit_entity", "duplicate_entity", "delete_entity", "undo_scene", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior", "inspect_animation", "preview_animation", "save_animation", "discard_animation", "draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source", "revise_source", "benchmark_villa", "villa_results", "list_workshop_tools", "run_workshop_tool", "unsupported"] },
+    "target": { "type": "string", "description": "Exact environment, entity, prefab, asset, animation or registered tool ID, a new environment name, a model search phrase for spawn_asset, or an empty string as required by the tool" },
     "name": { "type": "string", "description": "Prefab name of 1 to 48 characters for save_prefab, empty for other tools" },
     "preserve_rig": { "type": "boolean", "description": "True only for spawn_asset when the user requests a rigged model" },
     "clip": { "anyOf": [{ "$ref": "#/$defs/clip" }, { "type": "null" }], "description": "New clip for preview_animation, null for other tools" },
-    "behavior": { "anyOf": [{ "$ref": "#/$defs/behavior" }, { "type": "null" }], "description": "Settings for set_behavior, null to remove the behavior or for other tools" }
+    "behavior": { "anyOf": [{ "$ref": "#/$defs/behavior" }, { "type": "null" }], "description": "Settings for set_behavior, null to remove the behavior or for other tools" },
+    "changes": { "anyOf": [{ "$ref": "#/$defs/scene_changes" }, { "type": "null" }], "description": "Requested prop properties for spawn_prop, spawn_asset, edit_entity or duplicate_entity. Null leaves an existing property alone or uses the spawn default." }
   },
-  "required": ["tool", "target", "name", "preserve_rig", "clip", "behavior"],
+  "required": ["tool", "target", "name", "preserve_rig", "clip", "behavior", "changes"],
   "additionalProperties": false,
   "$defs": {
+    "scene_changes": {
+      "type": "object",
+      "properties": {
+        "position": { "type": ["array", "null"], "items": { "type": "number" }, "description": "Exactly three coordinates in metres in the current scene, or null for an aimed spawn or unchanged position" },
+        "yaw": { "type": ["number", "null"], "description": "Yaw in degrees from -360 to 360" },
+        "scale": { "type": ["number", "null"], "description": "Scale from 0.25 to 4" },
+        "color": { "type": ["string", "null"], "description": "Six RGB hex digits without #, or null" },
+        "name": { "type": ["string", "null"], "description": "Prop display name of at most 64 characters. Empty restores its default name." }
+      },
+      "required": ["position", "yaw", "scale", "color", "name"],
+      "additionalProperties": false
+    },
     "behavior": {
       "type": "object",
       "properties": {

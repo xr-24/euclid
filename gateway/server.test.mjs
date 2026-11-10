@@ -129,6 +129,21 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   const prefabTools = (await rpc('tools/list')).result.tools.filter(tool => tool.name.endsWith('_prefab') || tool.name === 'list_prefabs');
   assert.deepEqual(prefabTools.map(tool => tool.name), ['list_prefabs', 'save_prefab', 'spawn_prefab']);
   const entityId = 'b'.repeat(32);
+  const invalidSceneEdit = await rpc('tools/call', { name: 'edit_entity',
+    arguments: { target: entityId, changes: { name: 'Missing scene' } } });
+  assert.equal(invalidSceneEdit.error.code, -32602);
+  const invalidTransform = await rpc('tools/call', { name: 'edit_entity',
+    arguments: { zone: context.current, target: entityId, changes: { position: [1, 2] } } });
+  assert.equal(invalidTransform.error.code, -32602);
+  const moving = rpc('tools/call', { name: 'edit_entity',
+    arguments: { zone: context.current, target: entityId, changes: { position: [1, 0.15, -76], name: 'Library vase' } } });
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await sync());
+  assert.equal(command?.tool, 'edit_entity');
+  assert.equal(command.zone, context.current);
+  assert.deepEqual(command.changes, { position: [1, 0.15, -76], name: 'Library vase' });
+  await sync({ id: command.id, value: { ok: true, id: entityId } });
+  assert.equal((await moving).result.isError, false);
   const invalid = await rpc('tools/call', { name: 'save_prefab', arguments: { target: entityId, name: 'Bad\nname' } });
   assert.equal(invalid.error.code, -32602);
   const saving = rpc('tools/call', { name: 'save_prefab', arguments: { target: entityId, name: 'Hover cone' } });

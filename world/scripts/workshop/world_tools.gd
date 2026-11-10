@@ -11,10 +11,11 @@ const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const BehaviorHost = preload("res://scripts/plugins/behavior_host.gd")
 const DoorLinks = preload("res://scripts/plugins/door_links.gd")
 const DoorActuator = preload("res://scripts/plugins/door_actuator.gd")
+const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const MAX_ENTITIES := 256
 const MAX_UNDO := 64
 const MAX_SAVE_BYTES := 9 * 1024 * 1024
-const EDITABLE := ["position", "yaw", "scale", "color", "animation"]
+const EDITABLE := ["position", "yaw", "scale", "color", "animation", "name"]
 
 var _path := ""
 var _prefabs: PrefabLibrary
@@ -26,28 +27,30 @@ var _nodes := {}
 var _history: Array[Dictionary] = []
 var _root: Node3D
 var _load_error := ""
+var bounds: AABB
 
-func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime = null) -> void:
+func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime = null, scene_bounds := Placement.GRID) -> void:
 	_path = path
+	bounds = scene_bounds
 	_prefabs = prefabs
 	_behaviors = behaviors
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null or file.get_length() > MAX_SAVE_BYTES:
-		_load_error = "The Grid save could not be read."
+		_load_error = "The scene prop save could not be read."
 		return
 	var state: Variant = JSON.parse_string(file.get_as_text())
 	if not state is Dictionary or state.get("schema_version") != 1 or not state.get("entities") is Array:
-		_load_error = "The Grid save has an invalid format."
+		_load_error = "The scene prop save has an invalid format."
 		return
 	if state.entities.size() > MAX_ENTITIES:
-		_load_error = "The Grid save exceeds the entity limit."
+		_load_error = "The scene prop save exceeds the entity limit."
 		return
 	var loaded := {}
 	for item in state.entities:
 		if not item is Dictionary or not _valid_record(item) or loaded.has(item.id):
-			_load_error = "The Grid save contains an invalid entity."
+			_load_error = "The scene prop save contains an invalid entity."
 			return
 		loaded[item.id] = item
 	_entities = loaded
@@ -67,7 +70,7 @@ func attach(zone: Node3D) -> void:
 
 func execute(tool: String, args := {}) -> Dictionary:
 	if not is_instance_valid(_root):
-		return _error("Grid tools are available in The Grid.")
+		return _error("Wait for the scene to finish loading.")
 	if not _load_error.is_empty():
 		return _error(_load_error)
 	var id: Variant = args.get("id")
@@ -79,8 +82,11 @@ func execute(tool: String, args := {}) -> Dictionary:
 			var entities: Array[Dictionary] = []
 			for item in _entities.values():
 				entities.append({"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
-					"position": item.position.duplicate(), "behavior": _effective(item).get("behavior", {}).get("id", "")})
+					"position": item.position.duplicate(), "yaw": item.yaw, "scale": item.scale, "color": item.color,
+					"behavior": _effective(item).get("behavior", {}).get("id", "")})
 			return {"ok": true, "entities": entities}
+		"list_scene_assets":
+			return {"ok": true, "assets": EntityTypes.library_catalog()}
 		"list_behaviors":
 			if id != null and id != "" and record.is_empty():
 				return _error("Select an entity first.")
@@ -99,13 +105,17 @@ func execute(tool: String, args := {}) -> Dictionary:
 				return _error("Unknown entity type.")
 			if type == "imported_model" and (not EntityTypes.Assets.valid_id(args.get("asset_id")) or EntityTypes.Assets.scene(args.asset_id) == null):
 				return _error("Import the model before spawning it.")
+			if type == "library_model" and not EntityTypes.library_available(args.get("asset_id")):
+				return _error("Choose an installed model from the scene asset library.")
 			if _entities.size() >= MAX_ENTITIES:
-				return _error("The Grid is at its entity limit.")
+				return _error("This scene is at its prop limit.")
 			id = Crypto.new().generate_random_bytes(16).hex_encode()
 			var proposed := {"id": id, "type": type, "position": args.get("position"), "yaw": args.get("yaw", 0.0),
 				"scale": args.get("scale", 1.0), "color": args.get("color", EntityTypes.TYPES[type].color)}
-			if type == "imported_model":
+			if type in ["imported_model", "library_model"]:
 				proposed["asset_id"] = args.asset_id
+			if args.has("name") and args.name != "":
+				proposed["name"] = args.name.strip_edges() if args.name is String else args.name
 			if args.has("animation"):
 				proposed["animation"] = args.animation
 			if args.has("behavior"):
@@ -123,8 +133,24 @@ func execute(tool: String, args := {}) -> Dictionary:
 			for key in changes:
 				if key not in EDITABLE:
 					return _error("Unknown editable property.")
-				proposed[key] = changes[key]
+				if key == "name" and changes.name is String:
+					var name: String = changes.name.strip_edges()
+					if name.is_empty():
+						proposed.erase("name")
+					else:
+						proposed["name"] = name
+				else:
+					proposed[key] = changes[key]
 			return _edit(id, record, proposed)
+		"duplicate":
+			if record.is_empty():
+				return _error("Select an entity first.")
+			var placement := record.duplicate(true)
+			var offset: float = 0.8 * record.scale
+			var point: Array = placement.position
+			point[0] += offset if point[0] + offset <= bounds.end.x else -offset
+			placement["position"] = args.get("position", point)
+			return execute("spawn", placement)
 		"delete":
 			if record.is_empty():
 				return _error("Select an entity first.")
@@ -134,7 +160,7 @@ func execute(tool: String, args := {}) -> Dictionary:
 				return _error("There are no edits to undo.")
 			var edit: Dictionary = _history.back()
 			if not _apply_records(edit.previous):
-				return _error("The Grid save could not be written.")
+				return _error("The scene prop save could not be written.")
 			_restore_door_heights(edit.get("doors", {}))
 			_history.pop_back()
 			var previous: Dictionary = edit.previous.get(edit.id, {})
@@ -151,7 +177,7 @@ func run_action(targets: Array) -> Dictionary:
 	if edit.next.is_empty() and edit.doors == edit.openings:
 		return {"ok": true}
 	if not _apply_records(edit.next):
-		return _error("The Grid save could not be written.")
+		return _error("The scene prop save could not be written.")
 	_restore_door_heights(edit.openings)
 	_remember({"id": "", "previous": edit.previous, "doors": edit.doors})
 	return {"ok": true}
@@ -284,12 +310,12 @@ func _prefab_command(tool: String, args: Dictionary, record: Dictionary) -> Dict
 
 func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary:
 	if not proposed.is_empty() and not _valid_record(proposed):
-		return _error("Use a position within The Grid, a scale from 0.25 to 4, and a six-digit color.")
+		return _error("Use a position inside this scene, a scale from 0.25 to 4, a six-digit color, and a printable name.")
 	if proposed == previous:
 		return {"ok": true, "id": id, "entity": previous.duplicate(true)}
 	var next := proposed.duplicate(true)
 	if not _apply_records({id: next}):
-		return _error("The Grid save could not be written.")
+		return _error("The scene prop save could not be written.")
 	_remember({"id": id, "previous": {id: previous}})
 	return {"ok": true, "id": id, "entity": next.duplicate(true)}
 
@@ -393,14 +419,15 @@ func animation_player(id: String) -> Node:
 		return entity.get_node("PropMotion")
 	return null
 
-static func _valid_record(record: Dictionary) -> bool:
+func _valid_record(record: Dictionary) -> bool:
 	var id: Variant = record.get("id")
 	var point: Variant = record.get("position")
 	return id is String and id.length() == 32 and id.is_valid_hex_number() \
 		and EntityTypes.valid_properties(record) \
 		and point is Array and point.size() == 3 \
-		and EntityTypes.number_between(point[0], -60.0, 60.0) and EntityTypes.number_between(point[1], 0.0, 12.0) \
-		and EntityTypes.number_between(point[2], -60.0, 60.0)
+		and EntityTypes.number_between(point[0], bounds.position.x, bounds.end.x) \
+		and EntityTypes.number_between(point[1], bounds.position.y, bounds.end.y) \
+		and EntityTypes.number_between(point[2], bounds.position.z, bounds.end.z)
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "error": message}

@@ -9,9 +9,9 @@ extends RefCounted
 ## front facing +Z.
 
 const CATALOG := "res://assets/library/catalog.json"
+const Resources = preload("res://scripts/assets/asset_library.gd")
 
 static var _assets := {}
-static var _scenes := {}
 
 ## Read the catalog. Called once on the main thread at startup; safe to call again.
 static func load_catalog() -> void:
@@ -52,9 +52,7 @@ static func instance(id: String) -> Node3D:
 	if not has(id):
 		return null
 	var path := str(_assets[id].scene)
-	if not _scenes.has(path):
-		_scenes[path] = load(path)
-	var scene := _scenes[path] as PackedScene
+	var scene := Resources.get_resource(path) as PackedScene
 	return scene.instantiate() as Node3D if scene else null
 
 ## Size in metres (x = width, y = height, z = depth) at scale 1.

@@ -24,7 +24,7 @@ Allow about 2.25 GiB for the temporary art copy. Startup logs are under
 | E while near and facing the Codex avatar | Open the Codex uplink |
 | Tab | Open the menu |
 | Escape | Open the menu, or return from an application preview |
-| B in The Grid | Open Grid tools at the crosshair |
+| B | Open Grid or Scene tools at the crosshair |
 | F2 | Open or minimize the Codex uplink |
 | F11 | Toggle fullscreen |
 | F3 | Toggle live performance statistics |
@@ -65,9 +65,26 @@ Try **Where can we go?**, **Take me to the Roman villa**, **Take me to the beach
 
 Created environments use the Grid template, appear under **Custom spaces** in the menu, and keep separate entity saves. The hovering avatar follows your position across environments and keeps its distance when you turn to look around. **Stay here** parks it in the current environment for the session. The musical note toggles spoken tool results through an installed English system voice.
 
+## Edit props in the villa and at the beach
+
+Press **B** while aiming at solid ground in either scene. Choose an installed
+model and select **Place asset**, or place a prefab from the shared library.
+Aim at a placed prop and press **B** to select it. You can also select it by
+name in the palette. **Apply** saves its name, position, rotation, scale, and
+color. **Duplicate**, **Delete**, and **Undo** use the same edit history as
+agent commands. Each scene keeps its own props across restarts and its own
+undo history while Euclid is running.
+
+In **F2**, try **Place an antique ceramic vase here and call it Garden vase**,
+then **Rotate Garden vase to 90 degrees** or **Undo the last scene edit**.
+The native CLI can discover the installed library with `list_scene_assets`
+and placed IDs with `list_entities`. Its prop mutations require the active
+environment ID. Terrain, architecture, and original set dressing are authored
+through the scene builders.
+
 ## Live models
 
-In The Grid or a custom Grid space, press **F2** and ask **Spawn a piece of pizza**.
+In any environment, press **F2** and ask **Spawn a piece of pizza**.
 Codex derives a search phrase, searches Sketchfab and Poly Haven, chooses an actual
 result, and starts a background import. Euclid downloads the prepared GLB and
 loads it while the world is running. The object appears a few metres in front

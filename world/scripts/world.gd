@@ -6,6 +6,8 @@ const Villa = preload("res://scripts/zones/villa.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const Grid = preload("res://scripts/zones/grid_zone.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
+const ScenePlacement = preload("res://scripts/workshop/scene_placement.gd")
+const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 const GridAgentClient = preload("res://scripts/agents/grid_agent_client.gd")
@@ -70,7 +72,7 @@ var underwater: ColorRect
 var world_tools: RefCounted
 var prefab_library: PrefabLibrary
 var behavior_runtime: BehaviorRuntime
-var workshops := {}
+var scene_tools := {}
 var grid_palette_requested := false
 var _palette_host := GridPaletteHost.new()
 var grid_agent: HTTPRequest
@@ -344,8 +346,8 @@ func _show_menu() -> void:
 	for i in mini(3, manifest.zones.size()):
 		var zone: Dictionary = manifest.zones[i]
 		_button("%d    %s" % [i + 1, zone.name], _travel.bind(str(zone.id)))
-	if _is_workshop(zone_id) and not shifting:
-		_button("Grid tools  [B]", _request_grid_palette)
+	if not shifting:
+		_button("Grid tools  [B]" if _is_workshop(zone_id) else "Scene tools  [B]", _request_grid_palette)
 	_button("Codex  [F2]", _open_codex_console)
 	_button("Workbench  [F4]", _open_workbench)
 	if manifest.zones.size() > 3:
@@ -511,28 +513,18 @@ func _request_grid_palette() -> void:
 	grid_palette_requested = true
 
 func _show_grid_palette() -> void:
-	if not _is_workshop(zone_id) or shifting:
+	if not _scene_ready():
 		return
-	var direction := -camera.global_basis.z
-	var query := PhysicsRayQueryParameters3D.create(camera.global_position, camera.global_position + direction * 24.0)
-	query.exclude = [player.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	var at := player.global_position + Vector3(direction.x, 0, direction.z).normalized() * 3.0
-	var selected := ""
-	if not hit.is_empty():
-		var collider: Object = hit.collider
-		selected = str(collider.get_meta("entity_id")) if collider.has_meta("entity_id") else ""
-		if collider is Node and collider.name == "GridFloor" and hit.normal.y > 0.9:
-			at = hit.position
-	at = Vector3(clampf(at.x, -60.0, 60.0), 0, clampf(at.z, -60.0, 60.0))
-	_panel("Grid tools", "")
+	var grid := _is_workshop(zone_id)
+	var placement := ScenePlacement.pick(player, camera, world_tools.bounds, grid, true)
+	_panel("Grid tools" if grid else "Scene tools", "")
 	var viewport_size := get_viewport().get_visible_rect().size
 	overlay.offset_left = maxf(24.0, viewport_size.x * 0.44)
 	overlay.offset_top = minf(110.0, viewport_size.y * 0.1)
 	overlay.offset_right = -30
 	overlay.offset_bottom = -overlay.offset_top
-	_palette_host.mount(overlay_content, zone_id, at, selected, world_tools, _workshop_action_catalog, _run_palette_action)
-	_button("Back to The Grid  [Esc]", _close_panel)
+	_palette_host.mount(overlay_content, zone_id, placement.point, placement.selected, world_tools, _workshop_action_catalog, _run_palette_action)
+	_button("Back  [Esc]", _close_panel)
 
 func _run_grid_agent(prompt: String, placement: Array, palette: Control) -> void:
 	var requested_zone := zone_root
@@ -771,18 +763,24 @@ func _submit_codex_command(prompt: String) -> void:
 	var benchmark_target: Dictionary = _development.benchmark_target.duplicate() if _development else {}
 	context["source_revision"] = reviewed.get("can_revise", false) and reviewed.get("status") in ["staged", "failed", "passed"]
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
-	if _is_workshop(zone_id) and not shifting:
+	if _scene_ready():
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
 		context["entities"] = entities.slice(maxi(0, entities.size() - 64))
 		context["prefabs"] = world_tools.execute("list_prefabs").get("prefabs", [])
 		context["behaviors"] = world_tools.execute("list_behaviors").get("behaviors", [])
+		context["scene_assets"] = world_tools.execute("list_scene_assets").get("assets", [])
 	if scene_animations:
-		context["animation"] = scene_animations.context(world_tools if _is_workshop(zone_id) else null)
+		context["animation"] = scene_animations.context(world_tools if _scene_ready() else null)
 	var response: Dictionary = await grid_agent.plan(prompt, context)
 	console_busy = false
 	if response.has("error"):
 		_console_notice(str(response.error))
 		return
+	if response.plan.tool in SceneCommands.SCOPED:
+		if not _scene_ready() or requested_zone != zone_root.get_instance_id():
+			_console_notice("The environment changed while Codex was planning. Ask again in the current scene.")
+			return
+		response.plan["zone"] = context.current
 	console_busy = true
 	if response.plan.tool == "revise_source":
 		var output := _palette_host.error_log(reviewed.id, reviewed.version)
@@ -856,6 +854,15 @@ func _call_world_tool(plan: Dictionary) -> Dictionary:
 
 func _execute_world_tool(plan: Dictionary) -> Dictionary:
 	var target: String = str(plan.get("target", ""))
+	if plan.get("tool") in SceneCommands.SCOPED and not _scene_ready(plan.get("zone", "")):
+		return {"ok": false, "message": "Return to the requested environment and wait for it to finish loading."}
+	if plan.get("tool") in SceneCommands.ACTIONS:
+		var placement := []
+		if plan.tool == "spawn_prop" and not SceneCommands.options(plan).has("position"):
+			placement = _scene_spawn_position()
+		var result := SceneCommands.execute(world_tools, plan, placement)
+		result["zone"] = zone_id
+		return result
 	match plan.get("tool", ""):
 		"run_workshop_tool":
 			return _run_registered_action(plan)
@@ -870,25 +877,30 @@ func _execute_world_tool(plan: Dictionary) -> Dictionary:
 		"inspect_animation", "preview_animation", "save_animation", "discard_animation":
 			if shifting or not scene_animations:
 				return {"ok": false, "message": "Wait for the current environment to finish loading."}
-			return scene_animations.execute(plan, world_tools if _is_workshop(zone_id) else null)
+			return scene_animations.execute(plan, world_tools)
 		"list_assets":
 			var listed: Dictionary = await asset_client.list_assets()
 			listed["message"] = JSON.stringify(listed.get("assets", [])) if listed.get("ok", false) else listed.get("message", "Asset listing failed.")
 			return listed
 		"spawn_asset":
-			if not _is_workshop(zone_id) or shifting:
-				return {"ok": false, "message": "Enter The Grid or a custom Grid space to spawn editable models."}
 			var requested_zone := zone_root
 			# Capture placement before a download so camera movement cannot change it.
-			var position: Array = plan.get("position", _workshop_spawn_position())
+			var properties := SceneCommands.options(plan)
+			var position: Array = plan.get("position", properties.get("position", []))
+			if position.is_empty():
+				position = _scene_spawn_position()
+			if position.is_empty():
+				return {"ok": false, "message": "Aim at solid ground or specify a position before importing a model."}
 			_console_notice("Finding and preparing the model…")
 			var imported: Dictionary = await asset_client.ensure_asset(target, _world_context(), plan.get("preserve_rig", false))
 			if not imported.get("ok", false):
 				return {"ok": false, "message": imported.get("message", "The model could not be imported.")}
 			if not is_instance_valid(requested_zone) or zone_root != requested_zone or shifting:
 				return {"ok": false, "message": "The model is cached. Spawn it again in your current environment."}
-			var result: Dictionary = world_tools.execute("spawn", {"type": "imported_model", "asset_id": imported.asset.asset_id,
-				"position": position, "scale": plan.get("scale", 1.0), "color": "ffffff"})
+			properties.merge({"type": "imported_model", "asset_id": imported.asset.asset_id, "position": position,
+				"scale": plan.get("scale", properties.get("scale", 1.0))}, true)
+			var result: Dictionary = world_tools.execute("spawn", properties)
+			result["zone"] = zone_id
 			result["message"] = "Spawned %s. %s — %s. %s" % [imported.asset.title, imported.asset.author,
 				imported.asset.license_label, imported.asset.get("credit", "")] if result.ok else result.error
 			return result
@@ -920,8 +932,8 @@ func _execute_world_tool(plan: Dictionary) -> Dictionary:
 	return {"ok": false, "message": "Try listing environments, traveling, creating a Grid space, following, or staying."}
 
 func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
-	if not _is_workshop(zone_id) or shifting:
-		return {"ok": false, "message": "Enter The Grid or a custom Grid space to edit workshop entities."}
+	if not _scene_ready(plan.get("zone", "")):
+		return {"ok": false, "message": "Wait for the requested environment to finish loading."}
 	var target: String = plan.get("target", "")
 	var behavior: Variant = plan.get("behavior")
 	if behavior is Dictionary:
@@ -932,11 +944,17 @@ func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 		behavior = {"id": behavior.id, "settings": settings}
 		if not target_entity.is_empty():
 			behavior["target"] = target_entity
+	var placement := []
+	if plan.tool == "spawn_prefab":
+		placement = _scene_spawn_position()
+		if placement.is_empty():
+			return {"ok": false, "message": "Aim at solid ground before placing the prefab."}
 	var result: Dictionary = world_tools.execute(plan.tool, {"id": target, "prefab_id": target,
-		"name": plan.get("name"), "position": _workshop_spawn_position(), "behavior": behavior})
+		"name": plan.get("name"), "position": placement, "behavior": behavior})
 	if not result.ok:
 		result["message"] = result.error
 		return result
+	result["zone"] = zone_id
 	match plan.tool:
 		"save_prefab":
 			result["message"] = "Saved %s to the prefab library." % result.name
@@ -952,10 +970,14 @@ func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
 			result["message"] = "Nothing here yet." if names.is_empty() else ", ".join(names)
 	return result
 
-func _workshop_spawn_position() -> Array:
-	var forward := -camera.global_basis.z
-	var point := player.global_position + Vector3(forward.x, 0, forward.z).normalized() * 3.0
-	return [clampf(point.x, -60, 60), 0.0, clampf(point.z, -60, 60)]
+func _scene_ready(requested := "") -> bool:
+	return is_instance_valid(zone_root) and world_tools != null and not shifting \
+		and (requested.is_empty() or requested == zone_id)
+
+func _scene_spawn_position() -> Array:
+	var grid := _is_workshop(zone_id)
+	var placement := ScenePlacement.pick(player, camera, world_tools.bounds, grid, not grid)
+	return ScenePlacement.coordinates(placement.point)
 
 func _travel(destination: String) -> void:
 	_close_panel()
@@ -1093,14 +1115,14 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 			behavior_runtime.finish(linked_preview, false)
 			world_tools.finish_behavior_preview(linked_preview, false)
 		world_tools.attach(null)
-		if not workshops.has("construct"):
-			workshops["construct"] = world_tools
-		if _is_workshop(zone_id):
-			if not workshops.has(zone_id):
-				var path := "" if smoke_mode else "user://grid-entities-%s.json" % zone_id
-				workshops[zone_id] = WorldTools.new(path, prefab_library, behavior_runtime)
-			world_tools = workshops[zone_id]
-			world_tools.attach(zone_root)
+		if not scene_tools.has("construct"):
+			scene_tools["construct"] = world_tools
+		if not scene_tools.has(zone_id):
+			var prefix := "grid" if _is_workshop(zone_id) else "scene"
+			var path := "" if smoke_mode else "user://%s-entities-%s.json" % [prefix, zone_id]
+			scene_tools[zone_id] = WorldTools.new(path, prefab_library, behavior_runtime, ScenePlacement.bounds_for(zone_id))
+		world_tools = scene_tools[zone_id]
+		world_tools.attach(zone_root)
 	if side != 0.0:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
@@ -1359,7 +1381,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_B:
-		if _is_workshop(zone_id) and not overlay.visible and not shifting:
+		if not overlay.visible and _scene_ready():
 			_request_grid_palette()
 			get_viewport().set_input_as_handled()
 		return

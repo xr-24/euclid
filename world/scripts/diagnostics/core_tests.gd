@@ -6,6 +6,8 @@ const Context = preload("res://scripts/zones/zone_build_context.gd")
 const Assets = preload("res://scripts/assets/asset_library.gd")
 const WaterInteractions = preload("res://scripts/simulation/water_interactions.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
+const ScenePlacement = preload("res://scripts/workshop/scene_placement.gd")
+const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
@@ -111,6 +113,7 @@ func _run() -> void:
 	var ramp_y := pool_bottom[(ramp_j*int(pool.n)+ramp_i)*4]+float(pool.water_y)
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
 	_check_world_tools(path)
+	_check_scene_edits(path)
 	_check_workshop_actions(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
@@ -371,6 +374,47 @@ func _check_world_tools(path: String) -> void:
 	_check(not unwritable.execute("spawn", spawn).ok and unwritable.execute("list").entities.is_empty(), "failed save does not apply an edit")
 	zone.free()
 	DirAccess.remove_absolute(path)
+
+func _check_scene_edits(path: String) -> void:
+	var villa_root := Node3D.new()
+	var beach_root := Node3D.new()
+	var villa_path := path + ".villa"
+	var beach_path := path + ".beach"
+	var villa := WorldTools.new(villa_path, null, null, ScenePlacement.VILLA)
+	var beach := WorldTools.new(beach_path, null, null, ScenePlacement.BEACH)
+	villa.attach(villa_root)
+	beach.attach(beach_root)
+	var added := SceneCommands.execute(villa, {"tool": "spawn_prop", "target": "traffic_cone",
+		"changes": {"position": [1.0, 0.15, -76.0], "name": "Library marker"}}, [])
+	_check(added.ok and added.entity.name == "Library marker", "place named props beyond the Grid bounds")
+	var id: String = added.get("id", "")
+	var moved := SceneCommands.execute(villa, {"tool": "edit_entity", "target": id,
+		"changes": {"position": [1.0, 0.15, -77.0], "yaw": 45.0}}, [])
+	_check(moved.ok and moved.entity.id == id and moved.entity.yaw == 45.0, "agent edits preserve scene prop identity")
+	_check(not SceneCommands.execute(villa, {"tool": "edit_entity", "target": id,
+		"changes": {"position": [121.0, 0.15, -77.0]}}, []).ok, "reject an edit outside the villa bounds")
+	var duplicate := SceneCommands.execute(villa, {"tool": "duplicate_entity", "target": id}, [])
+	_check(duplicate.ok and duplicate.id != id and duplicate.entity.name == "Library marker", "duplicate keeps props independent")
+	var beach_prop := SceneCommands.execute(beach, {"tool": "spawn_prop", "target": "traffic_cone",
+		"changes": {"position": [2.0, 0.0, -8.0], "name": "Shore marker"}}, [])
+	_check(beach_prop.ok and not beach.execute("inspect", {"id": id}).ok, "prop identity is scoped to one scene")
+	_check(SceneCommands.execute(villa, {"tool": "undo_scene"}, []).ok and not villa.execute("inspect", {"id": duplicate.id}).ok
+		and beach.execute("inspect", {"id": beach_prop.id}).ok, "undo changes only the active scene")
+	villa_root.free()
+	beach_root.free()
+	villa_root = Node3D.new()
+	beach_root = Node3D.new()
+	villa = WorldTools.new(villa_path, null, null, ScenePlacement.VILLA)
+	beach = WorldTools.new(beach_path, null, null, ScenePlacement.BEACH)
+	villa.attach(villa_root)
+	beach.attach(beach_root)
+	_check(villa.execute("inspect", {"id": id}).get("entity") == moved.get("entity")
+		and beach.execute("inspect", {"id": beach_prop.id}).get("entity") == beach_prop.get("entity"),
+		"reopen both scene saves with their exact IDs and edits")
+	villa_root.free()
+	beach_root.free()
+	DirAccess.remove_absolute(villa_path)
+	DirAccess.remove_absolute(beach_path)
 
 func _check_text_tools() -> void:
 	var typed := TextEffects.change_between(PackedStringArray(["var a = 1"]), PackedStringArray(["var ab = 1"]))

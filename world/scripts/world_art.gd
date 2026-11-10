@@ -386,14 +386,15 @@ static func set_side(root: Node, side: float) -> void:
 			gi.visible = gi.get_meta("cfx_hidden")
 			gi.remove_meta("cfx_hidden")
 
-## Re-learn global illumination for the zone now in place (called mid-shift, under the effect).
+## Rebuild cached lighting after a zone shift or a change to authored geometry.
 static func rebuild_gi(world: Node3D, zone: String) -> void:
 	var env: Environment = world.environment
 	if not env.sdfgi_enabled:
 		return
 	env.sdfgi_min_cell_size = zone_state(zone).sdfgi_cell
 	env.sdfgi_enabled = false
-	world.get_tree().process_frame.connect(func() -> void: env.sdfgi_enabled = true, CONNECT_ONE_SHOT)
+	var finished := world.get_tree().process_frame if RenderingServer.get_rendering_device() == null else RenderingServer.frame_post_draw
+	finished.connect(func() -> void: env.sdfgi_enabled = true, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
 
 static func _has_fx(mat: Material) -> bool:
 	return mat is ShaderMaterial and (mat as ShaderMaterial).shader != null and "construct" in (mat as ShaderMaterial).shader.code

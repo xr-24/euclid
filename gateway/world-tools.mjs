@@ -15,7 +15,7 @@ const sceneFields = { position, yaw: { type: 'number', minimum: -360, maximum: 3
   scale: { type: 'number', minimum: 0.25, maximum: 4 }, color: text('Six RGB hex digits'), name: text('Display name, up to 64 characters') };
 const sceneZone = text('Exact active environment ID from list_environments');
 const sceneTarget = text('Exact entity ID from list_entities');
-const sceneMutations = ['spawn_prop', 'edit_entity', 'duplicate_entity', 'delete_entity', 'undo_scene'];
+const sceneMutations = ['spawn_prop', 'edit_entity', 'duplicate_entity', 'delete_entity', 'restore_dressing', 'undo_scene'];
 const sceneScoped = new Set([...sceneMutations, 'inspect_entity', 'list_entities', 'spawn_asset', 'save_prefab', 'spawn_prefab',
   'list_behaviors', 'set_behavior', 'inspect_animation', 'preview_animation', 'save_animation', 'discard_animation']);
 export const tools = [
@@ -38,15 +38,17 @@ export const tools = [
   { name: 'spawn_prop', description: 'Place a built-in prop or installed asset in the active scene. Omit position to place on aimed ground.',
     inputSchema: object({ zone: sceneZone, target: text('traffic_cone, pressure_plate, sliding_door or an exact ID from list_scene_assets'),
       changes: object(sceneFields) }, ['zone', 'target']) },
-  { name: 'list_entities', description: 'List editable props and their IDs in the active scene.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'inspect_entity', description: 'Read a placed prop and its editable properties.',
+  { name: 'list_entities', description: 'List editable props in the active scene, including hidden authored props and their IDs.', inputSchema: object(), annotations: { readOnlyHint: true } },
+  { name: 'inspect_entity', description: 'Read a prop and its editable properties.',
     inputSchema: object({ target: sceneTarget, zone: sceneZone }, ['target']), annotations: { readOnlyHint: true } },
-  { name: 'edit_entity', description: 'Move, rotate, scale, recolor or rename one placed prop. The edit supports undo.',
+  { name: 'edit_entity', description: 'Move, rotate, scale or rename one prop. Placed props also support recoloring. The edit supports undo.',
     inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object(sceneFields) }, ['zone', 'target', 'changes']) },
   { name: 'duplicate_entity', description: 'Place a copy of one prop with a new ID. Use changes.position to specify its placement.',
     inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object({ position }) }, ['zone', 'target']) },
-  { name: 'delete_entity', description: 'Remove one explicitly requested placed prop. The edit supports undo.',
+  { name: 'delete_entity', description: 'Remove one explicitly requested placed prop or hide an authored prop. The edit supports undo.',
     inputSchema: object({ zone: sceneZone, target: sceneTarget }, ['zone', 'target']), annotations: { destructiveHint: true } },
+  { name: 'restore_dressing', description: 'Restore an authored prop to its original name, position, rotation, scale and visibility. The edit supports undo.',
+    inputSchema: object({ zone: sceneZone, target: sceneTarget }, ['zone', 'target']) },
   { name: 'undo_scene', description: 'Reverse the most recent player or agent prop edit in the active scene.',
     inputSchema: object({ zone: sceneZone }, ['zone']) },
   { name: 'list_prefabs', description: 'List reusable prefabs shared across scenes.', inputSchema: object(), annotations: { readOnlyHint: true } },
@@ -100,7 +102,7 @@ export function validWorldPlan(plan, context) {
   if (plan.tool === 'spawn_prop') return ['traffic_cone', 'pressure_plate', 'sliding_door'].includes(plan.target) ||
     (/^[a-z_][a-z0-9_]{0,95}$/.test(plan.target) && (!context ||
       (Array.isArray(context.scene_assets) && context.scene_assets.some(asset => asset?.id === plan.target))));
-  if (['inspect_entity', 'edit_entity', 'duplicate_entity', 'delete_entity'].includes(plan.tool)) {
+  if (['inspect_entity', 'edit_entity', 'duplicate_entity', 'delete_entity', 'restore_dressing'].includes(plan.tool)) {
     if (!sessionPattern.test(plan.target)) return false;
     const keys = Object.keys(plan.changes ?? {}).filter(key => plan.changes[key] != null);
     return plan.tool === 'edit_entity' ? keys.length > 0 : plan.tool === 'duplicate_entity' ? keys.every(key => key === 'position') : !keys.length;

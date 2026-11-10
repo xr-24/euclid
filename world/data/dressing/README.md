@@ -9,13 +9,17 @@ added or swapped without touching code, and a new zone can be furnished the same
  "schema_version": 1,
  "plinths": {"statue": {"size": [0.95, 0.42, 0.95], "material": "marble"}},
  "items": [
-  {"asset": "apollo_belvedere", "position": [-18.5, 0.15, -17], "yaw": 90, "plinth": "statue"}
+  {"id": "apollo_gallery", "asset": "apollo_belvedere", "position": [-18.5, 0.15, -17], "yaw": 90, "plinth": "statue"}
  ]
 }
 ```
 
 - `asset`: a catalog id. Items whose model is missing (for example after removing a licence
   folder) are skipped.
+- `id` (optional): a unique identifier within this dressing file. It enables palette and agent
+  edits to the item. Keep the ID and the file path stable when rearranging items so existing
+  saves can find their overrides.
+- `name` (optional): a distinct display name for the palette and agent tools.
 - `position`: the floor point, in metres, that the item (or its plinth) stands on.
 - `yaw`: degrees about the vertical axis. Every library model faces +Z at yaw 0; 90 turns it to
   face +X.

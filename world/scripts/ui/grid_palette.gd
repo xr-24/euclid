@@ -20,6 +20,7 @@ var _place_asset: Button
 var _status: Label
 var _apply: Button
 var _delete: Button
+var _restore_authored: Button
 var _duplicate: Button
 var _undo: Button
 var _behaviors: BehaviorInspector
@@ -97,6 +98,7 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_apply = _button(actions, "Apply", _apply_changes)
 	_duplicate = _button(actions, "Duplicate", _run.bind("duplicate", {}))
 	_delete = _button(actions, "Delete", _run.bind("delete", {}))
+	_restore_authored = _button(actions, "Restore defaults", _run.bind("restore_dressing", {}))
 	_undo = _button(actions, "Undo", _run.bind("undo", {}))
 	_registered_actions = MenuButton.new()
 	_registered_actions.text = "Workshop actions"
@@ -260,8 +262,10 @@ func _apply_changes() -> void:
 	var point := []
 	for axis in ["X", "Y", "Z"]:
 		point.append(_fields[axis].value)
-	_run("edit", {"changes": {"position": point, "yaw": _fields.Yaw.value,
-		"scale": _fields.Scale.value, "color": _color.color.to_html(false), "name": _name.text}})
+	var changes := {"position": point, "yaw": _fields.Yaw.value, "scale": _fields.Scale.value, "name": _name.text}
+	if not _color.disabled:
+		changes["color"] = _color.color.to_html(false)
+	_run("edit", {"changes": changes})
 
 func _run(tool: String, args: Dictionary) -> void:
 	var request := args.duplicate()
@@ -274,7 +278,10 @@ func _run(tool: String, args: Dictionary) -> void:
 		_selected = result.id if not result.entity.is_empty() else ""
 	_refresh()
 	var messages := {"spawn": "Entity created.", "spawn_prefab": "Prefab placed.", "duplicate": "Entity duplicated.",
-		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone."}
+		"edit": "Properties saved.", "set_behavior": "Behavior saved.", "delete": "Entity deleted.", "undo": "Edit undone.",
+		"restore_dressing": "Authored placement restored."}
+	if tool == "delete" and result.entity.get("hidden", false):
+		messages["delete"] = "Authored prop hidden."
 	_status.text = "Behavior preview updated." if result.get("preview", false) else messages[tool]
 
 func _refresh() -> void:
@@ -286,7 +293,8 @@ func _refresh() -> void:
 	var index := 0
 	if result.ok:
 		for record in result.entities:
-			_entities.add_item("%s  ·  %s" % [EntityTypes.label(record), record.id.left(6)])
+			var prefix := "Hidden · " if record.get("hidden", false) else ""
+			_entities.add_item("%s%s  ·  %s" % [prefix, EntityTypes.label(record), record.id.left(6)])
 			var row := _entities.item_count - 1
 			_entities.set_item_metadata(row, record.id)
 			if record.id == _selected:
@@ -318,19 +326,25 @@ func _invoke_action(index: int) -> void:
 func _select(index: int) -> void:
 	_selected = _entities.get_item_metadata(index)
 	var result: Dictionary = _tools.execute("inspect", {"id": _selected})
-	_apply.disabled = not result.ok
-	_duplicate.disabled = not result.ok
-	_delete.disabled = not result.ok
-	_save_prefab.disabled = not result.ok
-	_color.disabled = not result.ok
-	_name.editable = result.ok
-	_name.text = result.get("entity", {}).get("name", "")
+	var record: Dictionary = result.get("entity", {})
+	var authored: bool = record.get("authored", false)
+	var editable: bool = result.ok and not record.get("hidden", false)
+	_apply.disabled = not editable
+	_duplicate.disabled = not editable or authored
+	_duplicate.visible = not authored
+	_delete.disabled = not editable
+	_delete.text = "Hide" if authored else "Delete"
+	_restore_authored.visible = authored and record.get("overridden", false)
+	_save_prefab.disabled = not editable or authored
+	_color.disabled = not editable or authored
+	(_color.get_parent() as Control).visible = not authored
+	_name.editable = editable
+	_name.text = record.get("name", "")
 	for field in _fields.values():
-		field.editable = result.ok
+		field.editable = editable
 	if not result.ok:
 		_behaviors.show_entity([], {})
 		return
-	var record: Dictionary = result.entity
 	var doors: Array = []
 	if record.type == "pressure_plate":
 		doors = _tools.execute("list_entities").get("entities", []).filter(func(item: Dictionary) -> bool: return item.type == "sliding_door")

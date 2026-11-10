@@ -37,7 +37,7 @@ The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone 
 
 Press **1** to enter The Grid. Aim at the floor and press **B**, then choose **Spawn orange cone**. If you're aiming into the distance, the palette places it a few metres ahead. Aim at an existing cone before pressing **B** to select it, or pick it from the entity list. Change its position, yaw, scale or color, then press **Apply**. Duplicate, delete and undo are in the same palette.
 
-Entity edits save to `grid-entities.json` alongside the existing location save. Undo history lasts for the current session.
+Entity edits save to `grid-entities.json` alongside the existing location save. Each scene keeps up to 64 undo steps across restarts.
 
 To reuse an entity in another Grid space, select it with **B**, enter a name, and
 click **Save prefab**. In any Grid space, pick it from the library and click
@@ -69,18 +69,20 @@ Created environments use the Grid template, appear under **Custom spaces** in th
 
 Press **B** while aiming at solid ground in either scene. Choose an installed
 model and select **Place asset**, or place a prefab from the shared library.
-Aim at a placed prop and press **B** to select it. You can also select it by
+Aim at a prop and press **B** to select it. You can also select it by
 name in the palette. **Apply** saves its name, position, rotation, scale, and
-color. **Duplicate**, **Delete**, and **Undo** use the same edit history as
-agent commands. Each scene keeps its own props across restarts and its own
-undo history while Euclid is running.
+color for placed props. In the villa, you can also move, rotate, resize, rename,
+or **Hide** the original statues and furnishings. Each keeps its original
+finish and moves with its plinth and collision. Select a hidden item from the
+list to **Restore defaults**. The palette and agent commands share each scene’s
+undo history, including after a restart.
 
 In **F2**, try **Place an antique ceramic vase here and call it Garden vase**,
-then **Rotate Garden vase to 90 degrees** or **Undo the last scene edit**.
+**Rotate the original Nile River God statue to 90 degrees**, or **Undo the last scene edit**.
 The native CLI can discover the installed library with `list_scene_assets`
-and placed IDs with `list_entities`. Its prop mutations require the active
-environment ID. Terrain, architecture, and original set dressing are authored
-through the scene builders.
+and prop IDs with `list_entities`. It can call `restore_dressing` on an original
+villa furnishing. Prop mutations require the active environment ID. Terrain,
+architecture, and the authored defaults live in the scene builders and data.
 
 ## Live models
 

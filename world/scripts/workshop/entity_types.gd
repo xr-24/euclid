@@ -33,7 +33,7 @@ static func label(record: Dictionary) -> String:
 		return record.name
 	if record.type == "imported_model":
 		return str(Assets.metadata(record.get("asset_id", "")).get("title", "Imported model"))
-	if record.type == "library_model":
+	if record.type in ["library_model", "authored_dressing"]:
 		return str(Library.info(record.asset_id).get("title", record.asset_id.capitalize()))
 	return TYPES[record.type].label
 

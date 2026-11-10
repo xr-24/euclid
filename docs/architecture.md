@@ -47,7 +47,7 @@ flowchart TD
 
 The Grid keeps the existing `construct` zone ID. Its builder creates the floor and boundaries under a detached root. The backdrop batches the fractured wall and suspended geometry separately from the playable floor. The coordinator attaches the workshop entities on the main thread before committing the zone.
 
-`workshop/world_tools.gd` is the shared command boundary. It accepts `list`, `inspect`, `spawn`, `edit`, `delete` and `undo`. Entity records use a stable ID, a registered type, a position in metres, yaw, scale and a color. The tool service validates every proposed record and writes the next snapshot atomically before applying the edit to the scene. Entity types are trusted factories in `workshop/entity_types.gd`.
+`workshop/world_tools.gd` is the shared command boundary. Entity records use a stable ID, a registered type, a position in metres, yaw, scale and a color. The tool service validates each proposed edit and saves it before changing the scene. Entity types are trusted factories in `workshop/entity_types.gd`.
 
 `workshop/prefab_library.gd` owns versioned, data-only entity snapshots in
 `user://grid-prefabs.json`. The coordinator gives every Grid workshop the same
@@ -60,10 +60,19 @@ its own identity and animation state. A model reference is a validated asset ID.
 The villa and beach use the same palette and command boundary. The coordinator
 attaches a separate prop layer to each finished zone on the main thread.
 `workshop/scene_placement.gd` owns scene bounds and camera-to-surface placement.
-The underlying builder still owns terrain, architecture, water, and original
-dressing. New props store catalog IDs for installed or imported assets and
-use per-instance materials and collision. Existing Grid saves keep their
-paths and format.
+The builder owns terrain, architecture, water, and the original dressing.
+`scene_dressing.gd` groups each authored villa model, its plinth and collision
+under a stable ID. On attachment, `workshop/dressing_layer.gd` applies sparse
+overrides for placement, name and visibility. Restoring defaults removes the
+override and uses the current authored values. After geometry changes, the
+coordinator refreshes the zone’s indirect lighting. Placed props store catalog IDs
+for installed or imported assets and use per-instance materials and collision.
+
+`persistence/scene_edit_store.gd` stores placed props, authored overrides and a
+bounded undo journal in one atomic snapshot. Each scene retains up to 64
+entries within a 2 MiB journal budget. Legacy placed-prop saves load from the
+same paths and use schema 2 on the next successful edit. If only the journal
+is invalid, the placed props and overrides still load.
 
 The palette sends a user-submitted prompt through `agents/grid_agent_client.gd`. The gateway runs Codex CLI under the local ChatGPT sign-in and returns a validated proposal. The coordinator owns the crosshair placement and applies the proposal through the same `spawn` command as the palette. It discards the result when the palette has closed or the zone has changed. The inspector reports success after the entity has been saved and placed.
 

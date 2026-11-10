@@ -114,6 +114,7 @@ func _run() -> void:
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
 	_check_world_tools(path)
 	_check_scene_edits(path)
+	_check_authored_dressing(path + ".dressing")
 	_check_workshop_actions(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
@@ -411,10 +412,60 @@ func _check_scene_edits(path: String) -> void:
 	_check(villa.execute("inspect", {"id": id}).get("entity") == moved.get("entity")
 		and beach.execute("inspect", {"id": beach_prop.id}).get("entity") == beach_prop.get("entity"),
 		"reopen both scene saves with their exact IDs and edits")
+	_check(villa.execute("undo").get("entity") == added.get("entity")
+		and beach.execute("inspect", {"id": beach_prop.id}).ok, "undo a persisted edit only in its own scene")
 	villa_root.free()
 	beach_root.free()
 	DirAccess.remove_absolute(villa_path)
 	DirAccess.remove_absolute(beach_path)
+
+func _check_authored_dressing(path: String) -> void:
+	var zone := Node3D.new()
+	var statue := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	statue.add_child(shape)
+	zone.add_child(statue)
+	var id := "a".repeat(32)
+	var authored := {"id": id, "authored": true, "type": "authored_dressing", "asset_id": "test",
+		"position": [0, 0, 0], "yaw": 0.0, "scale": 1.0, "name": "River statue", "color": "ffffff"}
+	zone.set_meta("authored_dressing", {id: {"record": authored, "node": statue, "shapes": {shape: false}}})
+	var legacy := {"id": "b".repeat(32), "type": "traffic_cone", "position": [0.0, 0.0, -2.0],
+		"yaw": 0.0, "scale": 1.0, "color": "ff681d"}
+	_check(Store.write_json(path, {"schema_version": 1, "entities": [legacy]}) == OK, "seed a legacy placed prop save")
+	var tools := WorldTools.new(path)
+	tools.attach(zone)
+	_check(tools.execute("inspect", {"id": legacy.id}).get("entity") == legacy, "load legacy props without conversion")
+	var changes := {"position": [3, 0, 0], "yaw": 90, "scale": 1.5, "name": "Moved statue"}
+	_check(tools.execute("edit", {"id": id, "changes": changes}).ok and statue.position.x == 3.0
+		and is_equal_approx(statue.rotation_degrees.y, 90.0) and statue.scale == Vector3.ONE * 1.5,
+		"transform an authored prop and its collision together")
+	_check(not tools.execute("edit", {"id": id, "changes": {"color": "0088ff"}}).ok,
+		"keep the original finish on authored props")
+	_check(tools.execute("delete", {"id": id}).ok and not statue.visible and shape.disabled,
+		"hide authored visuals and collision together")
+	var state: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	_check(state.schema_version == 2 and state.entities == [legacy] and state.dressing[id].hidden
+		and state.undo.size() == 2 and authored.position == [0, 0, 0], "save overrides and history together without changing authored data")
+	tools = WorldTools.new(path)
+	tools.attach(zone)
+	_check(tools.execute("inspect", {"id": id}).get("entity", {}).get("hidden", false) and shape.disabled,
+		"reload a hidden authored prop")
+	_check(tools.execute("undo").get("entity", {}).get("name") == "Moved statue" and statue.visible
+		and not shape.disabled and statue.position.x == 3.0, "undo the hide after reload without discarding earlier edits")
+	var restored := SceneCommands.execute(tools, {"tool": "restore_dressing", "target": id}, [])
+	_check(restored.ok and not restored.entity.overridden and statue.position == Vector3.ZERO
+		and statue.scale == Vector3.ONE, "restore the authored defaults")
+	_check(tools.execute("undo").ok and statue.position.x == 3.0, "undo restoring the authored defaults")
+	state = JSON.parse_string(FileAccess.get_file_as_string(path))
+	state.undo = [{"id": id, "previous": [], "dressing": {}}]
+	_check(Store.write_json(path, state) == OK, "seed an invalid undo journal")
+	tools = WorldTools.new(path)
+	tools.attach(zone)
+	_check(not tools.execute("list").get("can_undo", true) and tools.execute("inspect", {"id": legacy.id}).ok
+		and statue.position.x == 3.0, "recover props and overrides even when history is invalid")
+	zone.free()
+	DirAccess.remove_absolute(path)
 
 func _check_text_tools() -> void:
 	var typed := TextEffects.change_between(PackedStringArray(["var a = 1"]), PackedStringArray(["var ab = 1"]))

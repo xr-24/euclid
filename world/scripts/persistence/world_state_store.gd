@@ -8,10 +8,13 @@ static func write(path: String, zone: String, position: Vector3, yaw: float, pit
 	return write_json(path, state)
 
 static func write_json(path: String, state: Dictionary) -> Error:
+	return write_text(path, JSON.stringify(state))
+
+static func write_text(path: String, text: String) -> Error:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
-	file.store_string(JSON.stringify(state))
+	file.store_string(text)
 	file.flush()
 	var error := file.get_error()
 	file.close()

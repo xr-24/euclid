@@ -32,6 +32,15 @@ static func pick(player: CharacterBody3D, camera: Camera3D, bounds: AABB, grid: 
 static func coordinates(point: Vector3) -> Array:
 	return [point.x, point.y, point.z] if point.is_finite() else []
 
+static func valid_coordinates(bounds: AABB, point: Variant) -> bool:
+	if not point is Array or point.size() != 3:
+		return false
+	for axis in 3:
+		var value: Variant = point[axis]
+		if not (value is int or value is float) or not is_finite(float(value)) or value < bounds.position[axis] or value > bounds.end[axis]:
+			return false
+	return true
+
 static func _ray(state: PhysicsDirectSpaceState3D, player: CharacterBody3D, from: Vector3, to: Vector3) -> Dictionary:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [player.get_rid()]

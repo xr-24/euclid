@@ -144,6 +144,18 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   assert.deepEqual(command.changes, { position: [1, 0.15, -76], name: 'Library vase' });
   await sync({ id: command.id, value: { ok: true, id: entityId } });
   assert.equal((await moving).result.isError, false);
+  const invalidRestore = await rpc('tools/call', { name: 'restore_dressing',
+    arguments: { target: entityId } });
+  assert.equal(invalidRestore.error.code, -32602);
+  const restoring = rpc('tools/call', { name: 'restore_dressing',
+    arguments: { zone: context.current, target: entityId } });
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await sync());
+  assert.equal(command?.tool, 'restore_dressing');
+  assert.equal(command.zone, context.current);
+  assert.equal(command.target, entityId);
+  await sync({ id: command.id, value: { ok: true, id: entityId } });
+  assert.equal((await restoring).result.isError, false);
   const invalid = await rpc('tools/call', { name: 'save_prefab', arguments: { target: entityId, name: 'Bad\nname' } });
   assert.equal(invalid.error.code, -32602);
   const saving = rpc('tools/call', { name: 'save_prefab', arguments: { target: entityId, name: 'Hover cone' } });

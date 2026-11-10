@@ -2,8 +2,10 @@ extends RefCounted
 ## Main-thread command boundary shared by the palette and future agent adapters.
 ## Arguments and results contain serializable data. Each successful edit is saved before it appears.
 
+signal authored_geometry_changed
+
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
-const Store = preload("res://scripts/persistence/world_state_store.gd")
+const SceneStore = preload("res://scripts/persistence/scene_edit_store.gd")
 const Art = preload("res://scripts/rendering/zone_effects.gd")
 const PropMotion = preload("res://scripts/animation/prop_motion.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
@@ -12,9 +14,8 @@ const BehaviorHost = preload("res://scripts/plugins/behavior_host.gd")
 const DoorLinks = preload("res://scripts/plugins/door_links.gd")
 const DoorActuator = preload("res://scripts/plugins/door_actuator.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
-const MAX_ENTITIES := 256
-const MAX_UNDO := 64
-const MAX_SAVE_BYTES := 9 * 1024 * 1024
+const DressingLayer = preload("res://scripts/workshop/dressing_layer.gd")
+const MAX_ENTITIES := SceneStore.MAX_ENTITIES
 const EDITABLE := ["position", "yaw", "scale", "color", "animation", "name"]
 
 var _path := ""
@@ -23,6 +24,8 @@ var _behaviors: BehaviorRuntime
 var _links: DoorLinks
 var _preview := {}
 var _entities := {}
+var _dressing := DressingLayer.new()
+var _overrides := {}
 var _nodes := {}
 var _history: Array[Dictionary] = []
 var _root: Node3D
@@ -34,31 +37,17 @@ func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime
 	bounds = scene_bounds
 	_prefabs = prefabs
 	_behaviors = behaviors
-	if path.is_empty() or not FileAccess.file_exists(path):
-		return
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() > MAX_SAVE_BYTES:
-		_load_error = "The scene prop save could not be read."
-		return
-	var state: Variant = JSON.parse_string(file.get_as_text())
-	if not state is Dictionary or state.get("schema_version") != 1 or not state.get("entities") is Array:
-		_load_error = "The scene prop save has an invalid format."
-		return
-	if state.entities.size() > MAX_ENTITIES:
-		_load_error = "The scene prop save exceeds the entity limit."
-		return
-	var loaded := {}
-	for item in state.entities:
-		if not item is Dictionary or not _valid_record(item) or loaded.has(item.id):
-			_load_error = "The scene prop save contains an invalid entity."
-			return
-		loaded[item.id] = item
-	_entities = loaded
+	var state := SceneStore.read(path, _valid_record, DressingLayer.valid_override.bind(bounds))
+	_load_error = state.get("error", "")
+	_entities = state.get("entities", {})
+	_overrides = state.get("dressing", {})
+	_history.assign(state.get("undo", []))
 
 func attach(zone: Node3D) -> void:
 	_nodes.clear()
 	_root = null
 	_preview = {}
+	_dressing.attach(zone, _overrides)
 	if zone == null:
 		return
 	_links = DoorLinks.new()
@@ -74,30 +63,40 @@ func execute(tool: String, args := {}) -> Dictionary:
 	if not _load_error.is_empty():
 		return _error(_load_error)
 	var id: Variant = args.get("id")
-	var record: Dictionary = _entities.get(id, {})
+	var record := _record(id)
+	var authored := _dressing.has(id)
 	match tool:
 		"list":
-			return {"ok": true, "entities": _entities.values().duplicate(true), "can_undo": not _history.is_empty()}
+			return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty()}
 		"list_entities":
 			var entities: Array[Dictionary] = []
-			for item in _entities.values():
-				entities.append({"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
+			for item in _records():
+				var entry := {"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
 					"position": item.position.duplicate(), "yaw": item.yaw, "scale": item.scale, "color": item.color,
-					"behavior": _effective(item).get("behavior", {}).get("id", "")})
+					"behavior": _effective(item).get("behavior", {}).get("id", "")}
+				if item.get("authored", false):
+					entry.merge({"authored": true, "hidden": item.hidden, "overridden": item.overridden})
+				entities.append(entry)
 			return {"ok": true, "entities": entities}
 		"list_scene_assets":
 			return {"ok": true, "assets": EntityTypes.library_catalog()}
 		"list_behaviors":
+			if authored:
+				return {"ok": true, "behaviors": []}
 			if id != null and id != "" and record.is_empty():
 				return _error("Select an entity first.")
 			return {"ok": true, "behaviors": _behaviors.available(record.get("type", "")) if _behaviors else []}
 		"set_behavior":
 			if record.is_empty():
 				return _error("Select an entity first.")
+			if authored:
+				return _error("Place a library copy to attach behaviors to this model.")
 			return _set_behavior(id, record, args.get("behavior"))
 		"inspect":
 			return {"ok": true, "entity": _effective(record).duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
 		"list_prefabs", "save_prefab", "spawn_prefab":
+			if tool == "save_prefab" and authored:
+				return _error("Place a library copy to save this model as a prefab.")
 			return _prefab_command(tool, args, record)
 		"spawn":
 			var type: Variant = args.get("type")
@@ -126,11 +125,15 @@ func execute(tool: String, args := {}) -> Dictionary:
 		"edit":
 			if record.is_empty():
 				return _error("Select an entity first.")
+			if record.get("hidden", false):
+				return _error("Restore the authored prop before editing it.")
 			var changes: Variant = args.get("changes")
 			if not changes is Dictionary or changes.is_empty():
 				return _error("Choose properties to edit.")
 			var proposed := record.duplicate()
 			for key in changes:
+				if authored and key not in DressingLayer.PROPERTIES:
+					return _error("Authored props support position, rotation, scale and name edits.")
 				if key not in EDITABLE:
 					return _error("Unknown editable property.")
 				if key == "name" and changes.name is String:
@@ -145,6 +148,8 @@ func execute(tool: String, args := {}) -> Dictionary:
 		"duplicate":
 			if record.is_empty():
 				return _error("Select an entity first.")
+			if authored:
+				return _error("Place a separate copy of this model from the scene asset library.")
 			var placement := record.duplicate(true)
 			var offset: float = 0.8 * record.scale
 			var point: Array = placement.position
@@ -152,18 +157,22 @@ func execute(tool: String, args := {}) -> Dictionary:
 			placement["position"] = args.get("position", point)
 			return execute("spawn", placement)
 		"delete":
-			if record.is_empty():
+			if record.is_empty() or record.get("hidden", false):
 				return _error("Select an entity first.")
 			return _edit(id, record, {})
+		"restore_dressing":
+			if not authored:
+				return _error("Select a prop from the original scene dressing.")
+			return _edit_dressing(id, {})
 		"undo":
 			if _history.is_empty():
 				return _error("There are no edits to undo.")
 			var edit: Dictionary = _history.back()
-			if not _apply_records(edit.previous):
+			var history := _history.slice(0, _history.size() - 1)
+			if not _commit(edit.previous, edit.get("dressing", {}), history):
 				return _error("The scene prop save could not be written.")
 			_restore_door_heights(edit.get("doors", {}))
-			_history.pop_back()
-			var previous: Dictionary = edit.previous.get(edit.id, {})
+			var previous := _record(edit.id)
 			return {"ok": true, "id": edit.id, "entity": previous.duplicate(true)}
 	return _error("Unknown world tool.")
 
@@ -176,10 +185,10 @@ func run_action(targets: Array) -> Dictionary:
 		return edit
 	if edit.next.is_empty() and edit.doors == edit.openings:
 		return {"ok": true}
-	if not _apply_records(edit.next):
+	var history := _with_undo({"id": "", "previous": edit.previous, "doors": edit.doors})
+	if not _commit(edit.next, {}, history):
 		return _error("The scene prop save could not be written.")
 	_restore_door_heights(edit.openings)
-	_remember({"id": "", "previous": edit.previous, "doors": edit.doors})
 	return {"ok": true}
 
 func _prepare_action(targets: Array) -> Dictionary:
@@ -309,36 +318,67 @@ func _prefab_command(tool: String, args: Dictionary, record: Dictionary) -> Dict
 	return _error("Unknown prefab tool.")
 
 func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary:
+	if _dressing.has(id):
+		return _edit_dressing(id, _dressing.changes_for(id, proposed, _overrides.get(id, {})))
 	if not proposed.is_empty() and not _valid_record(proposed):
 		return _error("Use a position inside this scene, a scale from 0.25 to 4, a six-digit color, and a printable name.")
 	if proposed == previous:
 		return {"ok": true, "id": id, "entity": previous.duplicate(true)}
 	var next := proposed.duplicate(true)
-	if not _apply_records({id: next}):
+	if not _commit({id: next}, {}, _with_undo({"id": id, "previous": {id: previous}})):
 		return _error("The scene prop save could not be written.")
-	_remember({"id": id, "previous": {id: previous}})
 	return {"ok": true, "id": id, "entity": next.duplicate(true)}
 
-func _remember(edit: Dictionary) -> void:
-	_history.append(edit)
-	if _history.size() > MAX_UNDO:
-		_history.pop_front()
+func _edit_dressing(id: String, proposed: Dictionary) -> Dictionary:
+	if not DressingLayer.valid_override(proposed, bounds):
+		return _error("Use a position inside this scene, a scale from 0.25 to 4, and a printable name.")
+	var previous: Dictionary = _overrides.get(id, {})
+	if proposed != previous:
+		var history := _with_undo({"id": id, "previous": {}, "dressing": {id: previous}})
+		if not _commit({}, {id: proposed.duplicate(true)}, history):
+			return _error("The scene prop save could not be written.")
+	return {"ok": true, "id": id, "entity": _record(id)}
 
-func _apply_records(records: Dictionary) -> bool:
-	if records.is_empty():
-		return true
-	var previous := _entities
-	var next := _entities.duplicate()
-	for id in records:
-		if records[id].is_empty():
+func _record(id: Variant) -> Dictionary:
+	return _dressing.record(id, _overrides.get(id, {})) if _dressing.has(id) else _entities.get(id, {})
+
+func _records() -> Array:
+	return _entities.values() + _dressing.records(_overrides)
+
+func _with_undo(edit: Dictionary) -> Array[Dictionary]:
+	var history := _history.duplicate()
+	history.append(edit)
+	return SceneStore.trimmed(history)
+
+static func _updated(layer: Dictionary, updates: Dictionary) -> Dictionary:
+	var next := layer.duplicate()
+	for id in updates:
+		if updates[id].is_empty():
 			next.erase(id)
 		else:
-			next[id] = records[id]
-	if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "entities": next.values()}) != OK:
+			next[id] = updates[id]
+	return next
+
+func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionary]) -> bool:
+	var previous := _entities
+	var previous_overrides := _overrides
+	var next := _updated(_entities, records)
+	var overrides := _updated(_overrides, dressing)
+	if next.size() > MAX_ENTITIES or overrides.size() > SceneStore.MAX_DRESSING or not SceneStore.write(_path, next, overrides, history):
 		return false
 	_entities = next
+	_overrides = overrides
+	_history = history
 	for id in records:
 		_sync_record(id, previous.get(id, {}), records[id])
+	var geometry_changed := false
+	for id in dressing:
+		if _dressing.has(id):
+			var override: Dictionary = overrides.get(id, {})
+			_dressing.apply(id, override)
+			geometry_changed = geometry_changed or DressingLayer.changes_geometry(previous_overrides.get(id, {}), override)
+	if geometry_changed:
+		authored_geometry_changed.emit()
 	return true
 
 func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
@@ -420,14 +460,9 @@ func animation_player(id: String) -> Node:
 	return null
 
 func _valid_record(record: Dictionary) -> bool:
-	var id: Variant = record.get("id")
-	var point: Variant = record.get("position")
-	return id is String and id.length() == 32 and id.is_valid_hex_number() \
+	return SceneStore.valid_id(record.get("id")) \
 		and EntityTypes.valid_properties(record) \
-		and point is Array and point.size() == 3 \
-		and EntityTypes.number_between(point[0], bounds.position.x, bounds.end.x) \
-		and EntityTypes.number_between(point[1], bounds.position.y, bounds.end.y) \
-		and EntityTypes.number_between(point[2], bounds.position.z, bounds.end.z)
+		and Placement.valid_coordinates(bounds, record.get("position"))
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "error": message}

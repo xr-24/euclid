@@ -765,7 +765,7 @@ func _submit_codex_command(prompt: String) -> void:
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _scene_ready():
 		var entities: Array = world_tools.execute("list_entities").get("entities", [])
-		context["entities"] = entities.slice(maxi(0, entities.size() - 64))
+		context["entities"] = SceneCommands.planning_entities(entities, prompt, player.global_position)
 		context["prefabs"] = world_tools.execute("list_prefabs").get("prefabs", [])
 		context["behaviors"] = world_tools.execute("list_behaviors").get("behaviors", [])
 		context["scene_assets"] = world_tools.execute("list_scene_assets").get("assets", [])
@@ -1123,6 +1123,8 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 			scene_tools[zone_id] = WorldTools.new(path, prefab_library, behavior_runtime, ScenePlacement.bounds_for(zone_id))
 		world_tools = scene_tools[zone_id]
 		world_tools.attach(zone_root)
+		if not world_tools.authored_geometry_changed.is_connected(_refresh_authored_lighting):
+			world_tools.authored_geometry_changed.connect(_refresh_authored_lighting)
 	if side != 0.0:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
@@ -1131,6 +1133,10 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
+
+func _refresh_authored_lighting() -> void:
+	if environment:
+		WorldArt.rebuild_gi(self, zone_id)
 
 ## Build the other zones once in the background after startup, so their models, textures and
 ## shaders are already loaded the first time you shift to them.

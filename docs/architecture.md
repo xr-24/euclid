@@ -84,10 +84,15 @@ trail, a flash for inserted characters, dissolving ghosts for removed ones and a
 on load. It diffs consecutive texts (a line-level LCS refined to characters) rather than hooking
 editor internals, so typing, undo, Codex proposals and streamed logs all animate the same way.
 `ui/glow_layer.gd` blooms the finished panel from the screen texture's mipmaps. Both follow the
-Workbench's **FX** switch. The F2 uplink uses the same theme, displays new replies progressively,
-and keeps a session-local prompt history. `scripts/background-render.py --text-tools` uses a
+Workbench's **FX** switch. The F2 uplink uses the same theme and displays new replies progressively.
+`scripts/background-render.py --text-tools` uses a
 read-only gateway stand-in and writes fixture buffers alongside the captures. The native CLI
 still opens through `scripts/codex-terminal.ps1`. See the [embedded terminal proposal](terminal-blueprint.md).
+
+`persistence/development_session.gd` saves F2 scrollback and prompt recall
+alongside the last F4 file and tab in the normal profile. It stores presentation
+state. The gateway remains the authority on the active patch and its check
+results. Preview and recovery sessions use separate state.
 
 The standard Euclid launcher supplies a separate credential for the Workbench
 transport, and F4 opens the editor in the running world. The native world MCP
@@ -100,8 +105,11 @@ eligible paths and fingerprints editor buffers. `workbench-git.mjs` creates a
 detached worktree, verifies the full reviewed patch, commits it, and fast-forwards
 the primary branch only if its checkout is clean and its tip still matches the
 draft base. The worktree and its metadata live under `.local/workbench`.
-A restarted gateway recovers the draft and requires fresh checks. Rollback adds a
-revert commit when a Workbench commit is at the branch tip.
+A restarted gateway recovers the draft and the last completed check output
+keyed to its reviewed patch. A recovered failure can guide a revision. A
+recovered pass is retained as evidence and needs a fresh check to authorize
+preview or commit. Rollback adds a revert commit when a Workbench commit is
+at the branch tip.
 
 For a general F2 source request, `gateway/workbench-agent-draft.mjs` copies
 the pinned checkout into a temporary source workspace without its Git metadata

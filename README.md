@@ -57,7 +57,7 @@ Codex can propose one cone with a color and scale. Euclid places it at the cross
 
 ## Codex uplink
 
-Press **F2** in any environment. Type at the prompt and press **Enter**. Use the square and dash to expand and minimize the dock. Press **↑** and **↓** to recall up to 100 submitted prompts. Euclid keeps up to 300 scrollback entries during the running session. The arrow opens the interactive Codex CLI in a native Windows terminal. Use **Alt+Tab** to switch between Euclid and that window. See the [embedded terminal proposal](docs/terminal-blueprint.md).
+Press **F2** in any environment. Type at the prompt and press **Enter**. Use the square and dash to expand and minimize the dock. Press **↑** and **↓** to recall up to 100 submitted prompts. With the standard launcher, Euclid keeps that recall history and up to 300 scrollback entries across restarts. The arrow opens the interactive Codex CLI in a native Windows terminal. Use **Alt+Tab** to switch between Euclid and that window. See the [embedded terminal proposal](docs/terminal-blueprint.md).
 
 When the Codex avatar is close and in view, **E: Command agent** opens the same uplink. The avatar uses a higher-contrast projection in the villa and on the beach.
 
@@ -254,6 +254,12 @@ from the existing patch and receives the latest check output. F4's
 **Revision** tab shows what changed since the previous version, while **Diff**
 shows the full patch. **Restore previous** swaps the two versions. Run fresh
 checks after either action before previewing or committing.
+
+After a restart, open **F4** to return to the active draft, last selected file,
+and review tab. **Checks** keeps the last completed result for that patch. A
+failed draft can be revised from **F2** using that result. If the gateway
+restarted too, run checks again before previewing or committing a previously
+passing draft.
 
 The source workspace supports one active task and up to 24 changed Godot
 source or test files. The checks and preview run code from the reviewed draft

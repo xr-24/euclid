@@ -13,8 +13,8 @@ preview, or commits. The group duplication proof exercised this flow through
 preview and verified that one Undo removed the duplicated group.
 
 F4 also has a tabbed source editor with quick-open, find/replace, syntax highlighting,
-per-file undo, and local recovery of unstaged buffers. F2 has prompt recall and
-scrollback for the current session. See the [Workbench editor guide](../README.md#workbench-editor).
+per-file undo, and local recovery of unstaged buffers. F2 retains prompt recall
+and scrollback across restarts. See the [Workbench editor guide](../README.md#workbench-editor).
 
 F2 and F4 can revise the active agent-authored source draft using the existing
 patch and latest checks. F4 shows the revision diff and can restore the previous
@@ -26,11 +26,13 @@ source areas alongside their validation and activation paths.
 
 ## 2. Session continuity and safe activation
 
+Euclid reopens the active draft and its last completed checks, the F2
+conversation, and the selected F4 file and review tab. The launcher verifies
+boot and retains a separate last-known-good launch path.
+
 Define reload boundaries for plugins, UI, scenes, and other replaceable
-subsystems. For core changes, the launcher should verify the new boot and
-restore the development session, including the conversation, draft, and
-workspace. Test save migrations on copies before activation and keep an
-independent fallback for launcher, gateway, and runtime failures.
+subsystems. Test save migrations on copies before activation and extend
+independent fallback coverage for launcher, gateway, and runtime failures.
 
 The [embedded terminal proposal](terminal-blueprint.md) covers interactive shell
 sessions, including a later gateway-hosted session that can reconnect after a restart.

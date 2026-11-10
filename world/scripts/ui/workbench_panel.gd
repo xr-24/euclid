@@ -5,6 +5,8 @@ extends MarginContainer
 
 signal close_requested
 signal restart_requested
+signal view_changed(file: String, tab: String)
+signal commit_recorded(revision: String)
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
 const Look = preload("res://scripts/ui/terminal_theme.gd")
@@ -58,6 +60,8 @@ var _preview_behavior: Callable
 var _finish_behavior: Callable
 var _behavior_status: Callable
 var _plugin_context: Callable
+var _view_ready := false
+var _requested_review := ""
 
 ## Source locations named in a check log, as {"path": "world/...", "line": zero-based line}.
 static func error_locations(log: String) -> Array:
@@ -72,7 +76,7 @@ static func error_locations(log: String) -> Array:
 	return found
 
 func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
-		behavior_status: Callable, plugin_context: Callable) -> void:
+		behavior_status: Callable, plugin_context: Callable, saved_view := {}) -> void:
 	_preview_behavior = preview_behavior
 	_finish_behavior = finish_behavior
 	_behavior_status = behavior_status
@@ -134,6 +138,7 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tabs.custom_minimum_size.y = 220
 	_tabs.tab_changed.connect(func(_index: int) -> void: _update_cursor())
+	_tabs.tab_changed.connect(func(_index: int) -> void: _remember_view())
 	main.add_child(_tabs)
 	var source := VBoxContainer.new()
 	source.name = "Source"
@@ -224,7 +229,7 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 			_save_buffers(false))
 	add_child(autosave)
 	autosave.start()
-	_load_catalog()
+	_load_catalog(saved_view)
 
 func _button(parent: Control, label: String, callback: Callable) -> Button:
 	var button := Button.new()
@@ -310,7 +315,7 @@ func _on_editor_command(command: String) -> void:
 			font_size = clampi(font_size + (1 if command == "zoom_in" else -1), 11, 28)
 			_skin.default_font_size = font_size
 
-func _load_catalog() -> void:
+func _load_catalog(saved_view: Dictionary) -> void:
 	_busy = true
 	_sync_controls()
 	var result := await _client.send("catalog")
@@ -321,9 +326,24 @@ func _load_catalog() -> void:
 		_status.text = result.error
 		_sync_controls()
 		return
+	var file: String = saved_view.get("file", "")
+	if _catalog.has(file):
+		await _open_file(file)
 	await _poll(true)
-	if _state.get("draft") is Dictionary and _tabs.current_tab == 0:
-		_tabs.current_tab = 1
+	var draft: Variant = _state.get("draft")
+	if not _requested_review.is_empty():
+		show_review(_requested_review == "Checks")
+	elif draft is Dictionary:
+		var tab: int = ["Source", "Diff", "Checks", "Revision"].find(saved_view.get("tab", ""))
+		if tab < 0 or _tabs.is_tab_hidden(tab):
+			tab = 2 if draft.status == "failed" else 1
+		_tabs.current_tab = tab
+	_view_ready = true
+	_remember_view()
+
+func _remember_view() -> void:
+	if _view_ready:
+		view_changed.emit(_source, _tabs.get_tab_title(_tabs.current_tab))
 
 func _build_tree() -> void:
 	_tree_updating = true
@@ -447,6 +467,7 @@ func _show_file(file: String) -> void:
 	_refresh_tabs()
 	_update_cursor()
 	_sync_controls()
+	_remember_view()
 
 func _close_tab(index: int) -> void:
 	var file: String = _file_tabs.get_tab_metadata(index)
@@ -470,6 +491,7 @@ func _close_file() -> void:
 		_update_cursor()
 		_mark_tree()
 		_sync_controls()
+		_remember_view()
 
 func _close_buffer(file: String) -> void:
 	if not _buffers.has(file):
@@ -659,6 +681,8 @@ func _command(action: String, arguments := {}) -> void:
 			if not previous.is_empty():
 				await _open_file(previous)
 			var short: String = result.get("commit", "").left(7)
+			if action == "apply":
+				commit_recorded.emit(result.commit)
 			var messages := {"discard": "Discarded the Git draft.",
 				"apply": "Committed %s. The %s stays active." % [short, live_subject] if finished.live else "Committed %s. Restart Euclid to load it here." % short,
 				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
@@ -700,6 +724,8 @@ func _poll(force := false) -> void:
 		_show_state(result)
 
 func show_review(logs := false) -> void:
+	if not _view_ready:
+		_requested_review = "Checks" if logs else "Diff"
 	_tabs.current_tab = 2 if logs else (1 if _tabs.is_tab_hidden(3) else 3)
 
 func _show_state(result: Dictionary) -> void:
@@ -730,8 +756,11 @@ func _show_state(result: Dictionary) -> void:
 		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload", "restart": "Restart Euclid"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
 			draft.error if draft.status == "failed" else messages[draft.status]]
-		if draft.status == "staged" and not draft.get("summary", "").is_empty():
-			_status.text = draft.summary + " Review the diff before previewing."
+		if draft.status == "staged":
+			if draft.get("check_status") == "passed":
+				_status.text = "Previous checks passed. Run checks again to preview or commit."
+			elif not draft.get("summary", "").is_empty():
+				_status.text = draft.summary + " Review the diff before previewing."
 		if not draft.get("revision_notice", "").is_empty():
 			_status.text = draft.revision_notice
 		elif result.get("playing", false) and draft.status != "revising":
@@ -749,7 +778,9 @@ func _show_state(result: Dictionary) -> void:
 		if not _log.text.is_empty():
 			_log.fx.show_text("")
 		_mark_errors()
-		_chip.text = ""
+		var revision: String = result.get("revision", "")
+		_chip.text = "" if revision.is_empty() else "commit · " + revision.left(7)
+		_chip.add_theme_color_override("font_color", Look.GOOD)
 		if _buffers.is_empty():
 			_status.text = "Choose a source file to start."
 	_sync_controls()
@@ -831,7 +862,7 @@ func _sync_controls() -> void:
 	_buttons.discard.disabled = _busy or not staged or (blocked and operation not in ["checking", "authoring", "revising"])
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
-	_buttons.restart.disabled = blocked or staged
+	_buttons.restart.disabled = blocked or playing or live == "active"
 
 func _live_status() -> String:
 	var draft: Variant = _state.get("draft")

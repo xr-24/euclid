@@ -18,7 +18,7 @@ const ACCENT := Look.ACCENT
 const TYPE_RATE := 900.0
 const HISTORY_LIMIT := 100
 
-## Submitted prompts for ↑/↓ recall, kept for the session across console reopenings.
+## Submitted prompts for ↑/↓ recall. The main world restores and saves these.
 static var prompts := PackedStringArray()
 
 var expanded := false

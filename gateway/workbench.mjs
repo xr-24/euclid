@@ -102,6 +102,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const worktree = checkoutPath(directory, metadata.checkout ?? 'worktree');
       const diff = await git.review(worktree, base, names);
       if (digest !== fingerprint(diff)) throw new Error('The recovered Git worktree differs from the reviewed draft.');
+      const savedCheck = metadata.check;
+      const check = savedCheck?.version === digest && ['passed', 'failed'].includes(savedCheck.status) &&
+        typeof savedCheck.log === 'string' && typeof savedCheck.error === 'string' ? savedCheck : null;
       let revisionDiff = '';
       if (previous) {
         const earlier = await readPrevious(directory, worktree, base, previous);
@@ -111,7 +114,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         previous, revisionDiff, request,
         agentSource: agentSource === true,
         fromWorld: fromWorld ?? (appearanceFor(names)?.payload === 'shoreline'),
-        plugin: agentSource === true ? null : await livePlugin(worktree, names, binding), status: 'staged', log: '', error: '' };
+        plugin: agentSource === true ? null : await livePlugin(worktree, names, binding),
+        status: check?.status === 'failed' ? 'failed' : 'staged', check, log: check?.log ?? '', error: check?.error ?? '' };
     }
   }
 
@@ -129,6 +133,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       id: draft.id, name: draft.names.length === 1 ? draft.names[0] : `${draft.names.length} files`, files: draft.names,
       diff: draft.diff, status: sourceJob?.revising ? 'revising' : draft.status,
       log: sourceJob?.revising ? sourceJob.log : draft.log, error: draft.error,
+      check_status: draft.check?.status ?? '',
       version: fingerprint(draft.diff), can_revise: draft.agentSource === true,
       revision_diff: draft.revisionDiff ?? '', revision_notice: draft.revisionNotice ?? '', has_previous: Boolean(draft.previous),
       live: Boolean(draft.plugin || appearance || tool), activation: appearance?.activation ?? (draft.plugin || tool ? 'live' : 'restart'),
@@ -230,7 +235,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await writeFile(patch, change.diff, { flag: 'wx' });
         await git.apply(worktree, patch);
         const context = { request: change.request ?? '', files: change.names, summary: change.summary,
-          check_status: change.status, check_error: change.error, check_output: change.status === 'staged' ? '' : change.log };
+          check_status: change.check?.status ?? change.status, check_error: change.check?.error ?? '',
+          check_output: change.check?.log ?? '' };
         const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: editSource,
           signal: controller.signal, onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         const names = await git.changedPaths(worktree, base);
@@ -338,17 +344,22 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     }
   }
 
-  async function registerDraft(change, log = '') {
-    const { id, names, base, branch, directory, worktree, binding, summary, fromWorld, agentSource } = change;
-    const diff = await git.review(worktree, base, names);
-    if (Buffer.byteLength(diff) > maxDiff) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
-    const plugin = agentSource ? null : await livePlugin(worktree, names, binding);
+  async function saveDraft(change, diff, check) {
+    const { id, names, base, branch, directory, worktree, binding, summary, fromWorld, agentSource, previous, request } = change;
     const metadata = path.join(directory, 'draft.json');
     const pending = metadata + '.next';
     await writeFile(pending, JSON.stringify({ id, names, base, branch, digest: fingerprint(diff), binding, summary, fromWorld, agentSource,
-      checkout: path.basename(worktree), previous: change.previous, request: change.request }));
+      checkout: path.basename(worktree), previous, request, check }));
     await rename(pending, metadata);
-    draft = { ...change, diff, plugin, status: 'staged', log, error: '' };
+  }
+
+  async function registerDraft(change, log = '') {
+    const { worktree, base, names, binding, agentSource } = change;
+    const diff = await git.review(worktree, base, names);
+    if (Buffer.byteLength(diff) > maxDiff) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
+    const plugin = agentSource ? null : await livePlugin(worktree, names, binding);
+    await saveDraft(change, diff);
+    draft = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
   }
 
   async function ask(body, signal) {
@@ -381,9 +392,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const change = requireDraft(id, version);
     if (runner.playing()) throw new Error('Close the preview before rerunning checks.');
     operation = 'checking';
-    Object.assign(change, { status: 'checking', log: '', error: '', revisionNotice: '' });
+    Object.assign(change, { status: 'checking', check: null, log: '', error: '', revisionNotice: '' });
     const controller = new AbortController();
     const finished = (async () => {
+      let status = 'passed';
+      let error = '';
       try {
         await verifyReview(change);
         const appearance = appearanceFor(change.names);
@@ -392,11 +405,19 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         if (tool) readWorkshopTool((await readSource(change.worktree, tool)).text, tool);
         await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal);
         await verifyReview(change);
-        change.status = 'passed';
-      } catch (error) {
-        change.status = 'failed';
-        change.error = error.message;
+      } catch (failure) {
+        status = 'failed';
+        error = failure.message;
+      }
+      try {
+        const check = { version: fingerprint(change.diff), status, error, log: change.log };
+        if (!controller.signal.aborted) await saveDraft(change, change.diff, check);
+        change.check = check;
+      } catch (failure) {
+        change.revisionNotice = `Could not save the check output for reopening. ${failure.message}`;
+        change.check = { status, error, log: change.log };
       } finally {
+        Object.assign(change, { status, error });
         checks = null;
         if (operation === 'checking') operation = '';
       }

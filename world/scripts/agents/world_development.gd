@@ -2,11 +2,13 @@ extends Node
 ## Tracks a Workbench draft requested through the in-world agent.
 
 signal changed
+signal _refresh_finished
 
 const Client = preload("res://scripts/agents/workbench_client.gd")
 var draft := {}
 var _client: Client
 var _busy := false
+var _refreshing := false
 
 func configure(url: String, token: String, capability: String) -> void:
 	_client = Client.new()
@@ -48,9 +50,12 @@ func forget(id: String) -> void:
 		changed.emit()
 
 func _send(action: String, arguments: Dictionary) -> Dictionary:
+	if action != "state" and _refreshing:
+		await _refresh_finished
 	if _busy:
 		return {"error": "The Workbench is handling another request. Try again in a moment."}
 	_busy = true
+	_refreshing = action == "state"
 	var response := await _client.send(action, arguments)
 	_busy = false
 	if not response.has("error"):
@@ -66,4 +71,7 @@ func _send(action: String, arguments: Dictionary) -> Dictionary:
 		if next != draft:
 			draft = next
 			changed.emit()
+	if action == "state":
+		_refreshing = false
+		_refresh_finished.emit()
 	return response

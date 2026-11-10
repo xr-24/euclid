@@ -18,6 +18,7 @@ const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
+const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
@@ -84,6 +85,7 @@ var console_lines := PackedStringArray()
 var _workbench_capability := ""
 var _workbench_panel: Control
 var _development: WorldDevelopment
+var _development_session: DevelopmentSession
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
@@ -98,6 +100,8 @@ func _ready() -> void:
 	smoke_mode = "--smoke" in args or "--capture" in args or water_check or benchmark
 	if not smoke_mode and "--workbench-preview" not in args:
 		_workbench_capability = OS.get_environment("EUCLID_WORKBENCH_TOKEN")
+		if not _workbench_capability.is_empty():
+			_resume_development("user://development-session.json")
 	OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
 	environment_library = EnvironmentLibrary.new("" if smoke_mode else "user://environments.json")
 	manifest.zones.append_array(environment_library.environments())
@@ -377,10 +381,16 @@ func _open_workbench() -> void:
 	overlay.add_theme_stylebox_override("panel", frame)
 	_workbench_panel = WorkbenchPanel.new()
 	overlay_content.add_child(_workbench_panel)
+	var saved_view := {}
+	if _development_session:
+		saved_view = {"file": _development_session.file, "tab": _development_session.tab}
+		_workbench_panel.view_changed.connect(_development_session.save_view)
 	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_change,
-		_finish_live_change, _live_change_status, _workbench_plugin_context)
+		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view)
 	_workbench_panel.close_requested.connect(_close_panel)
 	_workbench_panel.restart_requested.connect(_restart_workbench)
+	_workbench_panel.commit_recorded.connect(func(revision: String) -> void:
+		_console_notice("Committed source draft %s." % revision.left(7)))
 
 func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
@@ -630,8 +640,15 @@ func _console_notice(line: String) -> void:
 	console_lines.append(line)
 	if console_lines.size() > CONSOLE_SCROLLBACK:
 		console_lines.remove_at(0)
+	if _development_session:
+		_development_session.save_console(console_lines, CodexConsole.prompts)
 	if is_instance_valid(codex_console):
 		codex_console.update_display(console_lines, console_busy)
+
+func _resume_development(path: String) -> void:
+	_development_session = DevelopmentSession.new(path)
+	console_lines = _development_session.lines
+	CodexConsole.prompts = _development_session.prompts
 
 func _open_native_cli() -> void:
 	if OS.get_name() != "Windows" or not is_instance_valid(world_bridge):
@@ -1360,6 +1377,7 @@ func _setup_gateway() -> void:
 		add_child(_development)
 		_development.configure(gateway_url, gateway_token, _workbench_capability)
 		_development.changed.connect(_development_changed)
+		_development.refresh()
 	request = HTTPRequest.new()
 	request.timeout = 3
 	add_child(request)

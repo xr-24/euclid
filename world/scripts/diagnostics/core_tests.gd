@@ -18,8 +18,21 @@ const FindBar = preload("res://scripts/ui/find_bar.gd")
 const QuickOpen = preload("res://scripts/ui/quick_open.gd")
 const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const CodexConsole = preload("res://scripts/ui/codex_console.gd")
+const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
+const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 var _failures := 0
 var _checks := 0
+
+class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
+	signal finish_poll
+	var revised := false
+
+	func send(action: String, _arguments := {}) -> Dictionary:
+		if action == "state":
+			await finish_poll
+		elif action == "revise":
+			revised = true
+		return {}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -103,6 +116,8 @@ func _run() -> void:
 	_check_linked_plugin(path)
 	_check_shoreline_look()
 	_check_text_tools()
+	_check_development_session()
+	await _check_development_refresh()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -407,3 +422,29 @@ func _check_text_tools() -> void:
 	console.update_display(PackedStringArray(["> hello", "world", "more output"]), false)
 	_check(console._history.visible_characters >= 0, "new console output types in")
 	console.free()
+
+func _check_development_session() -> void:
+	var path := "user://development-test-%d.json" % Time.get_ticks_usec()
+	var session := DevelopmentSession.new(path)
+	var lines := PackedStringArray(["> Fix the failing check", "The draft failed checks."])
+	var prompts := PackedStringArray(["Fix the failing check"])
+	session.save_console(lines, prompts)
+	session.save_view("world/scripts/world.gd", "Checks")
+	var reopened := DevelopmentSession.new(path)
+	_check(reopened.lines == lines and reopened.prompts == prompts, "reopen console scrollback and prompt recall")
+	_check(reopened.file == "world/scripts/world.gd" and reopened.tab == "Checks", "reopen selected Workbench file and tab")
+	Store.write_json(path, {"schema_version": 2, "lines": Array(lines)})
+	_check(DevelopmentSession.new(path).lines.is_empty(), "ignore unsupported development session saves")
+	DirAccess.remove_absolute(path)
+
+func _check_development_refresh() -> void:
+	var development := WorldDevelopment.new()
+	var client := RefreshFixtureClient.new()
+	development.add_child(client)
+	development._client = client
+	development.refresh()
+	client.finish_poll.emit.call_deferred()
+	var result := await development.revise("Fix the failing check", {"id": "fixture", "version": "reviewed"})
+	_check(client.revised and not result.has("error"), "an F2 revision waits for the draft refresh")
+	await process_frame
+	development.free()

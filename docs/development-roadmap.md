@@ -20,6 +20,10 @@ F2 and F4 can revise the active agent-authored source draft using the existing
 patch and latest checks. F4 shows the revision diff and can restore the previous
 patch. Each revision or restore needs fresh checks.
 
+A connected agent can read source, submit and revise its own draft, and run
+its checks through the [development MCP endpoint](agents.md#development-tools-for-connected-agents).
+Drafts record the agent that owns them.
+
 **Remaining.** Add durable task history, separate workspaces for concurrent
 agents, and conflict review when the primary branch advances. Expand eligible
 source areas alongside their validation and activation paths.

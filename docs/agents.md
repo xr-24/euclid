@@ -53,7 +53,48 @@ The Claude adapter has no command execution, so it creates and edits files but
 cannot delete one. `--restricted` needs Claude Code v2.1.248 or later. Schemas
 travel on the command line and are limited to 24,000 characters.
 
+## Development tools for connected agents
+
+An agent that connects over MCP can do source work itself. The gateway serves
+a second MCP endpoint beside the world tools:
+
+`POST http://127.0.0.1:4317/mcp/dev/<development capability>/<agent name>`
+
+It needs the gateway bearer credential and the development capability, which
+the gateway writes to `.local/gateway.json` as `development_token` at each
+start. The agent name is 1 to 32 lowercase letters, digits, `_` or `-`. It
+labels the agent's drafts and defaults to `agent`. The Codex terminal opened
+from F2 connects as `codex`.
+
+| Tool | Effect |
+| --- | --- |
+| `list_source`, `read_source` | Read draft-eligible source plus `README.md`, `AGENTS.md` and `docs/*.md`. With a draft active, reads return the draft's version |
+| `draft_status` | Owner, version, files, diff, check status and check output of the active draft |
+| `submit_draft` | Create a draft from complete file contents and deletions, or revise the agent's own draft on top of its current version |
+| `run_checks` | Start the isolated project checks for the agent's own draft |
+| `discard_draft` | Discard the agent's own draft |
+
+A submission is written into the same temporary workspace a local source
+agent edits, so the same path allowlist, 24-file and 256 KiB limits and
+reviewed Git diff apply. The draft appears in F2 and F4 like any other source
+draft. An agent can check, revise or discard only a draft it owns. Commit,
+preview, live activation and revert are not exposed. A person does those in
+the Workbench.
+
+Checks run the draft's code in the disposable preview project with the local
+account's permissions and without the gateway credentials. An agent can now
+start them for its own draft without a person reviewing the diff first.
+
+One draft is active at a time. A second agent can read it and must wait for it
+to be committed or discarded. The owner name is a label for attribution. Every
+local agent shares the same two credentials.
+
 ## Verification
+
+`gateway/workbench-mcp.test.mjs` runs the endpoint against a fixture
+repository: both credentials, the tool list, reads, rejected submissions, a
+failed check, a revision, a passing check, a second agent, and discard.
+
 
 `gateway/agents.test.mjs` drives both adapters through a stand-in CLI that
 records its arguments, input, working directory and environment, and answers

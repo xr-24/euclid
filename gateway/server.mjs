@@ -8,6 +8,7 @@ import { createAssetService, validAssetId } from './assets.mjs';
 import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
+import { createDevelopmentBridge } from './workbench-mcp.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const states = { 'task.started': 'working', 'task.completed': 'completed', 'task.failed': 'failed', 'task.blocked': 'blocked', 'presence.online': 'idle' };
@@ -24,7 +25,7 @@ export function validateEvent(event) {
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
-  workbenchRoot = root, workbenchOptions } = {}) {
+  workbenchRoot = root, workbenchOptions, developmentToken } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
   let saved = { agents: {}, seen: [] };
@@ -35,6 +36,12 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const workbenchToken = randomBytes(32).toString('hex');
   const workbenchExpected = Buffer.from(workbenchToken);
   const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), workbenchOptions);
+  // A third capability, for agents: source reads, drafts and checks, without commit or preview.
+  const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
+  const developmentExpected = Buffer.from(developmentSecret);
+  const development = createDevelopmentBridge(workbench);
+  let developmentRateStart = Date.now();
+  let developmentRateCount = 0;
   let queue = Promise.resolve();
   let rateStart = Date.now();
   let rateCount = 0;
@@ -67,9 +74,26 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 23 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 24 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
+      const developmentRoute = /^\/mcp\/dev\/([a-f0-9]{64})(?:\/([a-z0-9_-]{1,32}))?$/.exec(req.url);
+      if (developmentRoute) {
+        const capability = Buffer.from(developmentRoute[1]);
+        if (capability.length !== developmentExpected.length || !timingSafeEqual(capability, developmentExpected)) return reply(res, 403, { error: 'Development tools require the current Euclid gateway capability.' });
+        if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
+        // Agents poll while checks run. Their budget is separate so they cannot starve the world.
+        if (Date.now() - developmentRateStart > 60000) { developmentRateStart = Date.now(); developmentRateCount = 0; }
+        if (++developmentRateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
+        const body = await readJson(req, res, 512 * 1024);
+        if (body === undefined) return;
+        const controller = new AbortController();
+        res.once('close', () => controller.abort());
+        const result = await development.rpc(developmentRoute[2] ?? 'agent', body, controller.signal);
+        if (res.destroyed) return;
+        if (result === null) return res.writeHead(202).end();
+        return reply(res, 200, result);
+      }
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
       const workbenchRoute = /^\/v1\/workbench\/([a-z]+)$/.exec(req.url);
@@ -193,7 +217,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   });
   server.requestTimeout = 10000;
   server.headersTimeout = 10000;
-  return { server, token: secret, workbenchToken };
+  return { server, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -201,7 +225,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const port = Number(process.env.CONSTRUCT_PORT ?? 4317);
   gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
   gateway.server.listen(port, '127.0.0.1', async () => {
-    await writeFile(path.join(root, '.local/gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, token: gateway.token, workbench_token: gateway.workbenchToken }), { mode: 0o600 });
+    await writeFile(path.join(root, '.local/gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken }), { mode: 0o600 });
     console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
   });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => gateway.server.close());

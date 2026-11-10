@@ -2,11 +2,10 @@ import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { isAgentSourcePath, normalizeEdit } from './workbench-source.mjs';
+import { agentFileLimit, isAgentSourcePath, normalizeEdit } from './workbench-source.mjs';
 
 export const sourceDraftLimit = 24;
 const workspaceLimit = 32 * 1024 * 1024;
-const agentFileLimit = 256 * 1024;
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 async function inventory(root, signal) {

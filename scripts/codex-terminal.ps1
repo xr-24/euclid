@@ -15,6 +15,16 @@ try {
         '-c', "mcp_servers.euclid.url=$url/mcp/$WorldSession",
         '-c', 'mcp_servers.euclid.bearer_token_env_var=CONSTRUCT_GATEWAY_TOKEN',
         '-c', 'mcp_servers.euclid.default_tools_approval_mode=writes')
+    # Source reads, drafts and checks. Commit and preview stay in Euclid's Workbench.
+    $gatewayFile = Join-Path $projectRoot '.local\gateway.json'
+    if (Test-Path -LiteralPath $gatewayFile) {
+        $development = (Get-Content -Raw -LiteralPath $gatewayFile | ConvertFrom-Json).development_token
+        if ($development -match '^[a-f0-9]{64}$') {
+            $options += @('-c', "mcp_servers.euclid_dev.url=$url/mcp/dev/$development/codex",
+                '-c', 'mcp_servers.euclid_dev.bearer_token_env_var=CONSTRUCT_GATEWAY_TOKEN',
+                '-c', 'mcp_servers.euclid_dev.default_tools_approval_mode=writes')
+        }
+    }
     & $cli @options
     if ($LASTEXITCODE -ne 0) { throw "Codex exited with code $LASTEXITCODE." }
 } catch {

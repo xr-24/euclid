@@ -10,7 +10,8 @@ import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
-import { fingerprint, isAgentSourcePath, isSourcePath, listSources, normalizeEdit, readSource } from './workbench-source.mjs';
+import { fingerprint, isAgentSourcePath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
+import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
 import { authorSource } from './workbench-source-agent.mjs';
 
@@ -22,6 +23,7 @@ const maxFiles = 6;
 const maxBytes = 128 * 1024;
 const maxDiff = 256 * 1024;
 const paletteSource = 'world/scripts/ui/grid_palette.gd';
+const ownerName = value => typeof value === 'string' && /^[a-z0-9_-]{1,32}$/.test(value) ? value : undefined;
 const isPalette = names => names.length === 1 && names[0] === paletteSource;
 const appearanceFor = names => names.length === 1 && [shorelineAppearance, gridAppearance].find(item => item.file === names[0]);
 
@@ -100,6 +102,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       try { metadata = JSON.parse(await readFile(path.join(directory, 'draft.json'), 'utf8')); }
       catch (error) { if (error.code === 'ENOENT') continue; throw error; }
       const { id, names, base, branch, digest, binding, summary, fromWorld, agentSource, previous, request } = metadata;
+      const owner = ownerName(metadata.owner);
       const allowed = agentSource === true ? isAgentSourcePath : isSourcePath;
       if (item.name !== `git-draft-${id}` || !commitId.test(base) || typeof branch !== 'string' || !branch.startsWith('refs/heads/') ||
           !Array.isArray(names) || names.length < 1 || names.length > (agentSource === true ? sourceDraftLimit : maxFiles) || !names.every(allowed) || draft) {
@@ -117,7 +120,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         revisionDiff = await versionDiff(earlier, { worktree, names });
       }
       draft = { id, names, base, branch, directory, worktree, diff, binding, summary,
-        previous, revisionDiff, request,
+        previous, revisionDiff, request, owner,
         agentSource: agentSource === true,
         fromWorld: fromWorld ?? (appearanceFor(names)?.payload === 'shoreline'),
         plugin: agentSource === true ? null : await livePlugin(worktree, names, binding),
@@ -137,7 +140,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const state = { ...pending, revision, diagnostic, preview_log: previewLog };
     if (authoring && !authoring.revising) {
       const { id, status, error, log } = authoring;
-      return { ...state, draft: { id, status, error, log, diff: '', files: [],
+      return { ...state, draft: { id, status, error, log, diff: '', files: [], owner: authoring.owner ?? '',
         name: 'Source workspace', summary: '', subject: 'source', activation: 'restart', live: false,
         preview_zone: '', checked_preview: true, from_world: true, agent_source: true } };
     }
@@ -156,6 +159,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
+      owner: change.owner ?? '',
     } };
   }
 
@@ -241,25 +245,27 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     await writeDraft(base, files);
   }
 
-  async function startSource(body) {
+  // `submitted` replaces the local source agent with files a connected agent sent.
+  async function startSource(body, submitted) {
     const { base, branch } = await draftBase();
     if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 600) throw new Error('Describe a source change in 1 to 600 characters.');
     const id = randomUUID();
     const directory = path.join(storage, `git-draft-${id}`);
     const worktree = git.worktreePath(directory);
     const controller = new AbortController();
-    const job = { id, status: 'authoring', error: '', log: 'Preparing source from the pinned Git revision.\n', controller };
+    const owner = ownerName(body.owner);
+    const job = { id, status: 'authoring', error: '', log: 'Preparing source from the pinned Git revision.\n', controller, owner };
     sourceJob = job;
     job.finished = (async () => {
       try {
         await mkdir(directory, { recursive: true });
         await git.add(worktree, base);
-        const { names, summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), author: editSource,
+        const { names, summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), author: submitted ?? editSource,
           evidence: await benchmarkEvidence(null, base),
           signal: controller.signal, intent: files => git.intent(worktree, files),
           onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         controller.signal.throwIfAborted();
-        await registerDraft({ id, names, base, branch, directory, worktree, summary, request: body.prompt.trim(), fromWorld: true, agentSource: true }, job.log);
+        await registerDraft({ id, names, base, branch, directory, worktree, summary, request: body.prompt.trim(), fromWorld: true, agentSource: true, owner }, job.log);
         sourceJob = null;
       } catch (error) {
         await git.remove(worktree).catch(() => {});
@@ -272,7 +278,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     })();
   }
 
-  async function reviseSource(body) {
+  async function reviseSource(body, submitted) {
     const change = requireVersion(body);
     if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 600) throw new Error('Describe a draft revision in 1 to 600 characters.');
     await verifyReview(change);
@@ -293,7 +299,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         const context = { request: change.request ?? '', files: change.names, summary: change.summary,
           check_status: change.check?.status ?? change.status, check_error: change.check?.error ?? '',
           check_output: change.check?.log ?? '', preview_output: previewOutput };
-        const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: editSource,
+        const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: submitted ?? editSource,
           evidence: await benchmarkEvidence(change, base),
           signal: controller.signal, onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         const names = await git.changedPaths(worktree, base);
@@ -402,11 +408,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   }
 
   async function saveDraft(change, diff, check) {
-    const { id, names, base, branch, directory, worktree, binding, summary, fromWorld, agentSource, previous, request } = change;
+    const { id, names, base, branch, directory, worktree, binding, summary, fromWorld, agentSource, previous, request, owner } = change;
     const metadata = path.join(directory, 'draft.json');
     const pending = metadata + '.next';
     await writeFile(pending, JSON.stringify({ id, names, base, branch, digest: fingerprint(diff), binding, summary, fromWorld, agentSource,
-      checkout: path.basename(worktree), previous, request, check }));
+      checkout: path.basename(worktree), previous, request, owner, check }));
     await rename(pending, metadata);
   }
 
@@ -504,6 +510,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { text, hash };
     }
     if (action === 'state') return state();
+    // A connected agent reads the active draft when there is one, otherwise the main checkout.
+    if (action === 'files') return { files: await listAgentSources(draft?.worktree ?? root) };
+    if (action === 'file') return { ...await readAgentSource(draft?.worktree ?? root, body.name), draft: draft?.id ?? '' };
     if (action === 'propose') return ask(body, signal);
     if (action === 'cancelbenchmark') {
       if (!diagnosticJob || body.id !== diagnosticJob.id) throw new Error('There is no matching benchmark running.');
@@ -540,6 +549,12 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         case 'benchmark': operation = 'diagnosing'; await startBenchmark(body); break;
         case 'source': operation = 'authoring'; await startSource(body); break;
         case 'revise': operation = 'revising'; await reviseSource(body); break;
+        case 'submit': {
+          const submitted = sourceSubmission(body);
+          operation = draft ? 'revising' : 'authoring';
+          await (draft ? reviseSource(body, submitted) : startSource(body, submitted));
+          break;
+        }
         case 'previous': await restorePrevious(body); break;
         case 'stage': await stage(body); break;
         case 'author': await authorDraft(body, signal); break;

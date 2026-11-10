@@ -63,7 +63,21 @@ When the Codex avatar is close and in view, **E: Command agent** opens the same 
 
 Try **Where can we go?**, **Take me to the Roman villa**, **Take me to the beach**, **Create a Grid space called Signal Lab**, **Follow me**, or **Stay here**. The uplink sends the live environment list to Codex. The native CLI discovers the same world operations through a session-scoped MCP connection and prompts before changing the world. Both report travel once Euclid finishes the shift.
 
-Created environments use the Grid template, appear under **Custom spaces** in the menu, and keep separate entity saves. The hovering avatar follows your position across environments and keeps its distance when you turn to look around. **Stay here** parks it in the current environment for the session. The musical note toggles spoken tool results through an installed English system voice.
+Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. You can also ask **Create a new environment called Garden Annex using Villa Aurelia as its template**. The hovering avatar follows your position across environments and keeps its distance when you turn to look around. **Stay here** parks it in the current environment for the session. The musical note toggles spoken tool results through an installed English system voice.
+
+## Extend Euclid through shared definitions
+
+`world/data/commands` declares the built-in capabilities used by MCP, F2,
+the palette, and scene editing. The same schemas supply property validation,
+inspector ranges, entity defaults, and prefab properties. Registered workshop
+actions and behavior attachments appear in the live command catalog.
+See the [command registry guide](docs/command-registry.md).
+
+`world/data/zones/<id>/zone.json` declares each environment's reviewed builder,
+spawn, bounds, lighting, content layers, water features, editing capabilities,
+and named views. New package folders are discovered on startup. Custom spaces
+can reference any installed environment package. See the
+[environment package guide](docs/zone-packages.md).
 
 ## Edit props in the villa and at the beach
 

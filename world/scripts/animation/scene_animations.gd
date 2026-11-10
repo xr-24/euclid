@@ -1,6 +1,7 @@
 extends RefCounted
 ## One live draft at a time. Prop commits use the workshop's existing save and undo.
 
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
 const COMPANION := "companion"
@@ -38,59 +39,66 @@ func context(workshop: RefCounted) -> Dictionary:
 	return {"targets": targets, "draft": {"id": _target, "clip": _draft_value} if _has_preview() else {}}
 
 func execute(plan: Dictionary, workshop: RefCounted) -> Dictionary:
+	var definition := Commands.command(plan.get("tool"))
+	if definition.get("service") != "animation" or not has_method(definition.handler) or not Commands.valid_plan(definition, plan):
+		return _error("Invalid animation command.")
+	return call(definition.handler, plan, workshop)
+
+func _inspect_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
 	var id: String = plan.get("target", "")
-	match plan.tool:
-		"inspect_animation":
-			if id.is_empty():
-				var available := _targets(workshop)
-				var names := PackedStringArray()
-				for item in available.slice(0, 12):
-					names.append(item.name)
-				return {"ok": true, "message": "Animation targets include " + ", ".join(names) + ".", "targets": available.slice(0, 24)}
-			var player := _player(id, workshop)
-			if not player:
-				return _error("That animation target is unavailable in this environment.")
-			var joints := _joint_names(player.rig)
-			var channels := ["lift", "drift"] if id == COMPANION else ["offset", "rotation"]
-			if not joints.is_empty():
-				channels.append("joint_rotation")
-			return {"ok": true, "message": "This target supports %s." % ", ".join(channels), "channels": channels,
-				"joints": joints, "clip": player.clip, "preview": player == _draft and _has_preview()}
-		"preview_animation":
-			var player := _player(id, workshop)
-			if not player:
-				return _error("That animation target is unavailable in this environment.")
-			if id == COMPANION and not _companion.is_visible_in_tree():
-				return _error("The companion is parked in another environment. Ask it to follow to preview its animation here.")
-			var clip: Variant = plan.get("clip")
-			if not _valid_for(clip, player):
-				return _error("Use a closed loop with ordered keys and channels or joints supported by the target.")
-			clear_preview()
-			_previous = player.clip
-			_draft = player
-			_target = id
-			_draft_value = clip.duplicate(true)
-			player.set_clip(_draft_value)
-			return {"ok": true, "message": "Previewing %s. Say ‘save this animation’ or ‘discard this preview’." % clip.name}
-		"save_animation", "discard_animation":
-			if not _has_preview() or (not id.is_empty() and id != _target):
-				return _error("There is no active preview for that target.")
-			var name: String = _draft.clip.name
-			if plan.tool == "discard_animation":
-				clear_preview()
-				return {"ok": true, "message": "Discarded %s and restored the previous motion." % name}
-			if _target == COMPANION:
-				if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "clip": _draft.clip}) != OK:
-					return _error("The companion animation could not be saved.")
-			else:
-				if not workshop or workshop.animation_player(_target) != _draft:
-					return _error("The draft's prop is no longer in this workshop.")
-				var result: Dictionary = workshop.execute("edit", {"id": _target, "changes": {"animation": _draft.clip}})
-				if not result.ok:
-					return _error(result.error)
-			_forget()
-			return {"ok": true, "message": "Saved %s." % name}
-	return _error("Unknown animation tool.")
+	if id.is_empty():
+		var available := _targets(workshop)
+		var names := PackedStringArray()
+		for item in available.slice(0, 12):
+			names.append(item.name)
+		return {"ok": true, "message": "Animation targets include " + ", ".join(names) + ".", "targets": available.slice(0, 24)}
+	var player := _player(id, workshop)
+	if not player:
+		return _error("That animation target is unavailable in this environment.")
+	var joints := _joint_names(player.rig)
+	var channels := ["lift", "drift"] if id == COMPANION else ["offset", "rotation"]
+	if not joints.is_empty():
+		channels.append("joint_rotation")
+	return {"ok": true, "message": "This target supports %s." % ", ".join(channels), "channels": channels,
+		"joints": joints, "clip": player.clip, "preview": player == _draft and _has_preview()}
+
+func _preview_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
+	var id: String = plan.get("target", "")
+	var player := _player(id, workshop)
+	if not player:
+		return _error("That animation target is unavailable in this environment.")
+	if id == COMPANION and not _companion.is_visible_in_tree():
+		return _error("The companion is parked in another environment. Ask it to follow to preview its animation here.")
+	var clip: Variant = plan.get("clip")
+	if not _valid_for(clip, player):
+		return _error("Use a closed loop with ordered keys and channels or joints supported by the target.")
+	clear_preview()
+	_previous = player.clip
+	_draft = player
+	_target = id
+	_draft_value = clip.duplicate(true)
+	player.set_clip(_draft_value)
+	return {"ok": true, "message": "Previewing %s. Say ‘save this animation’ or ‘discard this preview’." % clip.name}
+
+func _finish_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
+	var id: String = plan.get("target", "")
+	if not _has_preview() or (not id.is_empty() and id != _target):
+		return _error("There is no active preview for that target.")
+	var name: String = _draft.clip.name
+	if Commands.command(plan.tool).mode == "discard":
+		clear_preview()
+		return {"ok": true, "message": "Discarded %s and restored the previous motion." % name}
+	if _target == COMPANION:
+		if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "clip": _draft.clip}) != OK:
+			return _error("The companion animation could not be saved.")
+	else:
+		if not workshop or workshop.animation_player(_target) != _draft:
+			return _error("The draft's prop is no longer in this workshop.")
+		var result: Dictionary = workshop.execute("edit", {"id": _target, "changes": {"animation": _draft.clip}})
+		if not result.ok:
+			return _error(result.error)
+	_forget()
+	return {"ok": true, "message": "Saved %s." % name}
 
 func leave_workshop() -> void:
 	if _target != COMPANION:

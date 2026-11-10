@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "id": "villa",
+  "builder": "res://scripts/zones/villa.gd",
+  "spawn": {
+    "position": [
+      0,
+      0.05,
+      37
+    ],
+    "yaw": 0
+  },
+  "bounds": [
+    [
+      -120,
+      -90,
+      -120
+    ],
+    [
+      240,
+      170,
+      225
+    ]
+  ],
+  "environment": {
+    "hdri": "kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+    "sun_azimuth": 128.0,
+    "sun_color": "fff1df",
+    "sun_energy": 2.6,
+    "sky_energy": 1.0,
+    "exposure": 0.92,
+    "fog_density": 0.0045,
+    "fog_albedo": "fff4e6",
+    "fog_anisotropy": 0.55,
+    "shadow_distance": 55.0,
+    "sdfgi_cell": 0.12
+  },
+  "capabilities": {
+    "workshop": false,
+    "scene_edit": true
+  },
+  "fallback": {
+    "style": "columns",
+    "floor_y": -0.26,
+    "walls": true,
+    "color": "69675c"
+  },
+  "workstation": "villa",
+  "water": [
+    "ocean",
+    "pool",
+    "still",
+    "spouts"
+  ],
+  "layers": {
+    "dressing": "res://data/dressing/villa.json",
+    "vegetation": "res://data/vegetation/villa_coast.json"
+  },
+  "views": {
+    "arrival": {
+      "position": [
+        0,
+        0.05,
+        37
+      ],
+      "target": [
+        0,
+        1,
+        -25
+      ]
+    },
+    "pool": {
+      "position": [
+        3.4,
+        0.1,
+        -15
+      ],
+      "target": [
+        0,
+        0.6,
+        22
+      ]
+    },
+    "house": {
+      "position": [
+        9,
+        0.1,
+        -12
+      ],
+      "target": [
+        -2,
+        4.5,
+        -36
+      ]
+    },
+    "view": {
+      "position": [
+        6,
+        0.1,
+        46.6
+      ],
+      "target": [
+        0,
+        -60,
+        140
+      ]
+    },
+    "cliff": {
+      "position": [
+        12,
+        -78.2,
+        112
+      ],
+      "target": [
+        0,
+        -12,
+        40
+      ]
+    },
+    "coastline": {
+      "position": [
+        -75,
+        0.5,
+        50
+      ],
+      "target": [
+        80,
+        -55,
+        150
+      ]
+    },
+    "hedge": {
+      "position": [
+        4.2,
+        0.1,
+        -12
+      ],
+      "target": [
+        5.6,
+        0.35,
+        -8
+      ]
+    },
+    "inner": {
+      "position": [
+        6,
+        0.2,
+        -46.6
+      ],
+      "target": [
+        0,
+        1.6,
+        -64
+      ]
+    },
+    "atrium": {
+      "position": [
+        -17,
+        0.2,
+        -44.8
+      ],
+      "target": [
+        -23,
+        1.8,
+        -56
+      ]
+    },
+    "library": {
+      "position": [
+        -10,
+        0.2,
+        -72
+      ],
+      "target": [
+        10,
+        2,
+        -79
+      ]
+    },
+    "gallery": {
+      "position": [
+        -28,
+        0.2,
+        -38.4
+      ],
+      "target": [
+        -6,
+        2,
+        -38.4
+      ]
+    },
+    "east_garden": {
+      "position": [
+        34.5,
+        0.05,
+        -42
+      ],
+      "target": [
+        44,
+        1,
+        -58
+      ]
+    },
+    "herb": {
+      "position": [
+        24,
+        -0.85,
+        -30
+      ],
+      "target": [
+        50,
+        -3,
+        30
+      ]
+    },
+    "theatre": {
+      "position": [
+        -34.8,
+        -1.0,
+        -50
+      ],
+      "target": [
+        -55,
+        0,
+        -58
+      ]
+    },
+    "apollo": {
+      "position": [
+        -12.5,
+        0.1,
+        -15
+      ],
+      "target": [
+        -18.5,
+        1.8,
+        -17
+      ]
+    },
+    "portico": {
+      "position": [
+        -17.2,
+        0.2,
+        24
+      ],
+      "target": [
+        -17,
+        2.2,
+        -22
+      ]
+    }
+  },
+  "benchmark_views": [
+    "arrival",
+    "pool",
+    "portico"
+  ],
+  "capture_views": [
+    "pool",
+    "house",
+    "view",
+    "cliff",
+    "coastline",
+    "hedge",
+    "inner",
+    "atrium",
+    "library",
+    "gallery",
+    "east_garden",
+    "herb",
+    "theatre",
+    "apollo"
+  ],
+  "capture_warmup": 0,
+  "graphics": {
+    "balanced_reconstruction": true
+  }
+}

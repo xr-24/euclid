@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "list_environments",
+      "description": "List environment names and IDs and the current environment.",
+      "service": "world",
+      "handler": "_list_environments",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "bridge": "context",
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "travel",
+      "description": "Shift the player to the exact environment ID discovered through list_environments.",
+      "service": "world",
+      "handler": "_travel_command",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "zone"
+      },
+      "required": [
+        "target"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": true
+    },
+    {
+      "name": "create_environment",
+      "description": "Create a named environment from an installed zone package. Omit template to use The Grid.",
+      "service": "world",
+      "handler": "_create_environment",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "environment_name",
+        "template": "zone"
+      },
+      "required": [
+        "target"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": true
+    },
+    {
+      "name": "follow",
+      "description": "Have the companion float alongside the player and travel with them.",
+      "service": "world",
+      "handler": "_companion_mode",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": true,
+      "mode": "follow"
+    },
+    {
+      "name": "stay",
+      "description": "Park the companion at its current location.",
+      "service": "world",
+      "handler": "_companion_mode",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": true,
+      "mode": "stay"
+    },
+    {
+      "name": "search_assets",
+      "description": "Search downloadable Sketchfab and Poly Haven models and return provenance and licenses.",
+      "service": "assets",
+      "handler": "search",
+      "effect": "read",
+      "surfaces": [
+        "mcp"
+      ],
+      "fields": {
+        "query": "asset_query",
+        "provider": "provider"
+      },
+      "required": [
+        "query"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false,
+      "parameters": [
+        "query",
+        "provider"
+      ]
+    },
+    {
+      "name": "import_asset",
+      "description": "Prepare an exact asset ID from search_assets. Check asset_status before spawning.",
+      "service": "assets",
+      "handler": "importAsset",
+      "effect": "write",
+      "surfaces": [
+        "mcp"
+      ],
+      "fields": {
+        "asset_id": "asset_id",
+        "preserve_rig": "boolean"
+      },
+      "required": [
+        "asset_id"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false,
+      "parameters": [
+        "asset_id",
+        "preserve_rig"
+      ]
+    },
+    {
+      "name": "asset_status",
+      "description": "Check preparation status for an exact asset ID.",
+      "service": "assets",
+      "handler": "status",
+      "effect": "read",
+      "surfaces": [
+        "mcp"
+      ],
+      "fields": {
+        "asset_id": "asset_id"
+      },
+      "required": [
+        "asset_id"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false,
+      "parameters": [
+        "asset_id"
+      ]
+    },
+    {
+      "name": "list_assets",
+      "description": "List prepared models with author, source and license credits.",
+      "service": "world",
+      "handler": "_list_assets",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "bridge": "assets_list",
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false,
+      "gateway_handler": "list"
+    },
+    {
+      "name": "spawn_entity",
+      "description": "Place a prepared model in the active scene. A scale of 1 gives a one-metre longest edge.",
+      "service": "assets",
+      "handler": "spawn_asset",
+      "effect": "write",
+      "surfaces": [
+        "mcp"
+      ],
+      "fields": {
+        "asset_id": "asset_id",
+        "position": "position",
+        "scale": "scale",
+        "zone": "zone"
+      },
+      "required": [
+        "asset_id"
+      ],
+      "undo": "scene",
+      "scope": "session",
+      "mutates_world": true,
+      "bridge": "spawn_ready"
+    },
+    {
+      "name": "spawn_asset",
+      "description": "Find, prepare and place an external model from a short search phrase or asset ID.",
+      "service": "world",
+      "handler": "_spawn_asset",
+      "effect": "write",
+      "surfaces": [
+        "f2"
+      ],
+      "fields": {
+        "target": "asset_query",
+        "preserve_rig": "boolean",
+        "position": "position",
+        "scale": "scale",
+        "changes": "prop_changes"
+      },
+      "required": [
+        "target"
+      ],
+      "scope": "scene",
+      "undo": "scene",
+      "mutates_world": true
+    },
+    {
+      "name": "inspect_animation",
+      "description": "List animation targets or inspect supported channels, joints and the current clip.",
+      "service": "animation",
+      "handler": "_inspect_animation",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "animation_target"
+      },
+      "required": [],
+      "scope": "scene",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "preview_animation",
+      "description": "Apply or revise a temporary looping clip on an inspected target.",
+      "service": "animation",
+      "handler": "_preview_animation",
+      "effect": "preview",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "animation_target",
+        "clip": "clip"
+      },
+      "required": [
+        "target",
+        "clip"
+      ],
+      "scope": "scene",
+      "undo": "none",
+      "mutates_world": true
+    },
+    {
+      "name": "save_animation",
+      "description": "Save the active animation preview. A saved prop animation supports scene undo.",
+      "service": "animation",
+      "handler": "_finish_animation",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "animation_target"
+      },
+      "required": [],
+      "scope": "scene",
+      "undo": "prop",
+      "mutates_world": true,
+      "mode": "save"
+    },
+    {
+      "name": "discard_animation",
+      "description": "Restore the previous motion from before the preview.",
+      "service": "animation",
+      "handler": "_finish_animation",
+      "effect": "preview",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "animation_target"
+      },
+      "required": [],
+      "scope": "scene",
+      "undo": "none",
+      "mutates_world": true,
+      "mode": "discard"
+    },
+    {
+      "name": "list_workshop_tools",
+      "description": "Discover actions registered in the current Grid space, including previewed actions.",
+      "service": "world",
+      "handler": "_list_registered_actions",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp",
+        "palette"
+      ],
+      "fields": {},
+      "required": [],
+      "bridge": "workshop_catalog",
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "run_workshop_tool",
+      "description": "Run an explicitly requested action from the current workshop catalog.",
+      "service": "world",
+      "handler": "_run_registered_action",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp",
+        "palette"
+      ],
+      "fields": {
+        "target": "workshop_action"
+      },
+      "required": [
+        "target"
+      ],
+      "scope": "scene",
+      "catalog": "workshop_tools",
+      "undo": "scene",
+      "mcp_arguments": {
+        "name": "target"
+      },
+      "mutates_world": true
+    },
+    {
+      "name": "unsupported",
+      "description": "Use when no registered command can fulfill the request.",
+      "service": "world",
+      "handler": "_unsupported_command",
+      "effect": "read",
+      "surfaces": [
+        "f2"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    }
+  ]
+}

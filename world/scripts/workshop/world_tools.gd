@@ -4,6 +4,7 @@ extends RefCounted
 
 signal authored_geometry_changed
 
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const SceneStore = preload("res://scripts/persistence/scene_edit_store.gd")
 const Art = preload("res://scripts/rendering/zone_effects.gd")
@@ -16,7 +17,6 @@ const DoorActuator = preload("res://scripts/plugins/door_actuator.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const DressingLayer = preload("res://scripts/workshop/dressing_layer.gd")
 const MAX_ENTITIES := SceneStore.MAX_ENTITIES
-const EDITABLE := ["position", "yaw", "scale", "color", "animation", "name"]
 
 var _path := ""
 var _prefabs: PrefabLibrary
@@ -62,125 +62,153 @@ func execute(tool: String, args := {}) -> Dictionary:
 		return _error("Wait for the scene to finish loading.")
 	if not _load_error.is_empty():
 		return _error(_load_error)
+	var definition := Commands.local(tool)
+	if definition.is_empty() or not has_method(definition.handler):
+		return _error("Unknown world tool.")
+	if definition.mutates_world and not _root.get_parent().get_meta("scene_edit", true):
+		return _error("This environment does not allow scene edits.")
+	return call(definition.handler, args)
+
+func _list_records(_args: Dictionary) -> Dictionary:
+	return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty()}
+
+func _list_entities(_args: Dictionary) -> Dictionary:
+	var entities: Array[Dictionary] = []
+	for item in _records():
+		var entry := {"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
+			"position": item.position.duplicate(), "yaw": item.yaw, "scale": item.scale, "color": item.color,
+			"behavior": _effective(item).get("behavior", {}).get("id", "")}
+		if item.get("authored", false):
+			entry.merge({"authored": true, "hidden": item.hidden, "overridden": item.overridden})
+		if item.has("live_position"):
+			entry["live_position"] = item.live_position
+		entities.append(entry)
+	return {"ok": true, "entities": entities}
+
+func _list_scene_assets(_args: Dictionary) -> Dictionary:
+	return {"ok": true, "assets": EntityTypes.library_catalog()}
+
+func _list_behaviors(args: Dictionary) -> Dictionary:
 	var id: Variant = args.get("id")
-	var record := _record(id)
-	var authored := _dressing.has(id)
-	match tool:
-		"list":
-			return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty()}
-		"list_entities":
-			var entities: Array[Dictionary] = []
-			for item in _records():
-				var entry := {"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
-					"position": item.position.duplicate(), "yaw": item.yaw, "scale": item.scale, "color": item.color,
-					"behavior": _effective(item).get("behavior", {}).get("id", "")}
-				if item.get("authored", false):
-					entry.merge({"authored": true, "hidden": item.hidden, "overridden": item.overridden})
-				if item.has("live_position"):
-					entry["live_position"] = item.live_position
-				entities.append(entry)
-			return {"ok": true, "entities": entities}
-		"list_scene_assets":
-			return {"ok": true, "assets": EntityTypes.library_catalog()}
-		"list_behaviors":
-			if authored:
-				return {"ok": true, "behaviors": []}
-			if id != null and id != "" and record.is_empty():
-				return _error("Select an entity first.")
-			return {"ok": true, "behaviors": _behaviors.available(record.get("type", "")) if _behaviors else []}
-		"set_behavior":
-			if record.is_empty():
-				return _error("Select an entity first.")
-			if authored:
-				return _error("Place a library copy to attach behaviors to this model.")
-			return _set_behavior(id, record, args.get("behavior"))
-		"inspect":
-			return {"ok": true, "entity": _effective(record).duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
-		"list_prefabs", "save_prefab", "spawn_prefab":
-			if tool == "save_prefab" and authored:
-				return _error("Place a library copy to save this model as a prefab.")
-			return _prefab_command(tool, args, record)
-		"spawn":
-			var type: Variant = args.get("type")
-			if not type is String or not EntityTypes.TYPES.has(type):
-				return _error("Unknown entity type.")
-			if type == "imported_model" and (not EntityTypes.Assets.valid_id(args.get("asset_id")) or EntityTypes.Assets.scene(args.asset_id) == null):
-				return _error("Import the model before spawning it.")
-			if type == "library_model" and not EntityTypes.library_available(args.get("asset_id")):
-				return _error("Choose an installed model from the scene asset library.")
-			if _entities.size() >= MAX_ENTITIES:
-				return _error("This scene is at its prop limit.")
-			id = Crypto.new().generate_random_bytes(16).hex_encode()
-			var proposed := {"id": id, "type": type, "position": args.get("position"), "yaw": args.get("yaw", 0.0),
-				"scale": args.get("scale", 1.0), "color": args.get("color", EntityTypes.TYPES[type].color)}
-			if type in ["imported_model", "library_model"]:
-				proposed["asset_id"] = args.asset_id
-			if args.has("name") and args.name != "":
-				proposed["name"] = args.name.strip_edges() if args.name is String else args.name
-			if args.has("animation"):
-				proposed["animation"] = args.animation
-			if args.has("behavior"):
-				if _behaviors and args.behavior is Dictionary and _behaviors.is_provisional(str(args.behavior.get("id", ""))):
-					return _error("Commit the plugin before duplicating its preview.")
-				proposed["behavior"] = args.behavior
-			return _edit(id, {}, proposed)
-		"edit":
-			if record.is_empty():
-				return _error("Select an entity first.")
-			if record.get("hidden", false):
-				return _error("Restore the authored prop before editing it.")
-			var changes: Variant = args.get("changes")
-			if not changes is Dictionary or changes.is_empty():
-				return _error("Choose properties to edit.")
-			var proposed := record.duplicate()
-			for key in changes:
-				if authored and key not in DressingLayer.PROPERTIES:
-					return _error("Authored props support position, rotation, scale and name edits.")
-				if key not in EDITABLE:
-					return _error("Unknown editable property.")
-				if key == "name" and changes.name is String:
-					var name: String = changes.name.strip_edges()
-					if name.is_empty():
-						proposed.erase("name")
-					else:
-						proposed["name"] = name
-				else:
-					proposed[key] = changes[key]
-			return _edit(id, record, proposed)
-		"duplicate":
-			if record.is_empty():
-				return _error("Select an entity first.")
-			if authored:
-				return _error("Place a separate copy of this model from the scene asset library.")
-			var placement := record.duplicate(true)
-			var offset: float = 0.8 * record.scale
-			var point: Array = placement.position
-			point[0] += offset if point[0] + offset <= bounds.end.x else -offset
-			placement["position"] = args.get("position", point)
-			return execute("spawn", placement)
-		"delete":
-			if record.is_empty() or record.get("hidden", false):
-				return _error("Select an entity first.")
-			return _edit(id, record, {})
-		"restore_dressing":
-			if not authored:
-				return _error("Select a prop from the original scene dressing.")
-			var result := _edit_dressing(id, {})
-			if result.ok:
-				_dressing.reset_motion(id)
-				result["entity"] = _record(id)
-			return result
-		"undo":
-			if _history.is_empty():
-				return _error("There are no edits to undo.")
-			var edit: Dictionary = _history.back()
-			var history := _history.slice(0, _history.size() - 1)
-			if not _commit(edit.previous, edit.get("dressing", {}), history):
-				return _error("The scene prop save could not be written.")
-			_restore_door_heights(edit.get("doors", {}))
-			var previous := _record(edit.id)
-			return {"ok": true, "id": edit.id, "entity": previous.duplicate(true)}
-	return _error("Unknown world tool.")
+	var record := _record(args.get("id"))
+	var authored := _dressing.has(args.get("id"))
+	if authored:
+		return {"ok": true, "behaviors": []}
+	if id != null and id != "" and record.is_empty():
+		return _error("Select an entity first.")
+	return {"ok": true, "behaviors": _behaviors.available(record.get("type", "")) if _behaviors else []}
+
+func _change_behavior(args: Dictionary) -> Dictionary:
+	var id: Variant = args.get("id")
+	var record := _record(args.get("id"))
+	var authored := _dressing.has(args.get("id"))
+	if record.is_empty():
+		return _error("Select an entity first.")
+	if authored:
+		return _error("Place a library copy to attach behaviors to this model.")
+	return _set_behavior(id, record, args.get("behavior"))
+
+func _inspect(args: Dictionary) -> Dictionary:
+	var record := _record(args.get("id"))
+	return {"ok": true, "entity": _effective(record).duplicate(true)} if not record.is_empty() else _error("Select an entity first.")
+
+func _spawn(args: Dictionary) -> Dictionary:
+	var type: Variant = args.get("type")
+	if not type is String or not EntityTypes.TYPES.has(type):
+		return _error("Unknown entity type.")
+	var type_definition: Dictionary = EntityTypes.TYPES[type]
+	var source: String = type_definition.get("asset_source", "")
+	var asset_id: Variant = args.get("asset_id", type_definition.get("asset_id"))
+	if source == "runtime" and (not EntityTypes.Assets.valid_id(asset_id) or EntityTypes.Assets.scene(asset_id) == null):
+		return _error("Import the model before spawning it.")
+	if source == "library" and not EntityTypes.library_available(asset_id):
+		return _error("Choose an installed model from the scene asset library.")
+	if _entities.size() >= MAX_ENTITIES:
+		return _error("This scene is at its prop limit.")
+	var id := Crypto.new().generate_random_bytes(16).hex_encode()
+	var proposed := {"id": id, "type": type, "position": args.get("position"), "yaw": args.get("yaw", 0.0),
+		"scale": args.get("scale", 1.0), "color": args.get("color", EntityTypes.TYPES[type].color)}
+	if not source.is_empty():
+		proposed["asset_id"] = asset_id
+	if args.has("name") and args.name != "":
+		proposed["name"] = args.name.strip_edges() if args.name is String else args.name
+	if args.has("animation"):
+		proposed["animation"] = args.animation
+	if args.has("behavior"):
+		if _behaviors and args.behavior is Dictionary and _behaviors.is_provisional(str(args.behavior.get("id", ""))):
+			return _error("Commit the plugin before duplicating its preview.")
+		proposed["behavior"] = args.behavior
+	return _edit(id, {}, proposed)
+
+func _edit_entity(args: Dictionary) -> Dictionary:
+	var id: Variant = args.get("id")
+	var record := _record(args.get("id"))
+	var authored := _dressing.has(args.get("id"))
+	if record.is_empty():
+		return _error("Select an entity first.")
+	if record.get("hidden", false):
+		return _error("Restore the authored prop before editing it.")
+	var changes: Variant = args.get("changes")
+	if not changes is Dictionary or changes.is_empty():
+		return _error("Choose properties to edit.")
+	var proposed := record.duplicate()
+	for key in changes:
+		if authored and key not in Commands.prop_fields(true):
+			return _error("Authored props support position, rotation, scale and name edits.")
+		if key != "animation" and key not in Commands.prop_fields(false):
+			return _error("Unknown editable property.")
+		if key == "name" and changes.name is String:
+			var name: String = changes.name.strip_edges()
+			if name.is_empty():
+				proposed.erase("name")
+			else:
+				proposed["name"] = name
+		else:
+			proposed[key] = changes[key]
+	return _edit(id, record, proposed)
+
+func _duplicate(args: Dictionary) -> Dictionary:
+	var record := _record(args.get("id"))
+	var authored := _dressing.has(args.get("id"))
+	if record.is_empty():
+		return _error("Select an entity first.")
+	if authored:
+		return _error("Place a separate copy of this model from the scene asset library.")
+	var placement := record.duplicate(true)
+	var offset: float = 0.8 * record.scale
+	var point: Array = placement.position
+	point[0] += offset if point[0] + offset <= bounds.end.x else -offset
+	placement["position"] = args.get("position", point)
+	return execute("spawn", placement)
+
+func _delete(args: Dictionary) -> Dictionary:
+	var id: Variant = args.get("id")
+	var record := _record(args.get("id"))
+	if record.is_empty() or record.get("hidden", false):
+		return _error("Select an entity first.")
+	return _edit(id, record, {})
+
+func _restore_dressing(args: Dictionary) -> Dictionary:
+	var id: Variant = args.get("id")
+	var authored := _dressing.has(args.get("id"))
+	if not authored:
+		return _error("Select a prop from the original scene dressing.")
+	var result := _edit_dressing(id, {})
+	if result.ok:
+		_dressing.reset_motion(id)
+		result["entity"] = _record(id)
+	return result
+
+func _undo(_args: Dictionary) -> Dictionary:
+	if _history.is_empty():
+		return _error("There are no edits to undo.")
+	var edit: Dictionary = _history.back()
+	var history := _history.slice(0, _history.size() - 1)
+	if not _commit(edit.previous, edit.get("dressing", {}), history):
+		return _error("The scene prop save could not be written.")
+	_restore_door_heights(edit.get("doors", {}))
+	var previous := _record(edit.id)
+	return {"ok": true, "id": edit.id, "entity": previous.duplicate(true)}
 
 func validate_action(targets: Array) -> Dictionary:
 	return _prepare_action(targets)
@@ -200,6 +228,8 @@ func run_action(targets: Array) -> Dictionary:
 func _prepare_action(targets: Array) -> Dictionary:
 	if not is_instance_valid(_root) or not _load_error.is_empty():
 		return _error("The Grid is unavailable for workshop edits.")
+	if not _root.get_parent().get_meta("scene_edit", true):
+		return _error("This environment does not allow scene edits.")
 	var previous := {}
 	var next := {}
 	var doors := {}
@@ -216,7 +246,7 @@ func _prepare_action(targets: Array) -> Dictionary:
 		if proposed != record:
 			previous[id] = record
 			next[id] = proposed
-		if target.close_door or (record.type == "sliding_door" and proposed != record):
+		if target.close_door or (EntityTypes.TYPES[record.type].factory == "door" and proposed != record):
 			var door := _door(id)
 			if door == null:
 				return _error("A workshop action door target is unavailable.")
@@ -260,7 +290,7 @@ func _configure_behavior(record: Dictionary, request: Variant) -> Dictionary:
 	if configured.is_empty() or not _behaviors.available(record.type).any(func(item: Dictionary) -> bool: return item.id == configured.id):
 		return {}
 	if _behaviors.registry.definition(configured.id).output == "door_open" \
-			and _entities.get(configured.get("target", ""), {}).get("type") != "sliding_door":
+			and EntityTypes.TYPES.get(_entities.get(configured.get("target", ""), {}).get("type"), {}).get("factory") != "door":
 		return {}
 	return configured
 
@@ -304,24 +334,29 @@ func _effective(record: Dictionary) -> Dictionary:
 		return effective
 	return record
 
-func _prefab_command(tool: String, args: Dictionary, record: Dictionary) -> Dictionary:
+func _list_prefabs(_args: Dictionary) -> Dictionary:
+	return _prefabs.list() if _prefabs else _error("The prefab library is unavailable.")
+
+func _save_prefab(args: Dictionary) -> Dictionary:
+	var id: Variant = args.get("id")
+	if _dressing.has(id):
+		return _error("Place a library copy to save this model as a prefab.")
 	if not _prefabs:
 		return _error("The prefab library is unavailable.")
-	match tool:
-		"list_prefabs":
-			return _prefabs.list()
-		"save_prefab":
-			if record.is_empty():
-				return _error("Select an entity to save as a prefab.")
-			return _prefabs.save(args.get("name"), record)
-		"spawn_prefab":
-			var result := _prefabs.get_prefab(args.get("prefab_id"))
-			if not result.ok:
-				return result
-			var placement: Dictionary = result.prefab.properties
-			placement["position"] = args.get("position")
-			return execute("spawn", placement)
-	return _error("Unknown prefab tool.")
+	var record := _record(id)
+	if record.is_empty():
+		return _error("Select an entity to save as a prefab.")
+	return _prefabs.save(args.get("name"), record)
+
+func _spawn_prefab(args: Dictionary) -> Dictionary:
+	if not _prefabs:
+		return _error("The prefab library is unavailable.")
+	var result := _prefabs.get_prefab(args.get("prefab_id"))
+	if not result.ok:
+		return result
+	var placement: Dictionary = result.prefab.properties
+	placement["position"] = args.get("position")
+	return execute("spawn", placement)
 
 func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary:
 	if _dressing.has(id):
@@ -419,7 +454,7 @@ func _show(record: Dictionary) -> void:
 	motion.name = "PropMotion"
 	motion.clip = record.get("animation", {})
 	entity.add_child(motion)
-	if record.type == "sliding_door":
+	if EntityTypes.TYPES[record.type].factory == "door":
 		var door := DoorActuator.new()
 		door.name = "DoorActuator"
 		door.links = _links

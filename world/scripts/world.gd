@@ -5,9 +5,13 @@ const WorldArt = preload("res://scripts/world_art.gd")
 const BuildContext = preload("res://scripts/zones/zone_build_context.gd")
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
-const Grid = preload("res://scripts/zones/grid_zone.gd")
+const Packages = preload("res://scripts/zones/zone_packages.gd")
+const ZoneCatalog = preload("res://scripts/zones/zone_catalog.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const ScenePlacement = preload("res://scripts/workshop/scene_placement.gd")
+const WorldCommands = preload("res://scripts/agents/world_commands.gd")
+const DevelopmentCommands = preload("res://scripts/agents/development_commands.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
@@ -96,11 +100,13 @@ var _benchmark_display := {}
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
+var _world_commands := WorldCommands.new(self)
+var _development_commands := DevelopmentCommands.new(self)
 var _development_action_busy := false
 var _development_status := ""
 
 func _ready() -> void:
-	manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
+	manifest = ZoneCatalog.read("res://data/world.json")
 	var args := OS.get_cmdline_user_args()
 	var water_check := "--water-check" in args or "--coast-check" in args
 	var benchmark := "--benchmark" in args
@@ -112,6 +118,8 @@ func _ready() -> void:
 	OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
 	environment_library = EnvironmentLibrary.new("" if smoke_mode else "user://environments.json")
 	manifest.zones.append_array(environment_library.environments())
+	for zone in manifest.zones:
+		Packages.register_zone(zone)
 	prefab_library = PrefabLibrary.new("" if smoke_mode else "user://grid-prefabs.json")
 	Graphics.configure(get_viewport(), smoke_mode)
 	_setup_input()
@@ -734,7 +742,9 @@ func _world_context() -> Dictionary:
 	var environments := []
 	for zone in manifest.zones:
 		environments.append({"id": zone.id, "name": zone.name, "description": zone.get("description", zone.get("subtitle", ""))})
-	return {"current": zone_id, "environments": environments, "workshop_tools": _workshop_action_catalog()}
+	return {"current": zone_id, "environments": environments, "workshop_tools": _workshop_action_catalog(),
+		"behaviors": behavior_runtime.available() if behavior_runtime and not shifting else [],
+		"command_registry": Commands.snapshot()}
 
 func _workshop_action_catalog() -> Array[Dictionary]:
 	return _workshop_actions.catalog(zone_id) if not shifting and _is_workshop(zone_id) else []
@@ -758,7 +768,7 @@ func _submit_codex_command(prompt: String) -> void:
 	console_busy = true
 	_console_notice("> " + prompt)
 	var context := _world_context()
-	context["shoreline_preview"] = zone_id == "beach"
+	context["shoreline_preview"] = _development != null and _shoreline.available() and not shifting
 	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
 	context["source_development"] = _development != null
 	var reviewed: Dictionary = _development.draft.duplicate() if _development else {}
@@ -778,66 +788,32 @@ func _submit_codex_command(prompt: String) -> void:
 	if response.has("error"):
 		_console_notice(str(response.error))
 		return
-	if response.plan.tool in SceneCommands.SCOPED:
+	var plan: Dictionary = response.plan
+	var definition := Commands.command(plan.get("tool"))
+	if definition.is_empty() or not definition.surfaces.has("f2") or not Commands.valid_plan(definition, plan):
+		_console_notice("Codex returned an invalid world command.")
+		return
+	if definition.get("scope") == "scene":
 		if not _scene_ready() or requested_zone != zone_root.get_instance_id():
 			_console_notice("The environment changed while Codex was planning. Ask again in the current scene.")
 			return
-		response.plan["zone"] = context.current
-	console_busy = true
-	if response.plan.tool == "revise_source":
-		var output := _palette_host.error_log(reviewed.id, reviewed.version)
-		var result := await _development.revise(prompt, reviewed, output)
-		if result.has("error"):
-			_console_notice(result.error)
-	elif response.plan.tool == "benchmark_villa":
-		var result := await _run_workbench_benchmark("benchmark", benchmark_target)
-		if result.has("error"):
-			_console_notice(result.error)
-	elif response.plan.tool == "villa_results":
-		await _development.refresh()
-		if _development.diagnostic_job.is_empty():
-			_console_notice(WorkbenchDiagnostics.summary(_development.diagnostic))
-		else:
-			_console_notice("The villa benchmark is still running.")
-	elif response.plan.tool in ["draft_shoreline", "draft_grid", "draft_behavior", "draft_workshop_tool", "draft_source"]:
-		await _request_development_draft(response.plan.tool, prompt, requested_zone)
-	elif response.plan.tool == "run_workshop_tool":
-		for entry in context.workshop_tools:
-			if entry.name == response.plan.target:
-				response.plan["zone"] = context.current
-				response.plan["revision"] = entry.revision
+		plan["zone"] = context.current
+	if definition.has("catalog"):
+		for entry in context.get(definition.catalog, []):
+			if entry.name == plan.target:
+				plan["revision"] = entry.revision
 				break
-		await _call_world_tool(response.plan)
+	console_busy = true
+	if definition.service == "development":
+		if context.get(definition.availability, false) and _development:
+			await _development_commands.execute(definition, {"prompt": prompt, "reviewed": reviewed, "benchmark": benchmark_target})
+		else:
+			_console_notice("That Workbench command is unavailable in the current session.")
 	else:
-		await _call_world_tool(response.plan)
+		await _call_world_tool(plan)
 	console_busy = false
 	if is_instance_valid(codex_console):
 		codex_console.update_display(console_lines, false)
-
-func _request_development_draft(tool: String, prompt: String, requested_zone: int) -> void:
-	if not _development:
-		_console_notice("Workbench needs the local gateway. Open your main Euclid session with Start Euclid.cmd.")
-		return
-	var available := _shoreline.available() if tool == "draft_shoreline" else _grid_scenery.available()
-	if tool != "draft_source" and (not is_instance_valid(zone_root) or requested_zone != zone_root.get_instance_id() or shifting or not available):
-		_console_notice("Enter the beach with simulated surf to draft a shoreline change." if tool == "draft_shoreline"
-			else "Enter a Grid space to draft this change.")
-		return
-	var context := {}
-	if tool in ["draft_behavior", "draft_workshop_tool"]:
-		context = _workbench_plugin_context()
-	var result := await _development.request(tool, prompt, context)
-	if result.has("error"):
-		_console_notice(result.error)
-	elif tool == "draft_source":
-		if result.draft.status == "authoring":
-			_console_notice("Codex is working in a separate source workspace. Open Workbench to see progress.")
-	else:
-		var summary: String = result.draft.get("summary", "")
-		if not summary.is_empty():
-			_console_notice(summary)
-		if result.draft.status == "checking":
-			_console_notice("Review the diff while the checks run.")
 
 func _call_world_tool(plan: Dictionary) -> Dictionary:
 	var result := await _execute_world_tool(plan)
@@ -849,122 +825,27 @@ func _call_world_tool(plan: Dictionary) -> Dictionary:
 	return result
 
 func _execute_world_tool(plan: Dictionary) -> Dictionary:
-	var target: String = str(plan.get("target", ""))
-	if plan.get("tool") in SceneCommands.SCOPED and not _scene_ready(plan.get("zone", "")):
+	var definition := Commands.command(plan.get("tool"))
+	if definition.is_empty() or definition.get("internal", false) or not Commands.valid_plan(definition, plan):
+		return {"ok": false, "message": "Invalid world command arguments."}
+	plan = Commands.canonical_plan(plan)
+	if definition.get("scope") == "scene" and not _scene_ready(plan.get("zone", "")):
 		return {"ok": false, "message": "Return to the requested environment and wait for it to finish loading."}
-	if plan.get("tool") in SceneCommands.ACTIONS:
-		var placement := []
-		if plan.tool == "spawn_prop" and not SceneCommands.options(plan).has("position"):
-			placement = _scene_spawn_position()
-		var result := SceneCommands.execute(world_tools, plan, placement)
-		result["zone"] = zone_id
-		return result
-	match plan.get("tool", ""):
-		"run_workshop_tool":
-			return _run_registered_action(plan)
-		"list_workshop_tools":
-			var catalog := _workshop_action_catalog()
-			var labels := PackedStringArray()
-			for entry in catalog:
-				labels.append(entry.label)
-			return {"ok": true, "message": ", ".join(labels) if not labels.is_empty() else "Enter a Grid space to find workshop actions.", "tools": catalog}
-		"list_entities", "list_prefabs", "save_prefab", "spawn_prefab", "list_behaviors", "set_behavior":
-			return _execute_workshop_tool(plan)
-		"inspect_animation", "preview_animation", "save_animation", "discard_animation":
+	match definition.service:
+		"scene":
+			var placement := []
+			if definition.get("placement", false) and not SceneCommands.options(plan).has("position"):
+				placement = _scene_spawn_position()
+			var result := SceneCommands.execute(world_tools, plan, placement)
+			result["zone"] = zone_id
+			return result
+		"animation":
 			if shifting or not scene_animations:
 				return {"ok": false, "message": "Wait for the current environment to finish loading."}
 			return scene_animations.execute(plan, world_tools)
-		"list_assets":
-			var listed: Dictionary = await asset_client.list_assets()
-			listed["message"] = JSON.stringify(listed.get("assets", [])) if listed.get("ok", false) else listed.get("message", "Asset listing failed.")
-			return listed
-		"spawn_asset":
-			var requested_zone := zone_root
-			# Capture placement before a download so camera movement cannot change it.
-			var properties := SceneCommands.options(plan)
-			var position: Array = plan.get("position", properties.get("position", []))
-			if position.is_empty():
-				position = _scene_spawn_position()
-			if position.is_empty():
-				return {"ok": false, "message": "Aim at solid ground or specify a position before importing a model."}
-			_console_notice("Finding and preparing the model…")
-			var imported: Dictionary = await asset_client.ensure_asset(target, _world_context(), plan.get("preserve_rig", false))
-			if not imported.get("ok", false):
-				return {"ok": false, "message": imported.get("message", "The model could not be imported.")}
-			if not is_instance_valid(requested_zone) or zone_root != requested_zone or shifting:
-				return {"ok": false, "message": "The model is cached. Spawn it again in your current environment."}
-			properties.merge({"type": "imported_model", "asset_id": imported.asset.asset_id, "position": position,
-				"scale": plan.get("scale", properties.get("scale", 1.0))}, true)
-			var result: Dictionary = world_tools.execute("spawn", properties)
-			result["zone"] = zone_id
-			result["message"] = "Spawned %s. %s — %s. %s" % [imported.asset.title, imported.asset.author,
-				imported.asset.license_label, imported.asset.get("credit", "")] if result.ok else result.error
-			return result
-		"list_environments":
-			var context := _world_context()
-			var labels := PackedStringArray()
-			for zone in context.environments:
-				labels.append(zone.name)
-			return {"ok": true, "message": "Available environments: " + ", ".join(labels) + ".", "context": context}
-		"travel":
-			if shifting:
-				return {"ok": false, "message": "A world shift is in progress."}
-			var zone := _zone(target)
-			if zone.id != target:
-				return {"ok": false, "message": "That environment is no longer in the catalog."}
-			await _shift(target)
-			return {"ok": zone_id == target, "message": "You’re in %s." % zone.name, "environment": zone_id}
-		"create_environment":
-			if shifting or building:
-				return {"ok": false, "message": "Wait for the current environment to finish loading."}
-			var created: Dictionary = environment_library.create(target, manifest.zones)
-			if created.ok:
-				manifest.zones.append(created.zone)
-			return created
-		"follow", "stay":
-			var mode: String = plan.tool
-			companion.set_mode(mode, zone_id, player)
-			return {"ok": true, "message": "I’ll follow you." if mode == "follow" else "I’ll stay here.", "mode": mode}
-	return {"ok": false, "message": "Try listing environments, traveling, creating a Grid space, following, or staying."}
-
-func _execute_workshop_tool(plan: Dictionary) -> Dictionary:
-	if not _scene_ready(plan.get("zone", "")):
-		return {"ok": false, "message": "Wait for the requested environment to finish loading."}
-	var target: String = plan.get("target", "")
-	var behavior: Variant = plan.get("behavior")
-	if behavior is Dictionary:
-		var target_entity: String = behavior.get("target_entity", "")
-		var settings := {}
-		for setting in behavior.settings:
-			settings[setting.key] = setting.value
-		behavior = {"id": behavior.id, "settings": settings}
-		if not target_entity.is_empty():
-			behavior["target"] = target_entity
-	var placement := []
-	if plan.tool == "spawn_prefab":
-		placement = _scene_spawn_position()
-		if placement.is_empty():
-			return {"ok": false, "message": "Aim at solid ground before placing the prefab."}
-	var result: Dictionary = world_tools.execute(plan.tool, {"id": target, "prefab_id": target,
-		"name": plan.get("name"), "position": placement, "behavior": behavior})
-	if not result.ok:
-		result["message"] = result.error
-		return result
-	result["zone"] = zone_id
-	match plan.tool:
-		"save_prefab":
-			result["message"] = "Saved %s to the prefab library." % result.name
-		"spawn_prefab":
-			result["message"] = "Placed the prefab. You can edit it or undo the placement."
-		"set_behavior":
-			result["message"] = "Removed the entity’s behavior." if behavior == null else \
-				("Updated the live test link." if result.get("preview", false) else "Saved the entity’s behavior.")
-		"list_entities", "list_prefabs", "list_behaviors":
-			var names := PackedStringArray()
-			for item in result.get("prefabs", result.get("entities", result.get("behaviors", []))):
-				names.append(item.name)
-			result["message"] = "Nothing here yet." if names.is_empty() else ", ".join(names)
-	return result
+		"world":
+			return await _world_commands.execute(definition, plan)
+	return {"ok": false, "message": "That command is unavailable in this world session."}
 
 func _scene_ready(requested := "") -> bool:
 	return is_instance_valid(zone_root) and world_tools != null and not shifting \
@@ -988,24 +869,6 @@ func _material(color: Color, emissive := false) -> StandardMaterial3D:
 		mat.emission = color
 		mat.emission_energy_multiplier = 0.6
 	return mat
-
-func _box(at: Vector3, size: Vector3, color: Color, collision := true) -> MeshInstance3D:
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mesh.mesh = box
-	mesh.material_override = _material(color)
-	mesh.position = at
-	build_root.add_child(mesh)
-	if collision:
-		var body := StaticBody3D.new()
-		var shape := CollisionShape3D.new()
-		var box_shape := BoxShape3D.new()
-		box_shape.size = size
-		shape.shape = box_shape
-		body.add_child(shape)
-		mesh.add_child(body)
-	return mesh
 
 func _label3d(text: String, at: Vector3, color := Color.WHITE, size := 45) -> Label3D:
 	var label := Label3D.new()
@@ -1050,32 +913,8 @@ func _build_zone_locked(destination: String, grid_appearance: Dictionary) -> Dic
 	build_root = context.build_root
 	build_interactables = context.build_interactables
 	build_agent_labels = context.build_agent_labels
-	var zone := _zone(destination)
-	var is_grid: bool = destination == "construct" or zone.get("template") == "grid"
-	var art := (is_grid and Grid.build(build_root, grid_appearance)) or context.build_art(destination)
-	if not art:
-		var floor_y := -0.26 if destination == "villa" else -0.2
-		_box(Vector3(0,floor_y,0), Vector3(24,0.4,24), Color("69675c") if destination == "villa" else Color(zone.color))
-		# Low boundary walls preserve the horizon while keeping the player on the floor.
-		for x in [-12,12]:
-			_box(Vector3(x,0.55,0), Vector3(0.25,1.1,24), Color(zone.color).darkened(0.09)).visible = destination != "beach"
-		for z in [-12,12]:
-			_box(Vector3(0,0.55,z), Vector3(24,1.1,0.25), Color(zone.color).darkened(0.09)).visible = destination != "beach"
-		if destination == "villa":
-			for x in [-8,8]:
-				for z in [-7,-2,3,8]:
-					_column(Vector3(x,0,z))
-		else:
-			var sea := _box(Vector3(0,-0.12,-85), Vector3(300,0.1,150), Color("3b9cae"), false)
-			var sea_material := ShaderMaterial.new()
-			sea_material.shader = load("res://shaders/water.gdshader")
-			sea_material.set_shader_parameter("water_color", Color("238b9a"))
-			sea.material_override = sea_material
-			for x in [-8,8]:
-				_box(Vector3(x,1.6,-6), Vector3(0.3,3.2,0.3), Color("81654a"))
-				for angle in [0,60,120]:
-					var leaf := _box(Vector3(x,3.2,-6), Vector3(4.5,0.12,0.8), Color("538b69"), false)
-					leaf.rotation_degrees.y = angle
+	if not context.build_art(destination, grid_appearance):
+		context.build_fallback(destination)
 	for anchor in manifest.anchors:
 		if anchor.zone == destination:
 			_add_anchor(anchor)
@@ -1149,7 +988,7 @@ func _zone(id: String) -> Dictionary:
 	return manifest.zones[0]
 
 func _is_workshop(id: String) -> bool:
-	return id == "construct" or _zone(id).get("template") == "grid"
+	return Packages.definition(id).capabilities.get("workshop", false)
 
 ## Rewrite the world around the player: the new zone is built in place, then a sphere grows from
 ## the player's eyes. Behind its front the old zone unravels into blue lattice and pouring digits
@@ -1255,25 +1094,6 @@ func _announce_zone() -> void:
 	zone_title_tween.tween_property(hud, "modulate:a", 0.9, 0.6)
 	zone_title_tween.tween_interval(2.2)
 	zone_title_tween.tween_property(hud, "modulate:a", 0.0, 1.4)
-
-func _column(at: Vector3) -> void:
-	var asset_path := "res://assets/generated/villa_column.glb"
-	if ResourceLoader.exists(asset_path):
-		var asset := load(asset_path) as PackedScene
-		var instance := asset.instantiate() as Node3D
-		build_root.add_child(instance)
-		instance.position = at
-		var body := StaticBody3D.new()
-		var shape := CollisionShape3D.new()
-		var collision := BoxShape3D.new()
-		collision.size = Vector3(0.9,4.4,0.9)
-		shape.shape = collision
-		shape.position.y = 2.2
-		body.add_child(shape)
-		instance.add_child(body)
-	else:
-		_box(at + Vector3(0,2.2,0), Vector3(0.65,4.4,0.65), Color("f1dfbb"))
-		_box(at + Vector3(0,0.15,0), Vector3(1.1,0.3,1.1), Color("e3c99b"))
 
 func _add_anchor(anchor: Dictionary) -> void:
 	var at := Vector3(anchor.position[0],anchor.position[1],anchor.position[2])
@@ -1396,7 +1216,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if nearest.kind == "companion":
 			_open_codex_console()
 		elif nearest.kind == "application":
-			if zone_id == "construct" and nearest.app_id == "terminal":
+			if _is_workshop(zone_id) and nearest.app_id == "terminal":
 				_open_codex_console()
 			else:
 				_open_app(nearest.app_id)
@@ -1580,17 +1400,6 @@ func _capture_previews() -> void:
 	if output.is_empty():
 		get_tree().quit(1)
 		return
-	# Extra viewpoints per zone: [suffix, eye position, point to look at].
-	var views := {
-		"villa": [["_pool", Vector3(3.4,0.1,-15), Vector3(0,0.6,22)], ["_house", Vector3(9,0.1,-12), Vector3(-2,4.5,-36)],
-			["_view", Vector3(6,0.1,46.6), Vector3(0,-60,140)], ["_cliff", Vector3(12,-78.2,112), Vector3(0,-12,40)],
-			["_coastline", Vector3(-75,0.5,50), Vector3(80,-55,150)], ["_hedge", Vector3(4.2,0.1,-12), Vector3(5.6,0.35,-8)],
-			["_inner", Vector3(6,0.2,-46.6), Vector3(0,1.6,-64)], ["_atrium", Vector3(-17,0.2,-44.8), Vector3(-23,1.8,-56)],
-			["_library", Vector3(-10,0.2,-72), Vector3(10,2,-79)], ["_gallery", Vector3(-28,0.2,-38.4), Vector3(-6,2,-38.4)],
-			["_east_garden", Vector3(34.5,0.05,-42), Vector3(44,1,-58)], ["_herb", Vector3(24,-0.85,-30), Vector3(50,-3,30)],
-			["_theatre", Vector3(-34.8,-1.0,-50), Vector3(-55,0,-58)], ["_apollo", Vector3(-12.5,0.1,-15), Vector3(-18.5,1.8,-17)]],
-		"beach": [["_shore", Vector3(-7,0,-10.5), Vector3(10,0.6,-26)], ["_surf", Vector3(2,0,-11.5), Vector3(0,-0.5,-17.5)], ["_back", Vector3(4,0,-11), Vector3(-6,1.2,8)], ["_wade", Vector3(1,-0.5,-17), Vector3(-4,-0.2,-40)]],
-	}
 	for zone in manifest.zones:
 		_load_zone(zone.id)
 		_close_panel()
@@ -1598,12 +1407,13 @@ func _capture_previews() -> void:
 		# the simulated surf time to roll in from the wavemaker.
 		for frame in range(90):
 			await get_tree().process_frame
-		if zone.id == "beach":
-			await get_tree().create_timer(14.0).timeout
+		var warmup: float = Packages.definition(zone.id).capture_warmup
+		if warmup > 0.0:
+			await get_tree().create_timer(warmup).timeout
 		print("CONSTRUCT_FPS %s %d" % [zone.id, Engine.get_frames_per_second()])
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(output.path_join(str(zone.id) + ".png"))
-		for view in views.get(zone.id, []):
+		for view in Packages.views(zone.id, "capture"):
 			player.position = view[1]
 			camera.global_position = player.position + Vector3(0,1.65,0)
 			var target: Vector3 = view[2]
@@ -1613,7 +1423,7 @@ func _capture_previews() -> void:
 			for frame in range(60):
 				await get_tree().process_frame
 			await RenderingServer.frame_post_draw
-			get_viewport().get_texture().get_image().save_png(output.path_join(str(zone.id) + view[0] + ".png"))
+			get_viewport().get_texture().get_image().save_png(output.path_join(str(zone.id) + "_" + view[0] + ".png"))
 	# The shift itself, mid-flight: villa to shore and back to the hub.
 	for leg in [["villa", "beach", "shift_villa_beach"], ["beach", "construct", "shift_beach_hub"]]:
 		_load_zone(leg[0])

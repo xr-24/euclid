@@ -59,8 +59,25 @@ its own undo history across restarts. Villa furnishings, garden props, beach
 scenery, the pier, floating props, and workstations can be transformed,
 hidden, and restored to authored defaults from the same tools.
 
+Environment packages now declare reviewed builders, spawn, bounds, lighting,
+water features, content layers, editing capabilities, and named capture and
+benchmark views. New package folders are discovered at startup. Custom
+environments can reference an installed package with separate prop saves.
+
 **Remaining.** Add editing tools for larger authored systems such as terrain,
 batched planting, and water. Let Workbench run named Blender exports and
 Godot imports in a draft, preserve source assets and
 licensing metadata, and preview the result in-world before commit. Keep the
 asset build, rendering, and gateway modules independent.
+
+## 5. Shared capability and entity definitions
+
+`world/data/commands` supplies the command catalog for MCP, F2, the palette,
+and Godot dispatch. Scene edits keep the existing atomic save and undo
+transaction. Runtime workshop actions and behavior attachments project
+through the registry. Shared entity definitions provide trusted factory
+selection, defaults, dimensions, editing ranges, and supported outputs.
+
+Cross-language tests compare the full loaded catalogs, handler mappings, and
+validation results. World and development operations have separate handler
+services, keeping their command-specific code out of the coordinator.

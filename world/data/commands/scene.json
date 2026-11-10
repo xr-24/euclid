@@ -1,0 +1,379 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "list_records",
+      "description": "List complete prop records for the scene palette.",
+      "service": "scene",
+      "handler": "_list_records",
+      "local": "list",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette"
+      ],
+      "fields": {},
+      "required": [],
+      "internal": true,
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "list_scene_assets",
+      "description": "List installed scene assets and their exact IDs and licenses.",
+      "service": "scene",
+      "handler": "_list_scene_assets",
+      "local": "list_scene_assets",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "notice": "assets",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "spawn_prop",
+      "description": "Place a built-in prop or an installed model. Omit position to place on aimed ground.",
+      "service": "scene",
+      "handler": "_spawn",
+      "local": "spawn",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "prop_type",
+        "changes": "prop_changes"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "spawn",
+      "placement": true,
+      "verb": "Placed",
+      "undo": "scene",
+      "require_zone": true,
+      "mutates_world": true
+    },
+    {
+      "name": "list_entities",
+      "description": "List editable props, including hidden authored props and their IDs.",
+      "service": "scene",
+      "handler": "_list_entities",
+      "local": "list_entities",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "output": "entities",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "inspect_entity",
+      "description": "Read a prop and its editable properties.",
+      "service": "scene",
+      "handler": "_inspect",
+      "local": "inspect",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "entity",
+      "notice": "inspect",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "edit_entity",
+      "description": "Move, rotate, resize, rename or recolor a prop. Authored props keep their original finish.",
+      "service": "scene",
+      "handler": "_edit_entity",
+      "local": "edit",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity",
+        "changes": "edit_changes"
+      },
+      "required": [
+        "target",
+        "changes"
+      ],
+      "adapter": "entity",
+      "verb": "Updated",
+      "undo": "scene",
+      "require_zone": true,
+      "mutates_world": true,
+      "palette": {
+        "group": "actions",
+        "label": "Apply",
+        "role": "apply",
+        "callback": "_apply_changes"
+      }
+    },
+    {
+      "name": "duplicate_entity",
+      "description": "Place an independent copy of a placed prop. Omit position to offset from the original.",
+      "service": "scene",
+      "handler": "_duplicate",
+      "local": "duplicate",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity",
+        "changes": "position_change"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "entity",
+      "verb": "Duplicated",
+      "undo": "scene",
+      "require_zone": true,
+      "mutates_world": true,
+      "palette": {
+        "group": "actions",
+        "label": "Duplicate",
+        "role": "duplicate"
+      }
+    },
+    {
+      "name": "delete_entity",
+      "description": "Remove an explicitly requested placed prop or hide an authored prop.",
+      "service": "scene",
+      "handler": "_delete",
+      "local": "delete",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "entity",
+      "undo": "scene",
+      "require_zone": true,
+      "destructive": true,
+      "notice": "delete",
+      "mutates_world": true,
+      "palette": {
+        "group": "actions",
+        "label": "Delete",
+        "role": "delete"
+      }
+    },
+    {
+      "name": "restore_dressing",
+      "description": "Restore an authored prop’s original placement, name and visibility.",
+      "service": "scene",
+      "handler": "_restore_dressing",
+      "local": "restore_dressing",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "entity",
+      "undo": "scene",
+      "require_zone": true,
+      "notice": "restore",
+      "mutates_world": true,
+      "palette": {
+        "group": "actions",
+        "label": "Restore defaults",
+        "role": "restore_authored"
+      }
+    },
+    {
+      "name": "undo_scene",
+      "description": "Reverse the most recent scene edit, including a workshop action.",
+      "service": "scene",
+      "handler": "_undo",
+      "local": "undo",
+      "effect": "undo",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "require_zone": true,
+      "notice": "undo",
+      "undo": "none",
+      "mutates_world": true,
+      "palette": {
+        "group": "actions",
+        "label": "Undo",
+        "role": "undo"
+      }
+    },
+    {
+      "name": "list_prefabs",
+      "description": "List reusable prefabs shared across scenes.",
+      "service": "scene",
+      "handler": "_list_prefabs",
+      "local": "list_prefabs",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "output": "prefabs",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "save_prefab",
+      "description": "Save a placed prop as a named prefab, including its saved animation.",
+      "service": "scene",
+      "handler": "_save_prefab",
+      "local": "save_prefab",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity",
+        "name": "prefab_name"
+      },
+      "required": [
+        "target",
+        "name"
+      ],
+      "adapter": "save_prefab",
+      "notice": "prefab_saved",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "spawn_prefab",
+      "description": "Place an independent copy of a saved prefab on aimed ground.",
+      "service": "scene",
+      "handler": "_spawn_prefab",
+      "local": "spawn_prefab",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity"
+      },
+      "required": [
+        "target"
+      ],
+      "adapter": "spawn_prefab",
+      "placement": true,
+      "undo": "scene",
+      "notice": "prefab_placed",
+      "mutates_world": true
+    },
+    {
+      "name": "list_behaviors",
+      "description": "List registered behaviors and settings. Supply an entity ID to filter compatible behaviors.",
+      "service": "scene",
+      "handler": "_list_behaviors",
+      "local": "list_behaviors",
+      "effect": "read",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity"
+      },
+      "required": [],
+      "adapter": "entity",
+      "output": "behaviors",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "set_behavior",
+      "description": "Attach or configure a registered behavior on a prop. Pass null to remove it.",
+      "service": "scene",
+      "handler": "_change_behavior",
+      "local": "set_behavior",
+      "effect": "write",
+      "scope": "scene",
+      "surfaces": [
+        "palette",
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "entity",
+        "behavior": "behavior_change"
+      },
+      "required": [
+        "target",
+        "behavior"
+      ],
+      "adapter": "behavior",
+      "undo": "scene",
+      "notice": "behavior",
+      "mutates_world": true
+    }
+  ]
+}

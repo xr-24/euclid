@@ -16,7 +16,6 @@ const Scatter = preload("res://scripts/scatter.gd")
 const TerrainField = preload("res://scripts/terrain_field.gd")
 
 const GEN := "res://assets/generated/"
-const SPAWN := {"position": Vector3(0, 0.05, 37.0), "yaw": 0.0}
 
 static func available() -> bool:
 	return ResourceLoader.exists(GEN + "villa_estate.glb") and FileAccess.file_exists(GEN + "villa_layout.json")
@@ -32,19 +31,21 @@ static func build(context: RefCounted) -> bool:
 	var sea_y := float(field.info.get("sea_y", -80.0)) if has_coast else -80.0
 	if has_coast:
 		_coast(root, field)
-	_sea(root, sea_y)
-	var pool := Water.build_pool_surface(root, layout)
+	if "ocean" in context.package.water:
+		_sea(root, sea_y)
+	var pool := Water.build_pool_surface(root, layout) if "pool" in context.package.water else {}
 	var water := {"sims": [] if pool.is_empty() else [pool], "floaters": [], "sources": []}
-	_still_water(root, layout)
-	_spouts(root, layout, water)
+	if "still" in context.package.water:
+		_still_water(root, layout)
+	if "spouts" in context.package.water:
+		_spouts(root, layout, water)
 	_lights(root, layout)
 	_gardens(root, layout)
-	SceneDressing.apply(root, "res://data/dressing/villa.json", {"marble": WorldArt.pbr("marble_rock_02", 1.4, Color(1.1, 1.07, 1.02)), "bronze": bronze()})
+	SceneDressing.apply(root, context.package.layers.dressing, {"marble": WorldArt.pbr("marble_rock_02", 1.4, Color(1.1, 1.07, 1.02)), "bronze": bronze()})
 	if has_coast:
-		Scatter.apply(root, "res://data/vegetation/villa_coast.json", field, keep_clear(layout))
+		Scatter.apply(root, context.package.layers.vegetation, field, keep_clear(layout))
 	water["sea_level"] = sea_y
 	root.set_meta("water", water)
-	WorldArt.spawns["villa"] = SPAWN
 	return true
 
 

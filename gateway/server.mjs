@@ -67,7 +67,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 21 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 22 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
@@ -120,7 +120,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         return reply(res, 200, { ...world, agents });
       }
       if (req.method === 'POST' && req.url === '/v1/companion/sync') {
-        const body = await readJson(req, res, 65536);
+        const body = await readJson(req, res, 128 * 1024);
         if (body === undefined) return;
         const response = bridge.sync(body);
         return response ? reply(res, 200, response) : reply(res, 400, { error: 'Invalid live world context' });
@@ -139,7 +139,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       }
       const companion = req.url === '/v1/companion/plan';
       if (req.method === 'POST' && (companion || req.url === '/v1/grid/plan')) {
-        const body = await readJson(req, res, companion ? 65536 : 8192);
+        const body = await readJson(req, res, companion ? 128 * 1024 : 8192);
         if (body === undefined) return;
         const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
         const context = companion ? body?.context : null;

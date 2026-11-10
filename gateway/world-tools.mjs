@@ -1,82 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { validAssetId } from './assets.mjs';
-import companionSchema from './companion-plan.schema.json' with { type: 'json' };
+import { commandFor, isRuntimeName, isWorkshopName, limits, mcpTools, mcpToolsFor, nativePlan, runtimeCommands, runtimePlan, validRegistry, validWorldPlan } from './command-registry.mjs';
 
-const object = (properties = {}, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
-const text = description => ({ type: 'string', description });
+export { validWorldPlan };
+export const tools = mcpTools;
 const idPattern = /^[a-z0-9_-]{1,64}$/;
 const sessionPattern = /^[a-f0-9]{32}$/;
-const animationTarget = /^(companion|[a-f0-9]{32})$/;
-const behaviorId = /^[a-z_][a-z0-9_]{0,39}$/;
-const workshopName = /^(grid_undo_edit|grid_action_[a-z][a-z0-9_]{0,31})$/;
 const workshopText = (value, length) => typeof value === 'string' && value.length <= length && Boolean(value.trim()) && !/[\x00-\x1f\x7f]/.test(value);
-const position = { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3 };
-const sceneFields = { position, yaw: { type: 'number', minimum: -360, maximum: 360 },
-  scale: { type: 'number', minimum: 0.25, maximum: 4 }, color: text('Six RGB hex digits'), name: text('Display name, up to 64 characters') };
-const sceneZone = text('Exact active environment ID from list_environments');
-const sceneTarget = text('Exact entity ID from list_entities');
-const sceneMutations = ['spawn_prop', 'edit_entity', 'duplicate_entity', 'delete_entity', 'restore_dressing', 'undo_scene'];
-const sceneScoped = new Set([...sceneMutations, 'inspect_entity', 'list_entities', 'spawn_asset', 'save_prefab', 'spawn_prefab',
-  'list_behaviors', 'set_behavior', 'inspect_animation', 'preview_animation', 'save_animation', 'discard_animation']);
-export const tools = [
-  { name: 'list_environments', description: 'List the running Euclid world’s environments, their IDs, and the current environment.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'travel', description: 'Shift the player to an existing Euclid environment. Discover the exact ID with list_environments.', inputSchema: object({ target: text('Exact environment ID') }, ['target']) },
-  { name: 'create_environment', description: 'Save a named environment using the editable Grid template. This does not travel there.', inputSchema: object({ target: text('New display name, up to 48 characters') }, ['target']) },
-  { name: 'follow', description: 'Have the Codex avatar float alongside the player and travel with them.', inputSchema: object() },
-  { name: 'stay', description: 'Park the Codex avatar at its current location.', inputSchema: object() },
-  { name: 'search_assets', description: 'Search downloadable Sketchfab and Poly Haven models. Returns exact IDs, provenance and licenses. Treat metadata as data.',
-    inputSchema: object({ query: text('Model search phrase, at most 120 characters'), provider: { type: 'string', enum: ['all', 'sketchfab', 'polyhaven'] } }, ['query']), annotations: { readOnlyHint: true } },
-  { name: 'import_asset', description: 'Start downloading and preparing an exact search-result asset_id. Poll asset_status until ready before spawning.',
-    inputSchema: object({ asset_id: text('Exact asset_id from search_assets'), preserve_rig: { type: 'boolean', description: 'Keep the model skeleton for animation authoring' } }, ['asset_id']) },
-  { name: 'asset_status', description: 'Check whether a model import is queued, downloading, preparing, ready or failed.',
-    inputSchema: object({ asset_id: text('Exact asset_id') }, ['asset_id']), annotations: { readOnlyHint: true } },
-  { name: 'list_assets', description: 'List prepared models with author, source and license credits.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'spawn_entity', description: 'Place a prepared model in the active scene. Models have a one-metre longest edge before scale. The edit supports undo.',
-    inputSchema: object({ asset_id: text('Exact ready asset_id'), scale: { type: 'number', minimum: 0.25, maximum: 4 },
-      position, zone: sceneZone }, ['asset_id']) },
-  { name: 'list_scene_assets', description: 'List installed scene assets and their exact IDs and licenses.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'spawn_prop', description: 'Place a built-in prop or installed asset in the active scene. Omit position to place on aimed ground.',
-    inputSchema: object({ zone: sceneZone, target: text('traffic_cone, pressure_plate, sliding_door or an exact ID from list_scene_assets'),
-      changes: object(sceneFields) }, ['zone', 'target']) },
-  { name: 'list_entities', description: 'List editable props in the active scene, including hidden authored props and their IDs.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'inspect_entity', description: 'Read a prop and its editable properties.',
-    inputSchema: object({ target: sceneTarget, zone: sceneZone }, ['target']), annotations: { readOnlyHint: true } },
-  { name: 'edit_entity', description: 'Move, rotate, scale or rename one prop. Placed props also support recoloring. The edit supports undo.',
-    inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object(sceneFields) }, ['zone', 'target', 'changes']) },
-  { name: 'duplicate_entity', description: 'Place a copy of one prop with a new ID. Use changes.position to specify its placement.',
-    inputSchema: object({ zone: sceneZone, target: sceneTarget, changes: object({ position }) }, ['zone', 'target']) },
-  { name: 'delete_entity', description: 'Remove one explicitly requested placed prop or hide an authored prop. The edit supports undo.',
-    inputSchema: object({ zone: sceneZone, target: sceneTarget }, ['zone', 'target']), annotations: { destructiveHint: true } },
-  { name: 'restore_dressing', description: 'Restore an authored prop to its original name, position, rotation, scale and visibility. The edit supports undo.',
-    inputSchema: object({ zone: sceneZone, target: sceneTarget }, ['zone', 'target']) },
-  { name: 'undo_scene', description: 'Reverse the most recent player or agent prop edit in the active scene.',
-    inputSchema: object({ zone: sceneZone }, ['zone']) },
-  { name: 'list_prefabs', description: 'List reusable prefabs shared across scenes.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'save_prefab', description: 'Save a placed prop as a named prefab, including its saved animation if present.',
-    inputSchema: object({ target: text('Exact entity ID from list_entities'), name: text('New prefab name, up to 48 characters') }, ['target', 'name']) },
-  { name: 'spawn_prefab', description: 'Place an independent copy of a saved prefab in the active scene.',
-    inputSchema: object({ target: text('Exact prefab ID from list_prefabs') }, ['target']) },
-  { name: 'list_behaviors', description: 'List registered entity behaviors and their editable settings. Supply an entity ID to filter compatible behaviors.',
-    inputSchema: object({ target: text('Optional exact entity ID from list_entities') }), annotations: { readOnlyHint: true } },
-  { name: 'set_behavior', description: 'Attach or configure a registered behavior on an existing entity. Pass null to remove it. The edit supports undo.',
-    inputSchema: object({ target: text('Exact entity ID'), behavior: { anyOf: [companionSchema.$defs.behavior, { type: 'null' }] } }, ['target', 'behavior']) },
-  { name: 'inspect_animation', description: 'List animatable scene entities or inspect a target’s channels, joint names and current clip.',
-    inputSchema: object({ target: text('Optional exact target ID. Use companion for Codex.') }), annotations: { readOnlyHint: true } },
-  { name: 'preview_animation', description: 'Apply or revise a temporary looping animation on an exact target. Inspect the rig first. Use save_animation or discard_animation after review.',
-    inputSchema: object({ target: text('Exact ID from inspect_animation'), clip: companionSchema.$defs.clip }, ['target', 'clip']) },
-  { name: 'save_animation', description: 'Save the active animation preview on its target.', inputSchema: object({ target: text('Optional exact preview target ID') }) },
-  { name: 'discard_animation', description: 'Discard the active preview and restore its previous motion.', inputSchema: object({ target: text('Optional exact preview target ID') }) },
-  { name: 'list_workshop_tools', description: 'Discover actions registered in the current Grid space, including newly previewed actions.', inputSchema: object(), annotations: { readOnlyHint: true } },
-  { name: 'run_workshop_tool', description: 'Run a named action from list_workshop_tools. Call it only when the user asks to perform the action.',
-    inputSchema: object({ name: text('Exact name from list_workshop_tools') }, ['name']) },
-];
-
-function validWorkshopCatalog(catalog) {
+function validWorkshopCatalog(catalog, context) {
   if (catalog === undefined) return true;
-  if (!Array.isArray(catalog) || catalog.length > 25) return false;
+  if (!Array.isArray(catalog) || catalog.length > limits.workshop_actions) return false;
   const names = new Set();
   for (const tool of catalog) {
-    if (typeof tool?.name !== 'string' || !workshopName.test(tool.name) || names.has(tool.name) ||
+    if (typeof tool?.name !== 'string' || !isWorkshopName(tool.name, context) || names.has(tool.name) ||
         !workshopText(tool.label, 48) || !workshopText(tool.description, 180) ||
         typeof tool.revision !== 'string' || !/^[a-f0-9]{64}$/.test(tool.revision)) return false;
     names.add(tool.name);
@@ -86,78 +21,12 @@ function validWorkshopCatalog(catalog) {
 
 export function validContext(context) {
   return typeof context?.current === 'string' && Array.isArray(context.environments) &&
-    context.environments.length > 0 && context.environments.length <= 15 &&
-    validWorkshopCatalog(context.workshop_tools) && context.environments.some(zone => zone?.id === context.current) &&
+    context.environments.length > 0 && context.environments.length <= limits.environments &&
+    validRegistry(context.command_registry) && validWorkshopCatalog(context.workshop_tools, context) &&
+    context.environments.some(zone => zone?.id === context.current) &&
     context.environments.every(zone => typeof zone?.id === 'string' && idPattern.test(zone.id) &&
       typeof zone.name === 'string' && zone.name.length <= 96 &&
       typeof zone.description === 'string' && zone.description.length <= 180);
-}
-
-const developmentTools = ['draft_shoreline', 'draft_grid', 'draft_behavior', 'draft_workshop_tool', 'draft_source', 'revise_source', 'benchmark_villa', 'villa_results'];
-
-export function validWorldPlan(plan, context) {
-  if (typeof plan?.tool !== 'string' || typeof plan.target !== 'string') return false;
-  if (plan.zone !== undefined && (typeof plan.zone !== 'string' || !idPattern.test(plan.zone))) return false;
-  if (plan.changes != null && !validSceneChanges(plan.changes)) return false;
-  if (plan.tool === 'spawn_prop') return ['traffic_cone', 'pressure_plate', 'sliding_door'].includes(plan.target) ||
-    (/^[a-z_][a-z0-9_]{0,95}$/.test(plan.target) && (!context ||
-      (Array.isArray(context.scene_assets) && context.scene_assets.some(asset => asset?.id === plan.target))));
-  if (['inspect_entity', 'edit_entity', 'duplicate_entity', 'delete_entity', 'restore_dressing'].includes(plan.tool)) {
-    if (!sessionPattern.test(plan.target)) return false;
-    const keys = Object.keys(plan.changes ?? {}).filter(key => plan.changes[key] != null);
-    return plan.tool === 'edit_entity' ? keys.length > 0 : plan.tool === 'duplicate_entity' ? keys.every(key => key === 'position') : !keys.length;
-  }
-  if (plan.tool === 'travel') return idPattern.test(plan.target);
-  if (plan.tool === 'revise_source') return context?.source_revision === true && plan.target === '';
-  if (['benchmark_villa', 'villa_results'].includes(plan.tool)) return context?.source_development === true && plan.target === '';
-  if (developmentTools.includes(plan.tool)) return plan.target === '';
-  if (plan.tool === 'run_workshop_tool') return Boolean(context?.workshop_tools?.some(tool => tool.name === plan.target));
-  if (plan.tool === 'create_environment') return plan.target.trim().length > 0 && plan.target.length <= 96;
-  if (plan.tool === 'save_prefab') return sessionPattern.test(plan.target) && typeof plan.name === 'string' &&
-    plan.name.trim().length > 0 && [...plan.name.trim()].length <= 48 && !/[\x00-\x1f\x7f]/.test(plan.name);
-  if (plan.tool === 'spawn_prefab') return sessionPattern.test(plan.target);
-  if (plan.tool === 'list_behaviors') return plan.target === '' || sessionPattern.test(plan.target);
-  if (plan.tool === 'set_behavior') return sessionPattern.test(plan.target) && validBehavior(plan.behavior);
-  if (plan.tool === 'spawn_asset') return plan.target.trim().length > 0 && plan.target.length <= 120 &&
-    (plan.preserve_rig === undefined || typeof plan.preserve_rig === 'boolean') &&
-    (plan.scale === undefined || (Number.isFinite(plan.scale) && plan.scale >= 0.25 && plan.scale <= 4)) &&
-    (plan.position === undefined || (Array.isArray(plan.position) && plan.position.length === 3 && plan.position.every(Number.isFinite)));
-  if (plan.tool === 'preview_animation') {
-    return animationTarget.test(plan.target) && plan.clip !== null && typeof plan.clip === 'object' &&
-      Array.isArray(plan.clip.keyframes) && plan.clip.keyframes.length <= 10 &&
-      Array.isArray(plan.clip.joint_tracks) && plan.clip.joint_tracks.length <= 16 &&
-      plan.clip.joint_tracks.every(track => Array.isArray(track?.keyframes) && track.keyframes.length <= 10) &&
-      JSON.stringify(plan.clip).length <= 32000;
-  }
-  if (['inspect_animation', 'save_animation', 'discard_animation'].includes(plan.tool)) {
-    return plan.target === '' || animationTarget.test(plan.target);
-  }
-  return plan.target === '' && ['list_environments', 'follow', 'stay', 'list_assets', 'list_scene_assets', 'list_entities', 'undo_scene', 'list_prefabs', 'list_workshop_tools', 'unsupported'].includes(plan.tool);
-}
-
-function validSceneChanges(changes) {
-  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
-  const { position: point, yaw, scale, color, name } = changes;
-  return Object.keys(changes).every(key => Object.hasOwn(sceneFields, key)) &&
-    (point == null || (Array.isArray(point) && point.length === 3 && point.every(value => Number.isFinite(value) && Math.abs(value) <= 1000))) &&
-    (yaw == null || (Number.isFinite(yaw) && Math.abs(yaw) <= 360)) &&
-    (scale == null || (Number.isFinite(scale) && scale >= 0.25 && scale <= 4)) &&
-    (color == null || (typeof color === 'string' && /^[a-f0-9]{6}$/i.test(color))) &&
-    (name == null || name === '' || workshopText(name, 64));
-}
-
-function validBehavior(behavior) {
-  if (behavior === null) return true;
-  if (typeof behavior?.id !== 'string' || !behaviorId.test(behavior.id) || !Array.isArray(behavior.settings) || behavior.settings.length > 6) return false;
-  if (behavior.target_entity !== undefined && behavior.target_entity !== '' &&
-      (typeof behavior.target_entity !== 'string' || !sessionPattern.test(behavior.target_entity))) return false;
-  const keys = new Set();
-  for (const setting of behavior.settings) {
-    if (typeof setting?.key !== 'string' || !behaviorId.test(setting.key) || keys.has(setting.key) ||
-        !Number.isFinite(setting.value) || Math.abs(setting.value) > 10000) return false;
-    keys.add(setting.key);
-  }
-  return true;
 }
 
 export function createWorldBridge(assets) {
@@ -189,7 +58,7 @@ export function createWorldBridge(assets) {
     prune();
     const session = sessions.get(id);
     if (!session || Date.now() - session.seen > 12000) return { ok: false, message: 'Open the Codex CLI from a running Euclid world.' };
-    if (plan.tool === 'list_environments') return { ok: true, ...session.context };
+    if (commandFor(plan.tool, session.context)?.bridge === 'context') return { ok: true, ...session.context };
     if (session.pending) return { ok: false, message: 'Euclid is still applying another world tool.' };
     if (signal.aborted) return { ok: false, message: 'World tool cancelled.' };
     return new Promise(resolve => {
@@ -201,7 +70,7 @@ export function createWorldBridge(assets) {
       };
       const abort = () => finish({ ok: false, message: 'World tool cancelled.' });
       const timer = setTimeout(() => finish({ ok: false, message: 'Euclid did not report a result. Inspect the current environment before retrying.' }), 35000);
-      const scope = sceneScoped.has(plan.tool) ? { zone: session.context.current } : {};
+      const scope = commandFor(plan.tool, session.context)?.scope === 'scene' ? { zone: session.context.current } : {};
       const command = { id: randomUUID(), ...scope, ...plan, expires_at: (Date.now() + 35000) / 1000 };
       session.pending = { command, finish };
       signal.addEventListener('abort', abort, { once: true });
@@ -216,7 +85,16 @@ export function createWorldBridge(assets) {
     if (message.id === undefined) return null;
     prune();
     const world = sessions.get(session);
-    const catalog = world && Date.now() - world.seen <= 12000 ? world.context.workshop_tools ?? [] : [];
+    const context = world && Date.now() - world.seen <= 12000 ? world.context : null;
+    const catalog = context?.workshop_tools ?? [];
+    const runtime = runtimeCommands(context);
+    function runAction(name) {
+      const descriptor = catalog.find(tool => tool.name === name);
+      return descriptor ? call(session, {
+        tool: 'run_workshop_tool', target: descriptor.name, revision: descriptor.revision, zone: world.context.current,
+      }, signal) : { ok: false, message: 'That workshop action is no longer registered here. List the current tools.' };
+    }
+
     switch (message.method) {
       case 'initialize':
         return reply({
@@ -225,53 +103,43 @@ export function createWorldBridge(assets) {
           instructions: 'Use these tools for the live Euclid world. Call list_environments to discover destinations.',
         });
       case 'ping': return reply({});
-      case 'tools/list': return reply({ tools: [...tools, ...catalog.map(tool => ({
-        name: tool.name, description: tool.description, inputSchema: object(), annotations: { destructiveHint: false },
+      case 'tools/list': return reply({ tools: [...mcpToolsFor(context), ...runtime.map(({ name, description, inputSchema }) => ({
+        name, description, inputSchema,
       }))] });
       case 'tools/call': {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
-        if (name === 'list_workshop_tools' || name === 'run_workshop_tool' || (typeof name === 'string' && workshopName.test(name))) {
-          const wrapper = name === 'run_workshop_tool';
-          if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length !== (wrapper ? 1 : 0)) {
-            return error(-32602, 'Invalid workshop action arguments');
-          }
-          const descriptor = catalog.find(tool => tool.name === (wrapper ? args.name : name));
-          const result = name === 'list_workshop_tools' ? { ok: true, tools: catalog } : descriptor ? await call(session, {
-            tool: 'run_workshop_tool', target: descriptor.name, revision: descriptor.revision, zone: world.context.current,
-          }, signal) : { ok: false, message: 'That workshop action is no longer registered here. List the current tools.' };
-          return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        const definition = commandFor(name, context);
+        const send = result => reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        if (!definition && isRuntimeName(name, context)) {
+          const command = runtime.find(entry => entry.name === name);
+          if (!command) return send({ ok: false, message: 'That command is no longer registered in this scene.' });
+          const plan = runtimePlan(command, args, context);
+          return plan ? send(await call(session, plan, signal)) : error(-32602, 'Invalid registered command arguments');
         }
-        if (['search_assets', 'import_asset', 'asset_status', 'list_assets', 'spawn_entity'].includes(name)) {
+        const plan = nativePlan(definition, args, context);
+        if (!plan) return error(-32602, 'Invalid world tool arguments');
+        if (definition.bridge === 'workshop_catalog') return send({ ok: true, tools: catalog });
+        if (definition.catalog === 'workshop_tools') return send(await runAction(plan.target));
+        if (definition.service === 'assets' || definition.bridge === 'assets_list') {
           if (!assets) return error(-32603, 'The asset service is unavailable.');
-          let result;
           try {
-            if (name === 'search_assets') result = await assets.search(args.query, args.provider);
-            if (name === 'import_asset') result = await assets.importAsset(args.asset_id, args.preserve_rig);
-            if (name === 'asset_status') result = await assets.status(args.asset_id);
-            if (name === 'list_assets') result = await assets.list();
-            if (name === 'spawn_entity') {
-              const plan = { tool: 'spawn_asset', target: args.asset_id,
-                ...(args.zone !== undefined || world?.context.current ? { zone: args.zone ?? world.context.current } : {}),
-                ...(args.scale === undefined ? {} : { scale: args.scale }),
-                ...(args.position === undefined ? {} : { position: args.position }) };
-              if (!validAssetId(args.asset_id) || !validWorldPlan(plan)) return error(-32602, 'Invalid spawn arguments');
-              if ((await assets.status(args.asset_id)).status !== 'ready') throw new Error('Wait for asset_status to report ready before spawning.');
-              result = await call(session, plan, signal);
+            if (definition.bridge !== 'spawn_ready') {
+              const handler = definition.gateway_handler ?? definition.handler;
+              if (typeof assets[handler] !== 'function') return error(-32603, 'The asset command has no handler.');
+              return send(await assets[handler](...(definition.parameters ?? []).map(key => args[key])));
             }
-          } catch (failure) { result = { ok: false, message: failure.message }; }
-          return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+            if ((await assets.status(args.asset_id)).status !== 'ready') {
+              return send({ ok: false, message: 'Wait for asset_status to report ready before spawning.' });
+            }
+            const { asset_id: target, ...placement } = args;
+            return send(await call(session, { tool: definition.handler, target, ...placement }, signal));
+          } catch (failure) {
+            return send({ ok: false, message: failure.message });
+          }
         }
-        if (sceneMutations.includes(name) && typeof args.zone !== 'string') return error(-32602, 'Specify the active environment ID.');
-        const plan = { tool: name, target: args.target ?? '',
-          ...(args.zone !== undefined ? { zone: args.zone } : {}),
-          ...(args.changes !== undefined ? { changes: args.changes } : {}),
-          ...(name === 'preview_animation' ? { clip: args.clip } : {}),
-          ...(name === 'set_behavior' ? { behavior: args.behavior } : {}),
-          ...(name === 'save_prefab' ? { name: args.name } : {}) };
-        if (!validWorldPlan(plan) || plan.tool === 'unsupported' || developmentTools.includes(plan.tool)) return error(-32602, 'Invalid world tool arguments');
-        const result = await call(session, plan, signal);
-        return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        if (!validWorldPlan(plan, context, true)) return error(-32602, 'Invalid world tool arguments');
+        return send(await call(session, plan, signal));
       }
       default: return error(-32601, 'Method not found');
     }

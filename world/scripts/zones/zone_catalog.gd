@@ -1,5 +1,6 @@
 extends RefCounted
 ## Data contract for world content. Theme data cannot select scripts or execute commands.
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 
 static func read(path: String) -> Dictionary:
 	var json := JSON.new()
@@ -10,7 +11,15 @@ static func read(path: String) -> Dictionary:
 	if not errors.is_empty():
 		push_error("Invalid world manifest: " + "; ".join(errors))
 		return {}
-	return json.data
+	var manifest: Dictionary = json.data
+	for id in Packages.ids():
+		if not manifest.zones.any(func(zone: Dictionary) -> bool: return zone.id == id):
+			var package := Packages.definition(id)
+			manifest.zones.append({"id": id, "name": package.get("name", id.capitalize()),
+				"description": package.get("description", ""), "color": package.get("color", "071217")})
+	for zone in manifest.zones:
+		Packages.register_zone(zone)
+	return manifest
 
 static func validate(data: Variant) -> PackedStringArray:
 	var errors := PackedStringArray()

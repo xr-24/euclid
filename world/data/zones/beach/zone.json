@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "id": "beach",
+  "builder": "res://scripts/zones/shore_zone.gd",
+  "spawn": {
+    "position": [
+      0,
+      0.05,
+      4
+    ],
+    "yaw": 0
+  },
+  "bounds": [
+    [
+      -74,
+      -16,
+      -94
+    ],
+    [
+      148,
+      61,
+      143
+    ]
+  ],
+  "environment": {
+    "hdri": "kloppenheim_06_puresky_4k.hdr",
+    "sun_azimuth": 205.0,
+    "sun_color": "ffbe82",
+    "sun_energy": 2.1,
+    "sky_energy": 1.0,
+    "exposure": 1.0,
+    "fog_density": 0.0022,
+    "fog_albedo": "ffe2c4",
+    "fog_anisotropy": 0.72,
+    "shadow_distance": 120.0,
+    "sdfgi_cell": 0.25,
+    "haze": 0.0016,
+    "haze_color": "e9c7a3"
+  },
+  "capabilities": {
+    "workshop": false,
+    "scene_edit": true
+  },
+  "fallback": {
+    "style": "coast",
+    "floor_y": -0.2,
+    "walls": false,
+    "color": null
+  },
+  "workstation": "beach",
+  "water": [
+    "ocean",
+    "surf",
+    "floaters"
+  ],
+  "layers": {},
+  "views": {
+    "arrival": {
+      "position": [
+        0,
+        0.05,
+        4
+      ],
+      "target": [
+        0,
+        1,
+        -25
+      ]
+    },
+    "shore": {
+      "position": [
+        -7,
+        0,
+        -10.5
+      ],
+      "target": [
+        10,
+        0.6,
+        -26
+      ]
+    },
+    "surf": {
+      "position": [
+        2,
+        0,
+        -11.5
+      ],
+      "target": [
+        0,
+        -0.5,
+        -17.5
+      ]
+    },
+    "back": {
+      "position": [
+        4,
+        0,
+        -11
+      ],
+      "target": [
+        -6,
+        1.2,
+        8
+      ]
+    },
+    "wade": {
+      "position": [
+        1,
+        -0.5,
+        -17
+      ],
+      "target": [
+        -4,
+        -0.2,
+        -40
+      ]
+    }
+  },
+  "benchmark_views": [
+    "arrival"
+  ],
+  "capture_views": [
+    "shore",
+    "surf",
+    "back",
+    "wade"
+  ],
+  "capture_warmup": 14,
+  "graphics": {
+    "balanced_reconstruction": false
+  }
+}

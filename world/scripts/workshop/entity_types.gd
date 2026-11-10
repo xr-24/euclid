@@ -5,25 +5,22 @@ const Assets = preload("res://scripts/assets/runtime_assets.gd")
 const Library = preload("res://scripts/asset_library.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const BehaviorRegistry = preload("res://scripts/plugins/behavior_registry.gd")
-const TYPES := {"traffic_cone": {"label": "Traffic cone", "color": "ff681d"},
-	"pressure_plate": {"label": "Pressure plate", "color": "2d8394"},
-	"sliding_door": {"label": "Sliding door", "color": "475567"},
-	"imported_model": {"label": "Imported model", "color": "ffffff"},
-	"library_model": {"label": "Library model", "color": "ffffff"}}
+const Commands = preload("res://scripts/workshop/command_registry.gd")
+static var TYPES := Commands.entity_types()
 const LIBRARY_CATEGORIES := ["bust", "fragment", "furniture", "plant", "prop", "rock", "sarcophagus", "statue", "tree"]
 
 static func valid_properties(record: Dictionary) -> bool:
 	var type: Variant = record.get("type")
-	var color: Variant = record.get("color")
+	var source: String = TYPES.get(type, {}).get("asset_source", "")
 	return type is String and TYPES.has(type) \
-		and (type != "imported_model" or Assets.valid_id(record.get("asset_id"))) \
-		and (type != "library_model" or library_id(record.get("asset_id"))) \
+		and (source != "runtime" or Assets.valid_id(record.get("asset_id"))) \
+		and (source != "library" or library_id(record.get("asset_id"))) \
 		and (not record.has("name") or valid_name(record.name)) \
 		and (not record.has("animation") or (MotionClip.valid(record.animation) and MotionClip.supports(record.animation, false))) \
 		and (not record.has("behavior") or BehaviorRegistry.valid_record(record.behavior)) \
-		and number_between(record.get("yaw"), -360.0, 360.0) \
-		and number_between(record.get("scale"), 0.25, 4.0) \
-		and color is String and color.length() == 6 and Color.html_is_valid(color)
+		and Commands.valid_field("yaw", record.get("yaw")) \
+		and Commands.valid_field("scale", record.get("scale")) \
+		and Commands.valid_field("color", record.get("color"))
 
 static func number_between(value: Variant, minimum: float, maximum: float) -> bool:
 	return (value is float or value is int) and is_finite(float(value)) and value >= minimum and value <= maximum
@@ -38,12 +35,7 @@ static func label(record: Dictionary) -> String:
 	return TYPES[record.type].label
 
 static func valid_name(value: Variant) -> bool:
-	if not value is String or value.length() > 64 or value.strip_edges().is_empty():
-		return false
-	for index in value.length():
-		if value.unicode_at(index) < 32 or value.unicode_at(index) == 127:
-			return false
-	return true
+	return value != "" and Commands.valid_field("prop_name", value)
 
 static func library_id(id: Variant) -> bool:
 	return id is String and id.length() <= 96 and id.is_valid_identifier()
@@ -69,21 +61,22 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 	body.position = Vector3(point[0], point[1], point[2])
 	body.rotation_degrees.y = record.yaw
 	var size: float = record.scale
-	match record.type:
-		"traffic_cone":
+	var definition: Dictionary = TYPES[record.type]
+	match definition.factory:
+		"cone":
 			_cone(body, Color.html(record.color), size)
-		"pressure_plate":
-			_box_body(body, Vector3(1.2, 0.09, 1.2) * size, Color.html(record.color)).name = "SignalSurface"
-		"sliding_door":
+		"box":
+			_box_body(body, _size(definition) * size, Color.html(record.color)).name = "SignalSurface"
+		"door":
 			var leaf := AnimatableBody3D.new()
 			leaf.name = "DoorLeaf"
 			leaf.sync_to_physics = false
 			leaf.set_meta("entity_id", record.id)
-			_box_body(leaf, Vector3(1.55, 2.35, 0.18) * size, Color.html(record.color))
+			_box_body(leaf, _size(definition) * size, Color.html(record.color))
 			body.add_child(leaf)
-		"imported_model", "library_model":
+		"model":
 			var model: Node3D
-			if record.type == "library_model":
+			if definition.asset_source == "library":
 				model = Library.instance(record.asset_id)
 			else:
 				var packed := Assets.scene(record.asset_id)
@@ -94,6 +87,10 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 			else:
 				body.set_meta("asset_unavailable", true)
 	return body
+
+static func _size(definition: Dictionary) -> Vector3:
+	var size: Array = definition.size
+	return Vector3(size[0], size[1], size[2])
 
 static func _place_model(body: AnimatableBody3D, model: Node3D, size: float, color: String) -> void:
 	var placement := Node3D.new()

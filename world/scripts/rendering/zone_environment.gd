@@ -1,36 +1,8 @@
 extends RefCounted
 ## Zone lighting and atmosphere; independent of geometry and simulation.
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Assets = preload("res://scripts/assets/asset_library.gd")
 static var _cache := {}
-const ZONES := {
-	"construct": {
-		# The white hub: a painted gradient sky instead of a photograph.
-		"sky_colors": [Color("809eb4"), Color("e5d6b8"), Color("d0c4ab"), Color("74796a")],
-		"sun_azimuth": 150.0, "sun_elevation": 38.0,
-		"sun_color": Color("fff0da"), "sun_energy": 2.0,
-		"sky_energy": 1.0, "exposure": 1.0,
-		"fog_density": 0.002, "fog_albedo": Color("eef3ff"), "fog_anisotropy": 0.4,
-		"shadow_distance": 60.0, "sdfgi_cell": 0.18,
-	},
-	"villa": {
-		"hdri": "kloofendal_48d_partly_cloudy_puresky_4k.hdr",
-		"sun_azimuth": 128.0, # degrees, from +Z toward +X: high sun from the right, behind the arrival point
-		"sun_color": Color("fff1df"), "sun_energy": 2.6,
-		"sky_energy": 1.0, "exposure": 0.92,
-		"fog_density": 0.0045, "fog_albedo": Color("fff4e6"), "fog_anisotropy": 0.55,
-		"shadow_distance": 55.0, "sdfgi_cell": 0.12,
-	},
-	"beach": {
-		"hdri": "kloppenheim_06_puresky_4k.hdr",
-		"sun_azimuth": 205.0, # low golden sun over the sea, a little to the left of the view
-		"sun_color": Color("ffbe82"), "sun_energy": 2.1,
-		"sky_energy": 1.0, "exposure": 1.0,
-		"fog_density": 0.0022, "fog_albedo": Color("ffe2c4"), "fog_anisotropy": 0.72,
-		"shadow_distance": 120.0, "sdfgi_cell": 0.25,
-		"haze": 0.0016, "haze_color": Color("e9c7a3"),
-	},
-}
-
 
 static func apply_environment(env: Environment, sun: DirectionalLight3D, zone: String) -> void:
 	var state := zone_state(zone)
@@ -40,7 +12,7 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D, zone: S
 ## Everything about a zone's look that can be blended during a shift.
 
 static func zone_state(zone: String) -> Dictionary:
-	var s: Dictionary = (ZONES.get(zone, ZONES.construct) as Dictionary).duplicate()
+	var s := Packages.environment(zone)
 	var hdri_path := Assets.PH + "hdri/" + str(s.get("hdri", ""))
 	var elevation: float = s.get("sun_elevation", 40.0)
 	s.yaw = 0.0
@@ -51,7 +23,7 @@ static func zone_state(zone: String) -> Dictionary:
 		elevation = sun_data.get("elevation_deg", elevation)
 		s.yaw = deg_to_rad(s.sun_azimuth - float(sun_data.get("u", 0.0)) * 360.0)
 	else:
-		s.panorama = _gradient_sky(s.get("sky_colors", ZONES.construct.sky_colors))
+		s.panorama = _gradient_sky(s.get("sky_colors", Packages.environment("construct").sky_colors))
 	var az := deg_to_rad(s.sun_azimuth)
 	var el := deg_to_rad(elevation)
 	s.to_sun = Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el))

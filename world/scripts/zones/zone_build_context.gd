@@ -1,65 +1,75 @@
 extends RefCounted
 ## A private detached root per build. No live player, UI, network or scene-tree ownership.
-const Villa = preload("res://scripts/zones/villa.gd")
-const Shore = preload("res://scripts/zones/shore_zone.gd")
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
-## Trusted code registers builders here. Unregistered zone IDs use the neutral blockout.
-const BUILDERS := {"villa": Villa, "beach": Shore}
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 var manifest: Dictionary
 var build_root: Node3D
 var build_interactables: Array[Dictionary] = []
 var build_agent_labels: Dictionary = {}
+var package := {}
+var appearance := {}
 
 func _init(definitions: Dictionary) -> void:
-	manifest = definitions
+	manifest = definitions.duplicate(true)
 
 func begin(destination: String) -> void:
 	build_root = Node3D.new()
 	build_root.name = "Zone_" + destination
 	build_interactables = []
 	build_agent_labels = {}
+	package = Packages.definition(destination).duplicate(true)
+	build_root.set_meta("scene_edit", package.capabilities.get("scene_edit", false))
+	build_root.set_meta("spawn", Packages.spawn(destination))
 
-func build_art(destination: String) -> bool:
-	var builder = BUILDERS.get(destination)
-	return builder != null and builder.build(self)
+func build_art(destination: String, grid_appearance := {}) -> bool:
+	package = Packages.definition(destination).duplicate(true)
+	appearance = grid_appearance if not grid_appearance.is_empty() else {"floor_spacing": 2.0, "wall_height": 1.0}
+	var builder := load(package.builder) as GDScript
+	if builder == null or not builder.has_script_method("build") or builder.get_instance_base_type() != &"RefCounted":
+		return false
+	var built: Variant = builder.call("build", self)
+	return built is bool and built
 
 func build(destination: String) -> Dictionary:
 	begin(destination)
-	var zone := _zone(destination)
 	if not build_art(destination):
-		var floor_y := -0.26 if destination == "villa" else -0.2
-		_box(Vector3(0,floor_y,0), Vector3(24,0.4,24), Color("69675c") if destination == "villa" else Color(zone.color))
-		# Low boundary walls preserve the horizon while keeping the player on the floor.
-		for x in [-12,12]:
-			_box(Vector3(x,0.55,0), Vector3(0.25,1.1,24), Color(zone.color).darkened(0.09)).visible = destination != "beach"
-		for z in [-12,12]:
-			_box(Vector3(0,0.55,z), Vector3(24,1.1,0.25), Color(zone.color).darkened(0.09)).visible = destination != "beach"
-		if destination == "construct":
-			for x in range(-10,11,2):
-				_box(Vector3(x,0.006,0), Vector3(0.015,0.01,23), Color("bdc6cf"), false)
-				_box(Vector3(0,0.006,x), Vector3(23,0.01,0.015), Color("bdc6cf"), false)
-		elif destination == "villa":
-			for x in [-8,8]:
-				for z in [-7,-2,3,8]:
-					_column(Vector3(x,0,z))
-		else:
-			var sea := _box(Vector3(0,-0.12,-85), Vector3(300,0.1,150), Color("3b9cae"), false)
-			var sea_material := ShaderMaterial.new()
-			sea_material.shader = load("res://shaders/water.gdshader")
-			sea_material.set_shader_parameter("water_color", Color("238b9a"))
-			sea.material_override = sea_material
-			for x in [-8,8]:
-				_box(Vector3(x,1.6,-6), Vector3(0.3,3.2,0.3), Color("81654a"))
-				for angle in [0,60,120]:
-					var leaf := _box(Vector3(x,3.2,-6), Vector3(4.5,0.12,0.8), Color("538b69"), false)
-					leaf.rotation_degrees.y = angle
+		build_fallback(destination)
 	for anchor in manifest.anchors:
 		if anchor.zone == destination:
 			_add_anchor(anchor)
 	# Every surface gets the construct effect built in now, so nothing is swapped later.
 	Effects.make_constructible(build_root)
 	return {"id": destination, "root": build_root, "interactables": build_interactables, "agent_labels": build_agent_labels}
+
+func build_fallback(destination: String) -> void:
+	var zone := _zone(destination)
+	var floor_y: float = package.fallback.floor_y
+	_box(Vector3(0,floor_y,0), Vector3(24,0.4,24), Color(package.fallback.get("color") if package.fallback.get("color") != null else zone.color))
+	# Low boundary walls preserve the horizon while keeping the player on the floor.
+	for x in [-12,12]:
+		_box(Vector3(x,0.55,0), Vector3(0.25,1.1,24), Color(zone.color).darkened(0.09)).visible = package.fallback.walls
+	for z in [-12,12]:
+		_box(Vector3(0,0.55,z), Vector3(24,1.1,0.25), Color(zone.color).darkened(0.09)).visible = package.fallback.walls
+	if package.fallback.style == "grid":
+		for x in range(-10,11,2):
+			_box(Vector3(x,0.006,0), Vector3(0.015,0.01,23), Color("bdc6cf"), false)
+			_box(Vector3(0,0.006,x), Vector3(23,0.01,0.015), Color("bdc6cf"), false)
+	elif package.fallback.style == "columns":
+		for x in [-8,8]:
+			for z in [-7,-2,3,8]:
+				_column(Vector3(x,0,z))
+	else:
+		var sea := _box(Vector3(0,-0.12,-85), Vector3(300,0.1,150), Color("3b9cae"), false)
+		var sea_material := ShaderMaterial.new()
+		sea_material.shader = load("res://shaders/water.gdshader")
+		sea_material.set_shader_parameter("water_color", Color("238b9a"))
+		sea.material_override = sea_material
+		for x in [-8,8]:
+			_box(Vector3(x,1.6,-6), Vector3(0.3,3.2,0.3), Color("81654a"))
+			for angle in [0,60,120]:
+				var leaf := _box(Vector3(x,3.2,-6), Vector3(4.5,0.12,0.8), Color("538b69"), false)
+				leaf.rotation_degrees.y = angle
 
 ## Build on a worker thread so the world keeps running.
 

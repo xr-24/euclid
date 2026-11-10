@@ -5,11 +5,11 @@ signal agent_requested(prompt: String, placement: Array, panel: Control)
 signal preview_failed(message: String)
 
 const Builtin = preload("res://scripts/ui/grid_palette.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const SOURCE_PATH := "res://scripts/ui/grid_palette.gd"
 const METHODS := [&"setup", &"capture_view", &"restore_view", &"finish_agent_request"]
 
 class SetupTools extends RefCounted:
-	const READS := ["list", "inspect", "list_entities", "list_behaviors", "list_prefabs", "list_scene_assets"]
 	var delegate: RefCounted
 	var bounds: AABB
 	var action: Callable
@@ -17,7 +17,8 @@ class SetupTools extends RefCounted:
 	var denied := false
 
 	func execute(tool: String, arguments := {}) -> Dictionary:
-		if ready or tool in READS:
+		var definition := Commands.local(tool)
+		if ready or (definition.get("effect") == "read" and definition.surfaces.has("palette")):
 			return delegate.execute(tool, arguments)
 		denied = true
 		return {"ok": false, "error": "The palette tried to edit the world during setup."}

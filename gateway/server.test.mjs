@@ -4,6 +4,7 @@ import { mkdtemp, rm, rmdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createGateway } from './server.mjs';
+import { installedSnapshot } from './command-registry.mjs';
 
 test('gateway authentication, lifecycle, duplicates, limits and restart', async t => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'construct-test-'));
@@ -93,7 +94,7 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   const session = 'a'.repeat(32);
   const headers = { Authorization: 'Bearer world-test-secret', 'Content-Type': 'application/json' };
   const post = (route, body) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) }).then(response => response.json());
-  const rpc = (method, params) => post('/mcp/' + session, { jsonrpc: '2.0', id: 1, method, params });
+  const rpc = (method, params, worldSession = session) => post('/mcp/' + worldSession, { jsonrpc: '2.0', id: 1, method, params });
   const context = { current: 'custom', environments: [{ id: 'custom', name: 'Signal Lab', description: 'A custom space' }] };
   const sync = result => post('/v1/companion/sync', { session, context, result });
   assert((await rpc('tools/list')).result.tools.some(tool => tool.name === 'preview_animation'));
@@ -178,6 +179,26 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   assert.deepEqual(command.behavior, behavior);
   await sync({ id: command.id, value: { ok: true } });
   assert.equal((await configuring).result.isError, false);
+  context.behaviors = [{ id: 'proximity_pulse', name: 'Proximity pulse', settings: {
+    radius: { minimum: 1, maximum: 12, default: 4 },
+  } }];
+  await sync();
+  const attachmentName = 'attach_behavior_proximity_pulse';
+  assert((await rpc('tools/list')).result.tools.some(tool => tool.name === attachmentName));
+  assert.equal((await rpc('tools/call', { name: attachmentName,
+    arguments: { target: entityId, settings: { radius: 13 } } })).error.code, -32602);
+  const attachment = rpc('tools/call', { name: attachmentName,
+    arguments: { target: entityId, settings: { radius: 6 } } });
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await sync());
+  assert.equal(command?.tool, 'set_behavior');
+  assert.equal(command.behavior.id, 'proximity_pulse');
+  assert.deepEqual(command.behavior.settings, [{ key: 'radius', value: 6 }]);
+  await sync({ id: command.id, value: { ok: true } });
+  assert.equal((await attachment).result.isError, false);
+  context.behaviors = [];
+  await sync();
+  assert(!(await rpc('tools/list')).result.tools.some(tool => tool.name === attachmentName));
 
   const reset = { name: 'grid_action_test_reset', label: 'Reset demo', description: 'Return the demo objects to their starting state.', revision: 'd'.repeat(64) };
   context.workshop_tools = [reset];
@@ -199,4 +220,18 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   await sync();
   assert(!(await rpc('tools/list')).result.tools.some(tool => tool.name === reset.name));
   assert.equal((await rpc('tools/call', { name: reset.name })).result.isError, true);
+  const previewSession = 'c'.repeat(32);
+  const registry = structuredClone(installedSnapshot);
+  registry.commands.push({ ...registry.commands.find(tool => tool.name === 'follow'), name: 'fixture_follow' });
+  const previewContext = { ...context, command_registry: registry };
+  const previewSync = result => post('/v1/companion/sync', { session: previewSession, context: previewContext, result });
+  await previewSync();
+  assert((await rpc('tools/list', {}, previewSession)).result.tools.some(tool => tool.name === 'fixture_follow'));
+  assert(!(await rpc('tools/list')).result.tools.some(tool => tool.name === 'fixture_follow'));
+  const custom = rpc('tools/call', { name: 'fixture_follow' }, previewSession);
+  command = null;
+  for (let tries = 0; !command && tries < 10; tries++) ({ command } = await previewSync());
+  assert.equal(command?.tool, 'fixture_follow');
+  await previewSync({ id: command.id, value: { ok: true } });
+  assert.equal((await custom).result.isError, false);
 });

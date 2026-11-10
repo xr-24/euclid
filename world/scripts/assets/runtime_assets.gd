@@ -1,15 +1,12 @@
 extends RefCounted
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 ## Runtime assets are data in the user cache. Saved entities store IDs, never file paths.
 
 static var cache_root := "user://runtime-assets"
 static var _scenes := {}
 
 static func valid_id(id: Variant) -> bool:
-	if not id is String:
-		return false
-	var pattern := RegEx.new()
-	pattern.compile("^(rig-)?(sf-[a-f0-9]{32}|ph-[A-Za-z0-9_-]{1,80})$")
-	return pattern.search(id) != null
+	return Commands.valid_field("asset_id", id)
 
 static func folder(id: String) -> String:
 	return cache_root.path_join(id) if valid_id(id) else ""

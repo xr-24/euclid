@@ -3,7 +3,7 @@ extends RefCounted
 
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
-const PROPERTIES := ["position", "yaw", "scale", "name"]
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 
 var _entries := {}
 
@@ -38,7 +38,7 @@ func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dicti
 		return current.merged({"hidden": true}, true)
 	var base: Dictionary = _entries[id].record
 	var result := {}
-	for key in PROPERTIES:
+	for key in Commands.prop_fields(true):
 		if proposed.has(key) and proposed[key] != base.get(key):
 			result[key] = proposed[key]
 	return result
@@ -103,9 +103,9 @@ static func valid_override(override: Variant, bounds: AABB) -> bool:
 			"position":
 				if not Placement.valid_coordinates(bounds, override.position): return false
 			"yaw":
-				if not EntityTypes.number_between(override.yaw, -360.0, 360.0): return false
+				if not Commands.valid_field("yaw", override.yaw): return false
 			"scale":
-				if not EntityTypes.number_between(override.scale, 0.25, 4.0): return false
+				if not Commands.valid_field("scale", override.scale): return false
 			"name":
 				if not EntityTypes.valid_name(override.name): return false
 			"hidden":

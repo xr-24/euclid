@@ -1,4 +1,5 @@
 extends RefCounted
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 ## Cost budgets belong here, not in the art builders. Both profiles retain the authored effects.
 const PATH := "user://graphics.cfg"
 const PROFILES := {
@@ -30,7 +31,7 @@ static func apply_zone(world: Node3D, zone: String) -> void:
 	if RenderingServer.get_current_rendering_method() != "forward_plus":
 		return
 	var viewport := world.get_viewport()
-	var balanced_villa := zone == "villa" and current == "balanced"
+	var balanced_villa: bool = Packages.definition(zone).graphics.get("balanced_reconstruction", false) and current == "balanced"
 	viewport.mesh_lod_threshold = 6.0 if balanced_villa else 1.0
 	if balanced_villa:
 		# Reconstruct the 3D image at window size; UI remains at native resolution.

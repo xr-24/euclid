@@ -1,0 +1,415 @@
+{
+  "version": 1,
+  "$defs": {
+    "behavior": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Exact registered behavior ID",
+          "pattern": "^[a-z_][a-z0-9_]{0,39}$"
+        },
+        "target_entity": {
+          "type": "string",
+          "description": "Exact door ID for a door behavior, or an empty string",
+          "pattern": "^(?:[a-f0-9]{32})?$"
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z_][a-z0-9_]{0,39}$"
+              },
+              "value": {
+                "type": "number",
+                "minimum": -10000,
+                "maximum": 10000
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Numeric settings from the catalog. Empty uses defaults.",
+          "maxItems": 6,
+          "uniqueBy": "key"
+        }
+      },
+      "required": [
+        "id",
+        "settings"
+      ],
+      "additionalProperties": false
+    },
+    "clip": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Clip name of 1 to 48 characters"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Loop length in seconds, from 1 to 30"
+        },
+        "interpolation": {
+          "type": "string",
+          "enum": [
+            "linear",
+            "smooth"
+          ]
+        },
+        "keyframes": {
+          "type": "array",
+          "description": "2 to 10 ordered keys from zero to duration. Match endpoints, with whole turns allowed for rotation.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "time": {
+                "type": "number"
+              },
+              "offset": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Three local offsets in metres, each within -2 to 2. Zero for companion."
+              },
+              "rotation": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Three local Euler angles in degrees, each within -720 to 720. Zero for companion."
+              },
+              "pose": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Two companion Lift and Drift weights within -1 to 1. Zero for props and for clips with joint tracks."
+              }
+            },
+            "required": [
+              "time",
+              "offset",
+              "rotation",
+              "pose"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10
+        },
+        "joint_tracks": {
+          "type": "array",
+          "description": "Up to 16 rig joint tracks. Empty for unrigged props or companion Lift/Drift clips.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "joint": {
+                "type": "string",
+                "description": "Exact joint name from inspection"
+              },
+              "keyframes": {
+                "type": "array",
+                "description": "2 to 10 ordered keys. The first is at zero and the last at duration, with matching rotations.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "time": {
+                      "type": "number"
+                    },
+                    "rotation": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "description": "Three local Euler angles relative to rest in degrees, each within -180 to 180"
+                    }
+                  },
+                  "required": [
+                    "time",
+                    "rotation"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 10
+              }
+            },
+            "required": [
+              "joint",
+              "keyframes"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "name",
+        "duration",
+        "interpolation",
+        "keyframes",
+        "joint_tracks"
+      ],
+      "additionalProperties": false
+    },
+    "boolean": {
+      "type": "boolean"
+    },
+    "entity": {
+      "type": "string",
+      "description": "Exact entity or prefab ID from the active scene catalog",
+      "pattern": "^[a-f0-9]{32}$"
+    },
+    "zone": {
+      "type": "string",
+      "description": "Exact environment ID from list_environments",
+      "pattern": "^[a-z0-9_-]{1,64}$"
+    },
+    "environment_name": {
+      "type": "string",
+      "description": "Name for a new environment",
+      "maxLength": 48,
+      "pattern": "^(?=[^\\x00-\\x1f\\x7f]*\\S)[^\\x00-\\x1f\\x7f]+$"
+    },
+    "prop_type": {
+      "type": "string",
+      "description": "A built-in prop type or an installed model ID",
+      "pattern": "^[a-z_][a-z0-9_]{0,95}$"
+    },
+    "asset_query": {
+      "type": "string",
+      "description": "Short model search phrase",
+      "maxLength": 120,
+      "pattern": "\\S"
+    },
+    "asset_id": {
+      "type": "string",
+      "description": "Exact downloadable model ID",
+      "maxLength": 160,
+      "pattern": "^(rig-)?(sf-[a-f0-9]{32}|ph-[A-Za-z0-9_-]{1,80})$"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "all",
+        "sketchfab",
+        "polyhaven"
+      ]
+    },
+    "animation_target": {
+      "type": "string",
+      "description": "Exact animation target ID or companion",
+      "pattern": "^(companion|[a-f0-9]{32})$"
+    },
+    "workshop_action": {
+      "type": "string",
+      "description": "Exact action from list_workshop_tools",
+      "pattern": "^(grid_undo_edit|grid_action_[a-z][a-z0-9_]{0,31})$"
+    },
+    "position": {
+      "type": "array",
+      "description": "Three coordinates in metres",
+      "items": {
+        "type": "number",
+        "minimum": -1000,
+        "maximum": 1000
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "multipleOfHint": 0.05
+    },
+    "yaw": {
+      "type": "number",
+      "minimum": -360,
+      "maximum": 360,
+      "title": "Yaw",
+      "multipleOfHint": 1
+    },
+    "scale": {
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 4,
+      "title": "Scale",
+      "multipleOfHint": 0.05
+    },
+    "color": {
+      "type": "string",
+      "description": "Six RGB hex digits",
+      "pattern": "^[a-fA-F0-9]{6}$"
+    },
+    "prop_name": {
+      "type": "string",
+      "description": "Display name. Empty restores the default.",
+      "maxLength": 64,
+      "pattern": "^(?:$|(?=[^\\x00-\\x1f\\x7f]*\\S)[^\\x00-\\x1f\\x7f]+)$"
+    },
+    "prefab_name": {
+      "type": "string",
+      "description": "New prefab name",
+      "maxLength": 48,
+      "pattern": "^(?=[^\\x00-\\x1f\\x7f]*\\S)[^\\x00-\\x1f\\x7f]+$"
+    },
+    "prop_changes": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/position"
+        },
+        "yaw": {
+          "$ref": "#/$defs/yaw"
+        },
+        "scale": {
+          "$ref": "#/$defs/scale"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "name": {
+          "$ref": "#/$defs/prop_name"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "edit_changes": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/position"
+        },
+        "yaw": {
+          "$ref": "#/$defs/yaw"
+        },
+        "scale": {
+          "$ref": "#/$defs/scale"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "name": {
+          "$ref": "#/$defs/prop_name"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "position_change": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/position"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "behavior_change": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/behavior"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "authored_properties": [
+    "position",
+    "yaw",
+    "scale",
+    "name"
+  ],
+  "entity_types": {
+    "traffic_cone": {
+      "label": "Traffic cone",
+      "color": "ff681d",
+      "factory": "cone",
+      "built_in": true,
+      "behavior_outputs": [
+        "emission"
+      ],
+      "palette_label": "Spawn orange cone"
+    },
+    "pressure_plate": {
+      "label": "Pressure plate",
+      "color": "2d8394",
+      "factory": "box",
+      "size": [
+        1.2,
+        0.09,
+        1.2
+      ],
+      "built_in": true,
+      "behavior_outputs": [
+        "emission",
+        "door_open"
+      ],
+      "palette_label": "Spawn plate"
+    },
+    "sliding_door": {
+      "label": "Sliding door",
+      "color": "475567",
+      "factory": "door",
+      "size": [
+        1.55,
+        2.35,
+        0.18
+      ],
+      "built_in": true,
+      "palette_label": "Spawn door"
+    },
+    "imported_model": {
+      "label": "Imported model",
+      "color": "ffffff",
+      "factory": "model",
+      "asset_source": "runtime"
+    },
+    "library_model": {
+      "label": "Library model",
+      "color": "ffffff",
+      "factory": "model",
+      "asset_source": "library"
+    }
+  },
+  "runtime_commands": {
+    "workshop": {
+      "source": "workshop_tools",
+      "base": "run_workshop_tool",
+      "name_rule": "workshop_action"
+    },
+    "behavior": {
+      "source": "behaviors",
+      "base": "set_behavior",
+      "prefix": "attach_behavior_"
+    }
+  },
+  "action_properties": [
+    "position",
+    "yaw",
+    "scale",
+    "color"
+  ],
+  "prefab_properties": [
+    "type",
+    "yaw",
+    "scale",
+    "color",
+    "asset_id",
+    "animation",
+    "behavior"
+  ],
+  "limits": {
+    "environments": 128,
+    "workshop_actions": 25,
+    "runtime_behaviors": 24
+  }
+}

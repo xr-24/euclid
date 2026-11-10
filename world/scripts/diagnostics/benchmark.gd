@@ -1,4 +1,5 @@
 extends RefCounted
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 ## Fixed-view, uncapped GPU benchmark. Never reads or writes the player's save.
 
 static func run(world: Node3D) -> void:
@@ -47,9 +48,9 @@ static func run(world: Node3D) -> void:
 		if variant in ["shadow_4k", "balanced"]: RenderingServer.directional_shadow_atlas_set_size(4096, true)
 		for sim in world.zone_root.find_children("*", "Node", true, false):
 			if sim is SimController: sim.set_process(variant != "no_sim")
-		var views := [["arrival", world.player.position, Vector3(0,1.0,-25)],
-			["pool", Vector3(3.4,0.1,-15), Vector3(0,0.6,22)],
-			["portico", Vector3(-17.2,0.2,24), Vector3(-17,2.2,-22)]] if suite not in ["isolate", "quality"] and zone == "villa" else [["arrival", world.player.position, Vector3(0,1,-25)]]
+		var views := Packages.views(zone, "benchmark")
+		if suite in ["isolate", "quality"]:
+			views = views.slice(0, 1)
 		for view in views:
 			world.player.position = view[1]
 			world.player.velocity = Vector3.ZERO

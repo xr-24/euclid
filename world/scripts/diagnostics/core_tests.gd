@@ -1,6 +1,7 @@
 extends SceneTree
 ## Focused data-contract and ownership tests, without rendering or the user's normal save.
 const Catalog = preload("res://scripts/zones/zone_catalog.gd")
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
 const Context = preload("res://scripts/zones/zone_build_context.gd")
 const Assets = preload("res://scripts/assets/asset_library.gd")
@@ -117,6 +118,8 @@ func _run() -> void:
 	_check_scene_edits(path)
 	_check_authored_dressing(path + ".dressing")
 	_check_registered_props()
+	_check_zone_packages(path + ".packages", manifest)
+	_check_data_entity_type()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
 	_check_live_behaviors(path)
@@ -516,6 +519,51 @@ func _check_registered_props() -> void:
 	_check(tools.execute("restore_dressing", {"id": floater_id}).ok and floater.position == Vector3(2, 1, 0)
 		and shape.shape.size == Vector3.ONE, "restore the floater's original release pose and collision")
 	zone.free()
+
+func _check_zone_packages(path: String, manifest: Dictionary) -> void:
+	for id in Packages.ids():
+		_check(Packages.valid(Packages.definition(id)), "validate the installed " + id + " package")
+	var invalid := Packages.definition("villa").duplicate(true)
+	invalid.builder = "res://scripts/../untrusted.gd"
+	_check(not Packages.valid(invalid), "reject a builder outside the reviewed zone source directory")
+	invalid = Packages.definition("villa").duplicate(true)
+	invalid.benchmark_views = ["missing"]
+	_check(not Packages.valid(invalid), "reject a missing named benchmark view")
+	var library := EnvironmentLibrary.new(path)
+	var created := library.create("Garden annex", manifest.zones, "villa")
+	_check(created.ok and created.zone.package == "villa" and created.zone.id != "villa",
+		"create a distinct environment using a villa package")
+	Packages.register_zone(created.zone)
+	_check(Packages.bounds(created.zone.id) == Packages.bounds("villa")
+		and Packages.spawn(created.zone.id) == Packages.spawn("villa")
+		and not Packages.definition(created.zone.id).capabilities.workshop,
+		"inherit the package's bounds, spawn, and capabilities without a zone-name branch")
+	_check(EnvironmentLibrary.new(path).environments() == library.environments(),
+		"restore an environment's template reference after restart")
+	_check(not library.create("Missing template", manifest.zones, "missing").ok,
+		"reject a template outside the installed environment catalog")
+	DirAccess.remove_absolute(path)
+
+func _check_data_entity_type() -> void:
+	var commands = preload("res://scripts/workshop/command_registry.gd")
+	var types := commands.entity_types()
+	types["fixture_box"] = {"factory": "box", "label": "Fixture box", "color": "24c4bc",
+		"size": [2.0, 0.4, 0.8], "built_in": true}
+	var zone := Node3D.new()
+	var tools := WorldTools.new()
+	tools.attach(zone)
+	var spawned := SceneCommands.execute(tools, {"tool": "spawn_prop", "target": "fixture_box"}, [0.0, 0.0, 0.0])
+	_check(spawned.ok and spawned.entity.color == "24c4bc" and "fixture_box" in commands.built_in_props(),
+		"declare a built-in entity type through schema data")
+	var entity: Node3D = tools._nodes[spawned.id]
+	var collision := entity.get_child(0) as CollisionShape3D
+	_check(collision != null and collision.shape.size == Vector3(2.0, 0.4, 0.8),
+		"build the schema's primitive dimensions and collider through the normal spawn command")
+	zone.set_meta("scene_edit", false)
+	_check(not tools.execute("delete", {"id": spawned.id}).ok and tools.execute("inspect", {"id": spawned.id}).ok,
+		"enforce package edit capabilities at the shared command boundary")
+	zone.free()
+	types.erase("fixture_box")
 
 func _check_text_tools() -> void:
 	var typed := TextEffects.change_between(PackedStringArray(["var a = 1"]), PackedStringArray(["var ab = 1"]))

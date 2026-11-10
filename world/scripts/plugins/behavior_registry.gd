@@ -5,6 +5,7 @@ const CATALOG := "res://data/behavior_plugins.json"
 const PACKAGES := "res://data/behavior_plugins"
 const SCRIPT_ROOT := "res://scripts/plugins/"
 const MAX_SETTINGS := 6
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 var _plugins := {}
 
 func _init() -> void:
@@ -80,11 +81,8 @@ static func _valid_definition(value: Variant) -> bool:
 			or not value.get("name") is String or not value.get("settings") is Dictionary or value.settings.size() > MAX_SETTINGS:
 		return false
 	var output: Variant = value.get("output", "emission")
-	if output == "door_open" and value.entity_type != "pressure_plate":
-		return false
-	if output == "emission" and value.entity_type not in ["pressure_plate", "traffic_cone"]:
-		return false
-	if output not in ["emission", "door_open"] or value.name.strip_edges().is_empty() or value.name.length() > 48:
+	var supported: Array = Commands.entity_types().get(value.entity_type, {}).get("behavior_outputs", [])
+	if output not in supported or value.name.strip_edges().is_empty() or value.name.length() > 48:
 		return false
 	for key in value.settings:
 		var spec: Variant = value.settings[key]

@@ -4,6 +4,7 @@ extends VBoxContainer
 signal agent_requested(prompt: String, placement: Array)
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const BehaviorInspector = preload("res://scripts/ui/behavior_inspector.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const API_VERSION := 1
@@ -13,6 +14,7 @@ var _spawn_at: Array
 var _selected := ""
 var _entities: OptionButton
 var _fields := {}
+var _numeric_fields := {}
 var _form_baseline := {}
 var _color: ColorPickerButton
 var _name: LineEdit
@@ -45,9 +47,9 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	add_theme_constant_override("separation", 10)
 	var spawn_row := HBoxContainer.new()
 	add_child(spawn_row)
-	_button(spawn_row, "Spawn orange cone", _spawn.bind("traffic_cone"))
-	_button(spawn_row, "Spawn plate", _spawn.bind("pressure_plate"))
-	_button(spawn_row, "Spawn door", _spawn.bind("sliding_door"))
+	for type in Commands.built_in_props():
+		var definition: Dictionary = EntityTypes.TYPES[type]
+		_button(spawn_row, definition.get("palette_label", "Spawn " + definition.label), _spawn.bind(type))
 	var library_row := HBoxContainer.new()
 	add_child(library_row)
 	_library = OptionButton.new()
@@ -62,16 +64,23 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	add_child(_entities)
 	_entities.item_selected.connect(_select)
 	_name = LineEdit.new()
-	_name.max_length = 64
+	_name.max_length = Commands.field("prop_name").maxLength
 	_name.placeholder_text = "Prop name"
 	add_child(_name)
 	var properties := GridContainer.new()
 	properties.columns = 3
 	add_child(properties)
 	var bounds: AABB = _tools.bounds
-	for spec in [["X", bounds.position.x, bounds.end.x, 0.05], ["Y", bounds.position.y, bounds.end.y, 0.05],
-			["Z", bounds.position.z, bounds.end.z, 0.05],
-			["Yaw", -360.0, 360.0, 1.0], ["Scale", 0.25, 4.0, 0.05]]:
+	var position_step: float = Commands.field("position").multipleOfHint
+	var specs := []
+	for axis in 3:
+		specs.append(["XYZ"[axis], bounds.position[axis], bounds.end[axis], position_step])
+	for key in Commands.prop_fields(false):
+		var rule := Commands.field(key)
+		if rule.get("type") == "number":
+			specs.append([rule.title, rule.minimum, rule.maximum, rule.multipleOfHint])
+			_numeric_fields[key] = rule.title
+	for spec in specs:
 		var field := VBoxContainer.new()
 		properties.add_child(field)
 		field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -96,11 +105,20 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	color_field.add_child(_color)
 	var actions := HBoxContainer.new()
 	add_child(actions)
-	_apply = _button(actions, "Apply", _apply_changes)
-	_duplicate = _button(actions, "Duplicate", _run.bind("duplicate", {}))
-	_delete = _button(actions, "Delete", _run.bind("delete", {}))
-	_restore_authored = _button(actions, "Restore defaults", _run.bind("restore_dressing", {}))
-	_undo = _button(actions, "Undo", _run.bind("undo", {}))
+	var action_buttons := {}
+	for definition in Commands.catalog():
+		var ui: Dictionary = definition.get("palette", {})
+		if ui.get("group") != "actions":
+			continue
+		var callback := Callable(self, ui.callback) if ui.has("callback") else _run.bind(definition.local, {})
+		var button := _button(actions, ui.label, callback)
+		if ui.has("role"):
+			action_buttons[ui.role] = button
+	_apply = action_buttons["apply"]
+	_duplicate = action_buttons["duplicate"]
+	_delete = action_buttons["delete"]
+	_restore_authored = action_buttons["restore_authored"]
+	_undo = action_buttons["undo"]
 	_registered_actions = MenuButton.new()
 	_registered_actions.text = "Workshop actions"
 	actions.add_child(_registered_actions)
@@ -113,7 +131,7 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	add_child(save_row)
 	_prefab_name = LineEdit.new()
 	_prefab_name.placeholder_text = "Prefab name"
-	_prefab_name.max_length = 48
+	_prefab_name.max_length = Commands.field("prefab_name").maxLength
 	_prefab_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	save_row.add_child(_prefab_name)
 	_save_prefab = _button(save_row, "Save prefab", _save_selected_prefab)
@@ -263,7 +281,9 @@ func _form_values() -> Dictionary:
 	var point := []
 	for axis in ["X", "Y", "Z"]:
 		point.append(_fields[axis].value)
-	var changes := {"position": point, "yaw": _fields.Yaw.value, "scale": _fields.Scale.value, "name": _name.text}
+	var changes := {"position": point, "name": _name.text}
+	for key in _numeric_fields:
+		changes[key] = _fields[_numeric_fields[key]].value
 	if not _color.disabled:
 		changes["color"] = _color.color.to_html(false)
 	return changes
@@ -347,8 +367,9 @@ func _select(index: int) -> void:
 	_delete.text = "Hide" if authored else "Delete"
 	_restore_authored.visible = authored and record.get("overridden", false)
 	_save_prefab.disabled = not editable or authored
-	_color.disabled = not editable or authored
-	(_color.get_parent() as Control).visible = not authored
+	var supports_color := "color" in Commands.prop_fields(authored)
+	_color.disabled = not editable or not supports_color
+	(_color.get_parent() as Control).visible = supports_color
 	_name.editable = editable
 	_name.text = record.get("name", "")
 	for field in _fields.values():
@@ -357,13 +378,14 @@ func _select(index: int) -> void:
 		_behaviors.show_entity([], {})
 		return
 	var doors: Array = []
-	if record.type == "pressure_plate":
-		doors = _tools.execute("list_entities").get("entities", []).filter(func(item: Dictionary) -> bool: return item.type == "sliding_door")
+	if "door_open" in EntityTypes.TYPES.get(record.type, {}).get("behavior_outputs", []):
+		doors = _tools.execute("list_entities").get("entities", []).filter(func(item: Dictionary) -> bool:
+			return EntityTypes.TYPES.get(item.type, {}).get("factory") == "door")
 	_behaviors.show_entity(_tools.execute("list_behaviors", {"id": _selected}).get("behaviors", []), record.get("behavior", {}), doors)
 	_fields.X.value = record.position[0]
 	_fields.Y.value = record.position[1]
 	_fields.Z.value = record.position[2]
-	_fields.Yaw.value = record.yaw
-	_fields.Scale.value = record.scale
+	for key in _numeric_fields:
+		_fields[_numeric_fields[key]].value = record[key]
 	_color.color = Color.html(record.color)
 	_form_baseline = _form_values()

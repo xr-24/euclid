@@ -27,14 +27,13 @@ func configure(url: String, token: String, capability: String) -> void:
 	add_child(timer)
 	timer.start()
 
-func request(tool: String, prompt: String, context: Dictionary) -> Dictionary:
-	match tool:
-		"draft_shoreline": return await _send("shoreline", {"prompt": prompt})
-		"draft_grid": return await _send("grid", {"prompt": prompt})
-		"draft_behavior": return await _send("author", {"prompt": prompt, "context": context, "from_world": true})
-		"draft_workshop_tool": return await _send("tool", {"prompt": prompt, "context": context})
-		"draft_source": return await _send("source", {"prompt": prompt})
-	return {"error": "Unknown development request."}
+func request(definition: Dictionary, prompt: String, context: Dictionary) -> Dictionary:
+	var arguments := {"prompt": prompt}
+	if definition.get("workshop_context", false):
+		arguments["context"] = context
+	if definition.get("from_world", false):
+		arguments["from_world"] = true
+	return await _send(definition.action, arguments)
 
 func command(action: String) -> Dictionary:
 	if draft.is_empty():

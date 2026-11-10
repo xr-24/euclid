@@ -37,7 +37,8 @@ static func build(context: RefCounted) -> bool:
 
 	# The sea: a dense patch near the beach for the swell, a coarse ring out to the horizon.
 	var ocean_materials: Array[ShaderMaterial] = []
-	for spec in [[Vector2(260, 200), Vector3(0, SEA_LEVEL, -70), 200], [Vector2(3000, 3000), Vector3(0, SEA_LEVEL, -1300), 24]]:
+	var ocean_specs := [[Vector2(260, 200), Vector3(0, SEA_LEVEL, -70), 200], [Vector2(3000, 3000), Vector3(0, SEA_LEVEL, -1300), 24]]
+	for spec in ocean_specs if "ocean" in context.package.water else []:
 		var sea := MeshInstance3D.new()
 		var plane := PlaneMesh.new()
 		plane.size = spec[0]
@@ -55,17 +56,18 @@ static func build(context: RefCounted) -> bool:
 		ocean_materials.append(sea.material_override)
 		root.add_child(sea)
 	# Simulated surf: the shoreline solver takes over the cove's shallows.
-	var surf := Water.build_surf(root, mat, ocean_materials)
+	var surf := Water.build_surf(root, mat, ocean_materials) if "surf" in context.package.water else {}
 	# The cove is open to walk and swim in; far-off invisible walls keep you in the world.
 	for wall in [[Vector3(0, 10, -95), Vector3(160, 40, 2)], [Vector3(0, 10, 50), Vector3(160, 40, 2)],
 			[Vector3(-75, 10, -20), Vector3(2, 40, 150)], [Vector3(75, 10, -20), Vector3(2, 40, 150)]]:
 		Assets.add_static_box(root, wall[0], wall[1])
 	# Flotsam riding the surf: it bobs on the simulated surface and drifts with the currents.
 	var floaters: Array[RigidBody3D] = []
-	for spec in [["inshore_barrel", "Inshore barrel", "wine_barrel_01", Vector3(-3.0, 0.0, -21.0), 0.9, 60.0],
+	var floater_specs := [["inshore_barrel", "Inshore barrel", "wine_barrel_01", Vector3(-3.0, 0.0, -21.0), 0.9, 60.0],
 			["crate", "Floating crate", "wooden_crate_01", Vector3(4.5, 0.0, -19.5), 0.6, 25.0],
 			["offshore_barrel", "Offshore barrel", "wine_barrel_01", Vector3(1.5, 0.0, -26.0), 0.9, 60.0],
-			["buoy", "Cove buoy", "ocean_buoy", Vector3(-9.0, 0.0, -34.0), 2.2, 180.0]]:
+			["buoy", "Cove buoy", "ocean_buoy", Vector3(-9.0, 0.0, -34.0), 2.2, 180.0]]
+	for spec in floater_specs if "floaters" in context.package.water else []:
 		var floater := Water.create_floater(root, spec[2], spec[3] + Vector3(0, SEA_LEVEL, 0), spec[4], spec[5])
 		if floater:
 			floaters.append(floater)

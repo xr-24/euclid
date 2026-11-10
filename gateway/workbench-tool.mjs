@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { structuredCodex } from './codex-grid.mjs';
+import { actionProperties, validActionProperty } from './command-registry.mjs';
 
 const schema = fileURLToPath(new URL('./workbench-tool.schema.json', import.meta.url));
 const identifier = /^[a-z][a-z0-9_]{0,31}$/;
@@ -7,14 +8,7 @@ const filePattern = /^world\/data\/workshop_tools\/([a-z][a-z0-9_]{0,31})\.json$
 const entityId = /^[a-f0-9]{32}$/;
 const zoneId = /^[a-z0-9-]{1,64}$/;
 const printable = (value, max) => typeof value === 'string' && Boolean(value.trim()) && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);
-const number = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
-const fields = {
-  position: value => Array.isArray(value) && value.length === 3 &&
-    number(value[0], -60, 60) && number(value[1], 0, 12) && number(value[2], -60, 60),
-  yaw: value => number(value, -360, 360),
-  scale: value => number(value, 0.25, 4),
-  color: value => typeof value === 'string' && /^[a-f0-9]{6}$/i.test(value),
-};
+const fields = Object.fromEntries(actionProperties.map(key => [key, value => validActionProperty(key, value)]));
 const exact = (value, keys) => value && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 
 export const workshopToolFile = names => names.length === 1 && filePattern.test(names[0]) ? names[0] : '';

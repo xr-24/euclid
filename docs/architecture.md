@@ -12,7 +12,8 @@ All paths below are relative to `world/scripts/`.
 | --- | --- | --- |
 | `world.gd` | Startup, active zone, input routing and main-thread commits | Coordinates services; no asset authoring or HTTP parsing |
 | `zones/zone_catalog.gd` | Version 1 content validation | Zone and anchor identities remain data |
-| `zones/zone_build_context.gd` | One detached root and its interaction registry | Trusted builder registry; no live scene tree, player, UI or network access |
+| `zones/zone_build_context.gd` | One detached root and its interaction registry | Reviewed package builder; no live scene tree, player, UI or network access |
+| `zones/zone_packages.gd` | Validated environment packages | Project-owned builder paths, spawn, bounds, views, capabilities and appearance |
 | `zones/villa.gd`, `zones/shore_zone.gd` | Zone-specific content | Each implements `build(context) -> bool`; false requests the fallback blockout |
 | `zones/authored_props.gd` | Stable IDs for builder-created props | Registers detached assemblies and their collision or editor pick volume |
 | `zones/workstations.gd` | Furniture for logical app anchors | Does not launch processes |
@@ -45,6 +46,13 @@ flowchart TD
 ```
 
 ## Grid workshop
+
+The [command registry](command-registry.md) supplies the shared capability
+catalog, handler mappings, input validation, and entity property schemas.
+`agents/world_commands.gd` and `agents/development_commands.gd` own the public
+world and development handlers. The coordinator dispatches to those services.
+The [environment packages](zone-packages.md) supply zone-specific content and
+configuration through a private build context.
 
 The Grid keeps the existing `construct` zone ID. Its builder creates the floor and boundaries under a detached root. The backdrop batches the fractured wall and suspended geometry separately from the playable floor. The coordinator attaches the workshop entities on the main thread before committing the zone.
 

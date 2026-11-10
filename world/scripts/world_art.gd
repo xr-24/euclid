@@ -6,39 +6,12 @@ extends RefCounted
 ## affected piece is skipped and world.gd keeps its original blockout, so the world always runs.
 ## Asset sources and the build steps are described in docs/asset-pipeline.md.
 
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Water = preload("res://scripts/simulation/water_system.gd")
 const WaterAssets = preload("res://scripts/assets/asset_library.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const AssetLibrary = preload("res://scripts/asset_library.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
-const ZONES := {
-	"construct": {
-		"sky_colors": [Color("060408"), Color("290a15"), Color("15070e"), Color("060408")],
-		"sun_azimuth": 150.0, "sun_elevation": 38.0,
-		"sun_color": Color("ffd1c5"), "sun_energy": 1.5,
-		"sky_energy": 1.0, "exposure": 1.0,
-		"sky_sun_visibility": 0.0,
-		"fog_density": 0.00045, "fog_albedo": Color("4a1624"), "fog_anisotropy": 0.3,
-		"shadow_distance": 60.0, "sdfgi_cell": 0.18,
-	},
-	"villa": {
-		"hdri": "kloofendal_48d_partly_cloudy_puresky_4k.hdr",
-		"sun_azimuth": 128.0, # degrees, from +Z toward +X: high sun from the right, behind the arrival point
-		"sun_color": Color("fff1df"), "sun_energy": 2.6,
-		"sky_energy": 1.0, "exposure": 0.92,
-		"fog_density": 0.0045, "fog_albedo": Color("fff4e6"), "fog_anisotropy": 0.55,
-		"shadow_distance": 55.0, "sdfgi_cell": 0.12,
-	},
-	"beach": {
-		"hdri": "kloppenheim_06_puresky_4k.hdr",
-		"sun_azimuth": 205.0, # low golden sun over the sea, a little to the left of the view
-		"sun_color": Color("ffbe82"), "sun_energy": 2.1,
-		"sky_energy": 1.0, "exposure": 1.0,
-		"fog_density": 0.0022, "fog_albedo": Color("ffe2c4"), "fog_anisotropy": 0.72,
-		"shadow_distance": 120.0, "sdfgi_cell": 0.25,
-		"haze": 0.0016, "haze_color": Color("e9c7a3"),
-	},
-}
 
 static var _cache := {}
 static var _resources := {}
@@ -57,10 +30,9 @@ static func res(path: String) -> Resource:
 
 ## Where the player appears in each zone when it is loaded directly (or a shift cannot keep them
 ## where they stand). Zone builders register theirs; anything else starts near the origin.
-static var spawns := {}
 
 static func spawn(zone: String) -> Dictionary:
-	return spawns.get(zone, {"position": Vector3(0, 0.05, 4), "yaw": 0.0})
+	return Packages.spawn(zone)
 
 
 # ---------------------------------------------------------------- materials and models
@@ -191,7 +163,7 @@ static func apply_environment(world: Node3D, zone: String) -> void:
 
 ## Everything about a zone's look that can be blended during a shift.
 static func zone_state(zone: String) -> Dictionary:
-	var s: Dictionary = (ZONES.get(zone, ZONES.construct) as Dictionary).duplicate()
+	var s := Packages.environment(zone)
 	var hdri_path := PH + "hdri/" + str(s.get("hdri", ""))
 	var elevation: float = s.get("sun_elevation", 40.0)
 	s.yaw = 0.0
@@ -202,7 +174,7 @@ static func zone_state(zone: String) -> Dictionary:
 		elevation = sun_data.get("elevation_deg", elevation)
 		s.yaw = deg_to_rad(s.sun_azimuth - float(sun_data.get("u", 0.0)) * 360.0)
 	else:
-		s.panorama = _gradient_sky(s.get("sky_colors", ZONES.construct.sky_colors))
+		s.panorama = _gradient_sky(s.get("sky_colors", Packages.environment("construct").sky_colors))
 	var az := deg_to_rad(s.sun_azimuth)
 	var el := deg_to_rad(elevation)
 	s.to_sun = Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el))

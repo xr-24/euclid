@@ -3,7 +3,7 @@ extends RefCounted
 
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
-const PROPERTIES := ["type", "yaw", "scale", "color", "asset_id", "animation", "behavior"]
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const LIMIT := 64
 const MAX_BYTES := 3 * 1024 * 1024
 
@@ -51,7 +51,7 @@ func save(title: Variant, entity: Dictionary) -> Dictionary:
 		if record.name.nocasecmp_to(name) == 0:
 			return _error("A prefab already has that name.")
 	var properties := {}
-	for key in PROPERTIES:
+	for key in Commands.prefab_properties():
 		if entity.has(key):
 			properties[key] = entity[key]
 	if properties.has("behavior"):
@@ -79,16 +79,11 @@ static func _valid_record(record: Variant) -> bool:
 	var id: Variant = record.get("id")
 	var properties: Variant = record.get("properties")
 	return id is String and id.length() == 32 and id.is_valid_hex_number() \
-		and properties is Dictionary and properties.keys().all(func(key: String) -> bool: return key in PROPERTIES) \
+		and properties is Dictionary and properties.keys().all(func(key: String) -> bool: return key in Commands.prefab_properties()) \
 		and EntityTypes.valid_properties(properties)
 
 static func _valid_name(value: Variant) -> bool:
-	if not value is String or value.strip_edges().is_empty() or value.length() > 48:
-		return false
-	for index in value.length():
-		if value.unicode_at(index) < 32 or value.unicode_at(index) == 127:
-			return false
-	return true
+	return Commands.valid_field("prefab_name", value)
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "error": message}

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "id": "construct",
+  "builder": "res://scripts/zones/grid_builder.gd",
+  "spawn": {
+    "position": [
+      0,
+      0.05,
+      4
+    ],
+    "yaw": 0
+  },
+  "bounds": [
+    [
+      -60,
+      0,
+      -60
+    ],
+    [
+      120,
+      12,
+      120
+    ]
+  ],
+  "environment": {
+    "sky_colors": [
+      "060408",
+      "290a15",
+      "15070e",
+      "060408"
+    ],
+    "sun_azimuth": 150.0,
+    "sun_elevation": 38.0,
+    "sun_color": "ffd1c5",
+    "sun_energy": 1.5,
+    "sky_energy": 1.0,
+    "exposure": 1.0,
+    "sky_sun_visibility": 0.0,
+    "fog_density": 0.00045,
+    "fog_albedo": "4a1624",
+    "fog_anisotropy": 0.3,
+    "shadow_distance": 60.0,
+    "sdfgi_cell": 0.18
+  },
+  "capabilities": {
+    "workshop": true,
+    "scene_edit": true
+  },
+  "fallback": {
+    "style": "grid",
+    "floor_y": -0.2,
+    "walls": true,
+    "color": null
+  },
+  "workstation": "grid",
+  "water": [],
+  "layers": {},
+  "views": {
+    "arrival": {
+      "position": [
+        0,
+        0.05,
+        4
+      ],
+      "target": [
+        0,
+        1,
+        -25
+      ]
+    }
+  },
+  "benchmark_views": [
+    "arrival"
+  ],
+  "capture_views": [],
+  "capture_warmup": 0,
+  "graphics": {
+    "balanced_reconstruction": false
+  }
+}

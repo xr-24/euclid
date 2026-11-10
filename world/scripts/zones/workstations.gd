@@ -3,17 +3,19 @@ extends RefCounted
 const Assets = preload("res://scripts/assets/asset_library.gd")
 const Grid = preload("res://scripts/zones/grid_zone.gd")
 const Props = preload("res://scripts/zones/authored_props.gd")
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 
 static func build(root: Node3D, at: Vector3, anchor: Dictionary) -> Node3D:
 	var station: Node3D
 	var asset := "terminal"
-	if anchor.zone == "construct":
+	var style: String = Packages.definition(anchor.zone).workstation
+	if style == "grid":
 		station = Grid.workstation(root, at)
 	else:
 		station = Node3D.new()
 		station.position = at
 		root.add_child(station)
-		var villa: bool = anchor.zone == "villa"
+		var villa := style == "villa"
 		asset = "round_wooden_table_01" if villa else "outdoor_table_chair_set_01"
 		var table := Assets.place(station, asset, Vector3.ZERO, 0.0 if villa else 90.0, 0.76 if villa else 0.0)
 		if table:

@@ -3,13 +3,14 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validField } from './command-registry.mjs';
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const allowed = new Set(['cc0', 'by', 'by-sa', 'by-nc', 'by-nc-sa']);
 const headers = { 'User-Agent': 'Euclid/0.1 (local 3D workspace)' };
 const LIMIT = 64 * 1024 * 1024;
-export const validAssetId = id => typeof id === 'string' && /^(rig-)?(sf-[a-f0-9]{32}|ph-[A-Za-z0-9_-]{1,80})$/.test(id);
+export const validAssetId = id => validField('asset_id', id);
 
 async function token() {
   if (process.env.SKETCHFAB_API_TOKEN) return process.env.SKETCHFAB_API_TOKEN.trim();

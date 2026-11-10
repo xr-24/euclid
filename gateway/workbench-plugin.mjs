@@ -3,11 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { structuredCodex } from './codex-grid.mjs';
 import { normalizeEdit } from './workbench-source.mjs';
+import { entityTypes } from './command-registry.mjs';
 
 const schema = fileURLToPath(new URL('./workbench-plugin.schema.json', import.meta.url));
 const identifier = /^[a-z_][a-z0-9_]{0,39}$/;
 const entityId = /^[a-f0-9]{32}$/;
-const typeNames = new Set(['pressure_plate', 'traffic_cone', 'sliding_door']);
+const typeNames = new Set(Object.keys(entityTypes).filter(type => entityTypes[type].built_in));
 const scriptPattern = /^world\/scripts\/plugins\/([a-z_][a-z0-9_]{0,39})\.gd$/;
 const manifestPath = id => `world/data/behavior_plugins/${id}.json`;
 const scriptPath = id => `world/scripts/plugins/${id}.gd`;
@@ -43,8 +44,8 @@ export function pluginFiles(proposal, context) {
   const source = context.entities.find(item => item.id === source_entity);
   const target = context.entities.find(item => item.id === target_entity);
   if (typeof id !== 'string' || !identifier.test(id) || !printable(name, 48) || !source || source.type !== entity_type ||
-      (output === 'door_open' ? entity_type !== 'pressure_plate' || target?.type !== 'sliding_door' :
-        output !== 'emission' || !['pressure_plate', 'traffic_cone'].includes(entity_type) || target_entity !== '')) {
+      !entityTypes[entity_type]?.behavior_outputs?.includes(output) ||
+      (output === 'door_open' ? entityTypes[target?.type]?.factory !== 'door' : target_entity !== '')) {
     throw new Error('Codex proposed an invalid plugin identity or scene binding.');
   }
   if (!Array.isArray(proposal.settings) || proposal.settings.length > 6) throw new Error('The plugin settings are invalid.');

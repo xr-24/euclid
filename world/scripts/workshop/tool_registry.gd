@@ -2,7 +2,8 @@ extends RefCounted
 ## Catalog and activation for data-only workshop plugins.
 
 const DIRECTORY := "res://data/workshop_tools"
-const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
+const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const UNDO := "grid_undo_edit"
 const LIMIT := 24
 
@@ -112,13 +113,9 @@ static func valid_definition(value: Variant) -> bool:
 	return true
 
 static func _valid_field(key: String, value: Variant) -> bool:
-	match key:
-		"position": return value is Array and value.size() == 3 and EntityTypes.number_between(value[0], -60.0, 60.0) \
-			and EntityTypes.number_between(value[1], 0.0, 12.0) and EntityTypes.number_between(value[2], -60.0, 60.0)
-		"yaw": return EntityTypes.number_between(value, -360.0, 360.0)
-		"scale": return EntityTypes.number_between(value, 0.25, 4.0)
-		"color": return _identifier(value, "^[a-fA-F0-9]{6}$")
-	return false
+	if key not in Commands.action_properties():
+		return false
+	return Placement.valid_coordinates(Placement.GRID, value) if key == "position" else Commands.valid_field(key, value)
 
 static func _identifier(value: Variant, pattern: String) -> bool:
 	return value is String and RegEx.create_from_string(pattern).search(value) != null

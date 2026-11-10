@@ -1,16 +1,14 @@
 extends RefCounted
 ## Editable scene bounds and the shared camera-to-surface placement rule.
 
-const GRID := AABB(Vector3(-60, 0, -60), Vector3(120, 12, 120))
-const VILLA := AABB(Vector3(-120, -90, -120), Vector3(240, 170, 225))
-const BEACH := AABB(Vector3(-74, -16, -94), Vector3(148, 61, 143))
+const Packages = preload("res://scripts/zones/zone_packages.gd")
+static var GRID := Packages.bounds("construct")
+static var VILLA := Packages.bounds("villa")
+static var BEACH := Packages.bounds("beach")
 const Props = preload("res://scripts/zones/authored_props.gd")
 
 static func bounds_for(zone: String) -> AABB:
-	match zone:
-		"villa": return VILLA
-		"beach": return BEACH
-		_: return GRID
+	return Packages.bounds(zone)
 
 static func contains(bounds: AABB, point: Vector3) -> bool:
 	return point.is_finite() and point == point.clamp(bounds.position, bounds.end)

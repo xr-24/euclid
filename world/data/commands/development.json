@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "draft_shoreline",
+      "description": "Draft a change to shoreline foam appearance.",
+      "service": "development",
+      "handler": "_request_development_draft",
+      "effect": "draft",
+      "availability": "shoreline_preview",
+      "surfaces": [
+        "f2"
+      ],
+      "action": "shoreline",
+      "fields": {},
+      "required": [],
+      "scope": "scene",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "draft_grid",
+      "description": "Draft a change to Grid line spacing or backdrop wall height.",
+      "service": "development",
+      "handler": "_request_development_draft",
+      "effect": "draft",
+      "availability": "grid_development",
+      "surfaces": [
+        "f2"
+      ],
+      "action": "grid",
+      "fields": {},
+      "required": [],
+      "scope": "scene",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "draft_behavior",
+      "description": "Draft a new linked behavior for an existing prop in a Grid space.",
+      "service": "development",
+      "handler": "_request_development_draft",
+      "effect": "draft",
+      "availability": "grid_development",
+      "surfaces": [
+        "f2"
+      ],
+      "action": "author",
+      "fields": {},
+      "required": [],
+      "scope": "scene",
+      "workshop_context": true,
+      "from_world": true,
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "draft_workshop_tool",
+      "description": "Draft a reusable workshop action for existing Grid props.",
+      "service": "development",
+      "handler": "_request_development_draft",
+      "effect": "draft",
+      "availability": "grid_development",
+      "surfaces": [
+        "f2"
+      ],
+      "action": "tool",
+      "fields": {},
+      "required": [],
+      "scope": "scene",
+      "workshop_context": true,
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "draft_source",
+      "description": "Prepare a reviewed Euclid source change in an isolated Workbench draft.",
+      "service": "development",
+      "handler": "_request_development_draft",
+      "effect": "draft",
+      "availability": "source_development",
+      "surfaces": [
+        "f2"
+      ],
+      "action": "source",
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "revise_source",
+      "description": "Revise the active source draft from its last reviewed version.",
+      "service": "development",
+      "handler": "_revise_command",
+      "effect": "draft",
+      "availability": "source_revision",
+      "surfaces": [
+        "f2"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "benchmark_villa",
+      "description": "Run the fixed-view villa performance benchmark on request.",
+      "service": "development",
+      "handler": "_benchmark_command",
+      "effect": "draft",
+      "availability": "source_development",
+      "surfaces": [
+        "f2"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "villa_results",
+      "description": "Show saved villa timings and comparisons.",
+      "service": "development",
+      "handler": "_villa_results_command",
+      "effect": "read",
+      "availability": "source_development",
+      "surfaces": [
+        "f2"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 param(
     [ValidateSet('balanced','cinematic')][string]$Quality = 'balanced',
     [ValidateSet('villa','beach','construct')][string]$Zone = 'villa',
-    [ValidateSet('default','quality','isolate','costs')][string]$Suite = 'default',
+    [ValidateSet('default','quality','isolate','costs','looks')][string]$Suite = 'default',
     [string]$OutputDirectory,
     [int]$Width = 1440,
     [int]$Height = 900,

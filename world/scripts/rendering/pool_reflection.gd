@@ -13,6 +13,8 @@ var mirror: Camera3D
 ## renders the shadow cascades a second time. Reflections are rippled and darker; the missing
 ## shadows don't read, the saved time does.
 var mirror_sun: DirectionalLight3D
+## Light the mirror with the scene's shadowed sun instead (costs the shadow cascades again).
+var use_scene_sun := false
 var reflected_camera := Vector4(0,0,0,-10000)
 var reflected_frames := 0
 var environment_ready := false
@@ -62,7 +64,8 @@ func _process(_delta: float) -> void:
 	var active := visibility.is_on_screen() and source.global_position.y > level+0.03 and source.global_position.distance_to(water.global_position)<80
 	material.set_shader_parameter("pool_reflection_enabled",active)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if active else SubViewport.UPDATE_DISABLED
-	mirror_sun.visible = active
+	mirror_sun.visible = active and not use_scene_sun
+	mirror.cull_mask = RenderLayers.MIRROR_VIEW | (RenderLayers.SUN if use_scene_sun else 0)
 	if not active:
 		_clear_clip_plane()
 		return

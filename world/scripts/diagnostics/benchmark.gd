@@ -3,7 +3,9 @@ const Packages = preload("res://scripts/zones/zone_packages.gd")
 ## Fixed-view, uncapped GPU benchmark. Never reads or writes the player's save.
 ## Suites: default (every view), quality (antialiasing and shadow atlas), isolate (screen-space
 ## effects) and costs, which turns one part of the scene or one renderer feature off at a time on
-## the first two views, so the difference from default is that part's cost.
+## the first two views, so the difference from default is that part's cost. looks renders the
+## first two views with and without the cheaper settings, saving a screenshot of each.
+const LOOKS := ["default", "hedge_shadows", "mirror_sun_shadows"]
 const COSTS := ["default", "no_mirror", "no_sun_shadow", "no_fog", "no_gi", "no_ssr", "no_ssil", "no_ssao",
 	"no_glow", "no_vegetation", "no_props", "no_hedges", "no_lights", "no_player", "no_sim"]
 
@@ -41,6 +43,8 @@ static func run(world: Node3D) -> void:
 	var variants := ["default", "no_ssil", "no_ssr", "no_gi", "no_sim", "gi_stagger"] if suite == "isolate" else ["default", "taa_only", "shadow_4k", "balanced"] if suite == "quality" else ["default"]
 	if suite == "costs":
 		variants = COSTS
+	elif suite == "looks":
+		variants = LOOKS
 	results["suite"] = suite if not suite.is_empty() else "default"
 	var mirror: SubViewport = world.zone_root.find_child("PoolMirrorViewport", true, false)
 	if mirror:
@@ -69,7 +73,7 @@ static func run(world: Node3D) -> void:
 		var views := Packages.views(zone, "benchmark")
 		if suite in ["isolate", "quality"]:
 			views = views.slice(0, 1)
-		elif suite == "costs":
+		elif suite in ["costs", "looks"]:
 			views = views.slice(0, 2)
 		for view in views:
 			world.player.position = view[1]
@@ -115,13 +119,18 @@ static func run(world: Node3D) -> void:
 				"mirror_gpu_ms":mirror_gpu/frames.size(), "mirror_cpu_ms":mirror_cpu/frames.size()}
 			results.samples.append(sample)
 			print("CONSTRUCT_BENCHMARK " + JSON.stringify(sample))
-			if variant == "default":
+			if variant == "default" or suite == "looks":
 				await RenderingServer.frame_post_draw
-				viewport.get_texture().get_image().save_png(output.path_join(zone + "_" + str(view[0]) + ".png"))
+				var suffix := "" if variant == "default" else "_" + variant
+				viewport.get_texture().get_image().save_png(output.path_join(zone + "_" + str(view[0]) + suffix + ".png"))
 		for node in hidden:
-			node.visible = true
+			if node is GeometryInstance3D and variant == "hedge_shadows":
+				(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			else:
+				node.visible = true
 		if mirror:
 			mirror.get_parent().set_process(true)
+			mirror.get_parent().set("use_scene_sun", false)
 	world.sun.shadow_enabled = sun_shadow
 	var file := FileAccess.open(output.path_join("results.json"),FileAccess.WRITE)
 	file.store_string(JSON.stringify(results,"\t"))
@@ -133,6 +142,17 @@ static func run(world: Node3D) -> void:
 static func _hide(world: Node3D, variant: String) -> Array[Node3D]:
 	var hidden: Array[Node3D] = []
 	var root: Node3D = world.zone_root
+	if variant == "mirror_sun_shadows":
+		var reflection := root.find_child("PoolReflection", true, false)
+		if reflection:
+			reflection.set("use_scene_sun", true)
+		return hidden
+	if variant == "hedge_shadows": # the leaf cards cast shadows again; returned so they can be reset
+		for node in root.find_children("*", "MeshInstance3D", true, false):
+			if str(node.name).to_lower().contains("hedge_leaves"):
+				(node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+				hidden.append(node)
+		return hidden
 	if variant == "no_mirror":
 		var reflection := root.find_child("PoolReflection", true, false)
 		if reflection:

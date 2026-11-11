@@ -13,7 +13,7 @@ extends Node
 ## 2D at the projected emitter, so text stays sharp under TAA, upscaling and tone mapping.
 
 const Face = preload("res://scripts/ui/wrist_face.gd")
-const Theme = preload("res://scripts/ui/terminal_theme.gd")
+const Palette = preload("res://scripts/ui/terminal_theme.gd")
 const HOLOGRAM = preload("res://shaders/wrist_hologram.gdshader")
 const VEIL = preload("res://shaders/wrist_veil.gdshader")
 
@@ -349,7 +349,7 @@ func _layout(window: Vector2) -> void:
 func _draw_beams() -> void:
 	if _k <= 0.002:
 		return
-	var accent := Theme.ACCENT
+	var accent := Palette.ACCENT
 	var bottom_left := Vector2(_rect.position.x, _rect.end.y)
 	var bottom_right := _rect.end
 	for index in FAN + 1:
@@ -366,4 +366,4 @@ func _draw_beams() -> void:
 		_beams.draw_line(point, point + Vector2(0, inward.y * minf(reach, _rect.size.y * 0.5)), bracket, 2.0, true)
 	var sweep := _rect.end.y - _rect.size.y * fposmod(time * 0.35, 1.0)
 	_beams.draw_line(Vector2(_rect.position.x, sweep), Vector2(_rect.end.x, sweep), Color(accent, 0.14 * _k), 1.0)
-	_beams.draw_line(_emitter - Vector2(8, 0), _emitter + Vector2(8, 0), Color(Theme.BRIGHT, 0.9 * _k), 2.5, true)
+	_beams.draw_line(_emitter - Vector2(8, 0), _emitter + Vector2(8, 0), Color(Palette.BRIGHT, 0.9 * _k), 2.5, true)

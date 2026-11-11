@@ -11,6 +11,7 @@ import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToo
 import { createPreviewRunner } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
+import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
 import { fingerprint, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
 import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
@@ -77,6 +78,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   let focusId = null;
   // Set when the person chose to work on their own files. An agent's new draft then stays out of view.
   let focusCleared = false;
+  // The shared table of extension kinds, read once from the main checkout. Without it every file is source.
+  let kindTable;
+  const kinds = () => (kindTable ??= loadKinds(root).catch(() => []));
   let sourceJob = null;
   let operation = '';
   let planning = false;
@@ -161,6 +165,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
 
   async function currentState(view) {
     const change = viewOf(view);
+    const table = await kinds();
     const job = sourceJob;
     // A new source job shows in the view that started it. The person also sees an agent's job when nothing else is open.
     const authoring = job && (job.revising ? job.id === change?.id
@@ -197,7 +202,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
-      owner: change.owner ?? '', base: change.base, behind_main: behind(change),
+      owner: change.owner ?? '', base: change.base, behind_main: behind(change), kinds: draftKinds(table, change.names),
     } };
   }
 
@@ -604,6 +609,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { text, hash };
     }
     if (action === 'state') return state();
+    if (action === 'extensions') {
+      const table = await kinds();
+      return { kinds: table.map(({ id, name, description, live, activation }) => ({ id, name, description, live, activation })),
+        extensions: await listExtensions(root, table) };
+    }
     if (action === 'head') return { head: await git.head() };
     if (action === 'history') {
       const limit = Number.isInteger(body?.limit) ? body.limit : 50;

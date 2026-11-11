@@ -40,6 +40,7 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 		return {}
 
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
+const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -719,6 +720,16 @@ func _check_live_extensions() -> void:
 	live.reload_committed()
 	_check(tools.reloads == 2 and palette.reloads == 1 and behavior.reloads == 1, "reload every kind after a revert")
 	_check(not LiveExtensions.new().preview({"draft": "x"}).ok, "refuse a draft no kind accepts")
+	# The world's live kinds and the gateway's shared kind table name the same kinds in the same order.
+	var table: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/extension_kinds.json"))
+	var listed := PackedStringArray()
+	if table is Dictionary:
+		for kind in table.get("kinds", []):
+			if kind is Dictionary and kind.get("live", false):
+				listed.append(str(kind.get("id", "")))
+	var world_kinds := LiveExtensions.new()
+	LiveKinds.register_all(world_kinds, {}, {})
+	_check(not listed.is_empty() and world_kinds.kind_ids() == listed, "register the live kinds the shared extension table lists")
 
 func _check_workbench_drafts() -> void:
 	_check(WorkbenchPanel.draft_label({"owner": "grok", "files": ["a", "b"], "status": "passed", "behind_main": true})

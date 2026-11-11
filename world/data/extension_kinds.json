@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kinds": [
+    {
+      "id": "grid_palette",
+      "name": "Grid palette",
+      "description": "The Grid's placement panel. A checked draft reloads in place, inside a Grid space.",
+      "files": "^world/scripts/ui/grid_palette\\.gd$",
+      "live": true,
+      "candidate": "grid_palette",
+      "activation": "reload_palette"
+    },
+    {
+      "id": "shoreline",
+      "name": "Shoreline look",
+      "description": "Foam strength and softness on the beach shoreline.",
+      "files": "^world/data/shoreline_appearance\\.json$",
+      "live": true,
+      "candidate": "shoreline",
+      "activation": "live"
+    },
+    {
+      "id": "grid",
+      "name": "Grid scenery",
+      "description": "Floor line spacing and backdrop wall height shared by Grid spaces.",
+      "files": "^world/data/grid_appearance\\.json$",
+      "live": true,
+      "candidate": "grid",
+      "activation": "reload_grid"
+    },
+    {
+      "id": "workshop_tool",
+      "name": "Workshop action",
+      "description": "A data-only action that moves, recolors or resets entities in one Grid space.",
+      "files": "^world/data/workshop_tools/[a-z][a-z0-9_]{0,31}\\.json$",
+      "live": true,
+      "candidate": "workshop_tool",
+      "activation": "live"
+    },
+    {
+      "id": "behavior",
+      "name": "Behavior plugin",
+      "description": "A behavior an entity runs, such as a pulse or a door link. A script plus its manifest.",
+      "files": "^world/(scripts/plugins/[a-z_][a-z0-9_]{0,39}\\.gd|data/behavior_plugins/[a-z_][a-z0-9_]{0,39}\\.json|data/behavior_plugins\\.json)$",
+      "live": true,
+      "candidate": "plugin",
+      "activation": "live"
+    },
+    {
+      "id": "environment",
+      "name": "Environment package",
+      "description": "A zone's reviewed builder, spawn, bounds, lighting, water, views and capabilities.",
+      "files": "^world/data/zones/[a-z0-9_-]+/zone\\.json$",
+      "live": false,
+      "activation": "restart"
+    },
+    {
+      "id": "command",
+      "name": "Command set",
+      "description": "Commands shared by MCP, F2, the palette and Godot, with their argument schemas.",
+      "files": "^world/data/commands/(world|scene|development)\\.json$",
+      "live": false,
+      "activation": "restart"
+    }
+  ]
+}

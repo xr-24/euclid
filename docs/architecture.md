@@ -277,8 +277,21 @@ last. Each adapter wraps the service that already owned that kind. Kinds get a
 context of callables for the current zone, the Grid workshop tools and the
 palette's action catalog, so they never reach into the world coordinator.
 
-To add a kind, subclass `live_kind.gd`, register it in `world.gd` before the
-behavior kind, and teach the gateway to serve its candidate.
+### One table of kinds
+
+`world/data/extension_kinds.json` lists every kind of extension Euclid takes,
+live or not: the five above, environment packages and command sets. Each entry
+has an id, a name, a description, a file pattern, whether it previews live,
+the candidate field the Workbench serves for it, and how a commit takes effect.
+The gateway (`gateway/extensions.mjs`) uses the table to name the kinds a draft
+changes and to list every installed extension as the same record: kind, id,
+name, files, live, activation, and a version where the files carry one.
+`LiveKinds.register_all` registers Godot's live kinds in the table's order, and
+a core test fails if the two disagree.
+
+To add a live kind, add it to the table before `behavior`, subclass
+`live_kind.gd`, register it in `register_all` at the same position, and teach
+the Workbench to serve its candidate.
 
 ## Live behavior plugins
 

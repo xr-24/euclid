@@ -366,11 +366,8 @@ func _register_live_extensions() -> void:
 	context["workshop"] = func() -> Variant: return world_tools if _is_workshop(zone_id) else null
 	context["catalog"] = _workshop_action_catalog
 	context["run_action"] = _run_palette_action
-	_live.register(LiveKinds.Palette.new(_palette_host, context))
-	_live.register(LiveKinds.Appearance.new("shoreline", _shoreline))
-	_live.register(LiveKinds.Appearance.new("grid", _grid_scenery))
-	_live.register(LiveKinds.WorkshopAction.new(_workshop_actions, context))
-	_live.register(LiveKinds.Behavior.new(behavior_runtime, context))
+	LiveKinds.register_all(_live, {"palette": _palette_host, "shoreline": _shoreline, "grid": _grid_scenery,
+		"workshop_actions": _workshop_actions, "behaviors": behavior_runtime}, context)
 
 func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame

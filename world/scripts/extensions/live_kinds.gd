@@ -3,6 +3,16 @@ extends RefCounted
 ## the service that already owns that kind. The world passes a context of callables:
 ##   zone() -> String, workshop() -> the Grid workshop tools in a Grid space or null,
 ##   catalog and run_action for the Grid palette.
+## world/data/extension_kinds.json lists the same live kinds in the same order for the gateway.
+
+## Registers every live kind in table order. services holds palette, shoreline, grid, workshop_actions
+## and behaviors. The behavior kind accepts any remaining candidate, so it comes last.
+static func register_all(live: RefCounted, services: Dictionary, world: Dictionary) -> void:
+	live.register(Palette.new(services.get("palette"), world))
+	live.register(Appearance.new("shoreline", services.get("shoreline")))
+	live.register(Appearance.new("grid", services.get("grid")))
+	live.register(WorkshopAction.new(services.get("workshop_actions"), world))
+	live.register(Behavior.new(services.get("behaviors"), world))
 
 ## The replaceable Grid palette. It previews only inside a Grid space.
 class Palette extends "res://scripts/extensions/live_kind.gd":

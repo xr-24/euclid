@@ -16,6 +16,9 @@ export const developmentTools = [
   { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
       'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
+  { name: 'list_extensions', description: 'List the kinds of extension Euclid takes, whether each previews live in the running world ' +
+      'or needs a restart, and every installed extension with its kind, id, files and version. draft_status names the kinds your draft changes.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'task_history', description: 'List recent Workbench events, newest first: drafts, revisions, checks with their scope, ' +
       'commits, discards and reverts. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
     inputSchema: { type: 'object', properties: { draft: { type: 'string', pattern: '^[a-f0-9-]{36}$', description: 'A draft id from draft_status or an earlier entry.' } },
@@ -70,7 +73,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
     return { ok: true, busy: state.operation ?? '', other_drafts: others(state, agent), draft: {
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
       files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
-      activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '',
+      activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '', kinds: draft.kinds ?? [],
       ...(withDiff ? { diff: clip(draft.diff, 96000) } : {}),
       output: tail(draft.log, 12000), preview_output: tail(state.preview_log, 4000),
     } };
@@ -136,6 +139,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
         const draft = await own(agent, args.version);
         return report(await workbench('rebase', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
       }
+      case 'list_extensions': return { ok: true, ...await workbench('extensions', {}, signal) };
       case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
       case 'submit_draft': return submit(agent, args, signal);
       case 'run_checks': {

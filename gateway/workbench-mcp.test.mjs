@@ -80,7 +80,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'task_history', 'submit_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'list_extensions', 'task_history', 'submit_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -123,6 +123,8 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   assert.equal(first.draft.summary, 'Adds a test and removes the old script.');
   assert.equal(first.draft.diff, undefined);
   const staged = (await tool('draft_status')).draft;
+  assert.deepEqual(staged.kinds, ['source'], 'without a shared kind table every file is source');
+  assert.deepEqual(Object.keys(await tool('list_extensions')).sort(), ['extensions', 'isError', 'kinds', 'ok']);
   assert.match(staged.diff, /\+const READY := maybe/);
   assert.equal(git('rev-parse', 'HEAD'), base);
   assert.equal(git('status', '--porcelain'), '');

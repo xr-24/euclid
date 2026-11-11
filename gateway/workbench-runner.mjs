@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { access, cp, lstat, mkdir, open, statfs, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { assertSeparateBase, linkBase, syncBase } from './preview-base.mjs';
 import { fingerprint } from './workbench-source.mjs';
 
 const previewLogPath = draft => path.join(draft.directory, `preview-${fingerprint(draft.diff)}.log`);
@@ -44,15 +45,27 @@ function run(file, args, { cwd, env, timeout, onOutput, signal }) {
   });
 }
 
-export function createPreviewRunner(root, { benchmarkWindowId = 0 } = {}) {
+export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.join(root, '.local/preview-base') } = {}) {
   const godot = process.env.GODOT_BIN || path.join(root, '.tools/godot/Godot_v4.7.2-stable_win64_console.exe');
   const env = childEnvironment(godot);
+  assertSeparateBase(root, base);
   let preview = null;
+  let baseTurn = Promise.resolve();
+  // One preview at a time updates the shared base and links from it.
+  function fillFromBase(tree, onOutput, signal) {
+    const turn = baseTurn.then(async () => {
+      const names = await syncBase(root, base, { signal, onOutput });
+      const { linked, copied } = await linkBase(base, tree, names, { signal });
+      onOutput(`Linked ${linked} art and import files${copied ? `, copied ${copied}` : ''}.\n`);
+    });
+    baseTurn = turn.catch(() => {});
+    return turn;
+  }
   async function prepare({ directory, worktree, id }, onOutput, signal) {
     const tree = path.join(directory, 'preview');
     await rm(tree, { recursive: true, force: true });
     const disk = await statfs(directory);
-    if (disk.bavail * disk.bsize < 2.5 * 1024 ** 3) throw new Error('Free at least 2.5 GiB for the disposable preview project.');
+    if (disk.bavail * disk.bsize < 512 * 1024 ** 2) throw new Error('Free at least 0.5 GiB for the disposable preview project.');
     await mkdir(tree);
     onOutput('Preparing a preview from the reviewed Git worktree.\n');
     const copyFilter = async source => {
@@ -67,12 +80,8 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0 } = {}) {
         return copyFilter(source);
       } });
     }
-    onOutput('Copying the local art pack and import cache.\n');
-    await cp(path.join(root, 'world/assets'), path.join(tree, 'world/assets'), { recursive: true, force: false, filter: copyFilter });
-    for (const entry of ['imported', 'uid_cache.bin']) {
-      const cache = `world/.godot/${entry}`;
-      if (existsSync(path.join(root, cache))) await cp(path.join(root, cache), path.join(tree, cache), { recursive: true, filter: copyFilter });
-    }
+    onOutput('Linking the local art pack and import cache.\n');
+    await fillFromBase(tree, onOutput, signal);
     const project = path.join(tree, 'world/project.godot');
     const config = await readFile(project, 'utf8');
     const settings = config.replace(/^config\/custom_user_dir_name=.*$/m, `config/custom_user_dir_name="Godot/app_userdata/Euclid-workbench-${id}"`);

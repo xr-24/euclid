@@ -12,7 +12,8 @@ const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scen
 // checks, and replaces the running gateway. No draft may change it. The launcher,
 // check and recovery scripts under scripts/ and the files in the project root are
 // outside every draft as well, so a bad change can always be reviewed and undone.
-export const kernel = Object.freeze(['gateway/handoff.mjs', 'gateway/workbench-git.mjs', 'gateway/workbench-runner.mjs', 'gateway/workbench-source.mjs']);
+export const kernel = Object.freeze(['gateway/handoff.mjs', 'gateway/preview-base.mjs', 'gateway/workbench-git.mjs',
+  'gateway/workbench-runner.mjs', 'gateway/workbench-source.mjs']);
 export const isKernelPath = name => kernel.includes(name);
 export const isGatewayPath = name => typeof name === 'string' && name.startsWith('gateway/');
 const harness = /^(?:gateway\/(?:[\w-]+\/)*[\w.-]+\.(?:mjs|json)|docs\/[\w.-]+\.md|README\.md)$/;

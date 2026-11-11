@@ -58,8 +58,14 @@ rendered captures, and benchmark logs with the Git baseline or measured draft
 version. Diagnostics also shows ordinary preview output and errors. Codex
 can use both kinds of evidence to inform a revision.
 
-**Remaining.** Add moving routes and repeatable transition measurements, then
-use them to isolate villa regressions from inside Euclid.
+Checks and benchmarks no longer copy about 2 GiB of art and import cache each
+time. The runner keeps one private copy, updates only changed files, and
+hard-links it into each preview. Across drives it falls back to copying.
+
+**Remaining.** Split checks so a gateway-only draft skips the Godot import.
+Attach rendered screenshots to check results and keep a task journal. Add
+moving routes and repeatable transition measurements, then use them to isolate
+villa regressions from inside Euclid.
 
 ## 4. Scene and asset development
 

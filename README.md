@@ -346,8 +346,9 @@ cone teal and update the spawn button to match. You can also edit either file
 directly and switch between open buffers.
 
 **Review diff** creates a separate Git worktree for the draft. **Run checks**
-tests it in a disposable project and shows its logs. Keep about 2.5 GiB free for
-the preview copy. **Play preview** opens that build with separate saves. Enter a
+tests it in a disposable project and shows its logs. The first check keeps a
+2 GiB copy of the local art and import cache under `.local/workbench`. Later
+checks link to it and copy only what changed. **Play preview** opens that build with separate saves. Enter a
 message and choose **Commit** to add the reviewed changes to the local branch.
 The main checkout must be clean and still on the draft's starting commit. If
 it moved, the draft stays available. **Discard** removes the draft. **Revert

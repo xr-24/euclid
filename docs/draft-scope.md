@@ -18,13 +18,14 @@ Workbench status line still reads **Restart Euclid** for the last two.
 
 ## The kernel
 
-Four gateway files cannot be changed by any draft:
+Five gateway files cannot be changed by any draft:
 
 | File | Why it is fixed |
 | --- | --- |
 | `gateway/workbench-source.mjs` | Defines what a draft may change, including this list |
 | `gateway/workbench-git.mjs` | Verifies the reviewed diff and makes the commit |
 | `gateway/workbench-runner.mjs` | Isolates checks and previews and removes their credentials |
+| `gateway/preview-base.mjs` | Keeps previews' linked art apart from the live project |
 | `gateway/handoff.mjs` | Replaces the running gateway and resumes it on failure |
 
 Everything under `scripts/` and every file in the project root other than

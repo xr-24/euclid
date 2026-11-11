@@ -63,7 +63,7 @@ async function readChanges(root, files) {
   return changes;
 }
 
-export function createWorkbench(root, storage, { runner = createPreviewRunner(root), propose = proposeEdit,
+export function createWorkbench(root, storage, { runner = createPreviewRunner(root, { base: path.join(storage, 'preview-base') }), propose = proposeEdit,
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
   designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '' } = {}) {
   const git = createWorkbenchGit(root);

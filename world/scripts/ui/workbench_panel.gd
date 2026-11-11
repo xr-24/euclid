@@ -69,6 +69,7 @@ var _benchmark: Callable
 var _live_output: Callable
 var _view_ready := false
 var _requested_review := ""
+var _requested_tab := ""
 var _drafts := OptionButton.new()
 var _drafts_updating := false
 var _drafts_signature := ""
@@ -422,7 +423,9 @@ func _load_catalog(saved_view: Dictionary) -> void:
 		await _open_file(file)
 	await _poll(true)
 	var draft: Variant = _state.get("draft")
-	if not _requested_review.is_empty():
+	if not _requested_tab.is_empty():
+		show_tab(_requested_tab)
+	elif not _requested_review.is_empty():
 		show_review(_requested_review == "Checks")
 	elif saved_view.get("tab") == "Diagnostics":
 		_tabs.current_tab = 4
@@ -861,6 +864,16 @@ func _poll(force := false) -> void:
 		return
 	if force or result != _state:
 		_show_state(result)
+
+## Shows a tab by its title, such as Terminal or Agents. Before the first load finishes, the
+## request waits so the restored view does not replace it.
+func show_tab(title: String) -> void:
+	if not _view_ready:
+		_requested_tab = title
+	for index in _tabs.get_tab_count():
+		if _tabs.get_tab_title(index) == title and not _tabs.is_tab_hidden(index):
+			_tabs.current_tab = index
+			return
 
 func show_review(logs := false) -> void:
 	if not _view_ready:

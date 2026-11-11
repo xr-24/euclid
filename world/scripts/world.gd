@@ -25,6 +25,8 @@ const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const TaskPresence = preload("res://scripts/agents/task_presence.gd")
 const PlayerAvatar = preload("res://scripts/player/player_avatar.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
+const WristComputer = preload("res://scripts/player/wrist_computer.gd")
+const WristPages = preload("res://scripts/player/wrist_pages.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
@@ -41,6 +43,8 @@ var player: CharacterBody3D
 var camera: Camera3D
 var player_avatar: PlayerAvatar
 var _player_motor := PlayerMotor.new()
+## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
+var wrist: WristComputer
 var environment: Environment
 var sky_material: ProceduralSkyMaterial
 var sun: DirectionalLight3D
@@ -151,6 +155,7 @@ func _ready() -> void:
 		smoke_mode = true
 		call_deferred("_run_diagnostic", "world_capture.gd")
 	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_report_boot_ready()
 
 func _report_boot_ready() -> void:
@@ -168,7 +173,7 @@ func _report_boot_ready() -> void:
 			file.close()
 
 func _setup_input() -> void:
-	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "interact": KEY_E, "travel": KEY_TAB, "jump": KEY_SPACE, "dive": KEY_C}
+	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "interact": KEY_E, "jump": KEY_SPACE, "dive": KEY_C}
 	for action in keys:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -237,6 +242,8 @@ func _setup_player() -> void:
 	camera.current = true
 	player_avatar = PlayerAvatar.new()
 	player_avatar.mount(player, camera)
+	wrist = WristComputer.new()
+	wrist.mount(self, camera, player_avatar.hands, WristPages.new(self))
 
 func _setup_ui() -> void:
 	add_child(_palette_host)
@@ -289,7 +296,6 @@ func _setup_ui() -> void:
 	overlay_content.add_theme_constant_override("separation", 10)
 	overlay.add_child(overlay_content)
 	overlay.hide()
-	_show_menu()
 
 func _ui_label(parent: Node, at: Vector2, font_size: int) -> Label:
 	var label := Label.new()
@@ -333,6 +339,8 @@ func _panel(title: String, description: String, height := 500.0, remember_palett
 
 func _show_panel() -> void:
 	hint.text = ""
+	if is_instance_valid(wrist):
+		wrist.lower_wrist()
 	overlay.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -343,27 +351,6 @@ func _button(title: String, callback: Callable) -> void:
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.pressed.connect(callback)
 	overlay_content.add_child(button)
-
-func _show_menu() -> void:
-	_panel("EUCLID", "")
-	_button("Resume", _close_panel)
-	for i in mini(3, manifest.zones.size()):
-		var zone: Dictionary = manifest.zones[i]
-		_button("%d    %s" % [i + 1, zone.name], _travel.bind(str(zone.id)))
-	if not shifting:
-		_button("Grid tools  [B]" if _is_workshop(zone_id) else "Scene tools  [B]", _request_grid_palette)
-	_button("Codex  [F2]", _dev.open_console)
-	_button("Workbench  [F4]", _dev.open_workbench)
-	if manifest.zones.size() > 3:
-		var spaces := OptionButton.new()
-		spaces.add_item("Custom spaces")
-		for zone in manifest.zones.slice(3):
-			spaces.add_item(zone.name)
-			spaces.set_item_metadata(spaces.item_count - 1, zone.id)
-		spaces.item_selected.connect(func(index: int) -> void:
-			if index > 0: _travel(spaces.get_item_metadata(index)))
-		overlay_content.add_child(spaces)
-	_button("Save and quit", _quit)
 
 func _close_panel() -> void:
 	overlay.hide()
@@ -829,7 +816,8 @@ func _physics_process(delta: float) -> void:
 	if not player:
 		return
 	var direction := Vector3.ZERO
-	var controls := not overlay.visible and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not smoke_mode
+	var controls := not overlay.visible and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not smoke_mode \
+		and not wrist.blocks_movement()
 	if controls:
 		var axes := Input.get_vector("left", "right", "forward", "back")
 		direction = player.basis * Vector3(axes.x,0,axes.y)
@@ -858,7 +846,7 @@ func _physics_process(delta: float) -> void:
 
 func _update_interaction_hint() -> void:
 	nearest = {}
-	if overlay.visible or shifting:
+	if overlay.visible or shifting or wrist.is_open:
 		hint.text = ""
 		return
 	if is_instance_valid(companion) and companion.can_command(camera, player):
@@ -876,7 +864,7 @@ func _update_interaction_hint() -> void:
 		if distance < best and -camera.global_basis.z.dot(eye_target.normalized()) > 0.55:
 			best = distance
 			nearest = item
-	hint.text = "E: " + str(nearest.label) if not nearest.is_empty() else ""
+	hint.text = "E: " + str(nearest.label) if not nearest.is_empty() else wrist.idle_hint()
 
 func _input(event: InputEvent) -> void:
 	if smoke_mode or not is_instance_valid(overlay) or not event is InputEventKey or not event.pressed or event.echo:
@@ -895,6 +883,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
 		get_viewport().set_input_as_handled()
 		return
+	if not overlay.visible and wrist.handle(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_B:
 		if not overlay.visible and _scene_ready():
 			_request_grid_palette()
@@ -903,11 +894,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if overlay.visible:
 			_close_panel()
-		else:
-			_show_menu()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("travel"):
-		_show_menu()
 	elif not overlay.visible and _zone_key(event) >= 0:
 		_shift(str(manifest.zones[_zone_key(event)].id))
 	elif event.is_action_pressed("interact") and not overlay.visible and not nearest.is_empty():
@@ -1044,8 +1031,10 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_quit()
 	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT and not smoke_mode:
-		if is_instance_valid(overlay) and not overlay.visible:
-			_show_menu()
+		# Let go of the mouse; a click back in picks it up again.
+		if is_instance_valid(wrist):
+			wrist.typing = false
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _quit() -> void:
 	_save()

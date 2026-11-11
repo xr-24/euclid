@@ -1,5 +1,5 @@
 extends RefCounted
-## Rendered captures of every zone, its named capture views, two shifts in flight and the menu.
+## Rendered captures of every zone, its named capture views, two shifts in flight and the wrist computer.
 ## Run with `-- --capture` and CONSTRUCT_CAPTURE_DIR set. Frames are written as PNG files.
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 
@@ -59,8 +59,9 @@ static func run(world: Node3D) -> void:
 			longest = maxi(longest, now - last)
 			last = now
 		print("CONSTRUCT_SHIFT %s longest frame %.1f ms" % [leg[2], maxi(worst, longest) / 1000.0])
-	world._show_menu()
-	await _save_frame(world, output.path_join("menu.png"))
+	world.wrist.raise_wrist("areas")
+	await tree.create_timer(0.8).timeout
+	await _save_frame(world, output.path_join("wrist.png"))
 	print("CONSTRUCT_CAPTURE_OK")
 	tree.quit()
 

@@ -13,8 +13,16 @@ static func run(world: Node3D) -> void:
 			assert(world.zone_root.get_child_count() > 5)
 		assert(not world.interactables.is_empty())
 		await tree.process_frame
+	# The wrist computer is the menu: it rises with the arm, and any panel lowers it.
+	var wrist = world.wrist
+	wrist.raise_wrist("areas")
+	assert(wrist.is_open and wrist.current().id == "areas" and wrist.rows().size() == world.manifest.zones.size())
+	await tree.create_timer(0.8).timeout
+	assert(wrist._layer.visible and wrist.open_t == 1.0)
+	wrist.turn(-1)
+	assert(wrist.current().id == "system")
 	world._open_app("terminal")
-	assert(world.overlay.visible)
+	assert(world.overlay.visible and not wrist.is_open)
 	world._close_panel()
 	assert(not world.overlay.visible)
 	world._load_zone("villa")

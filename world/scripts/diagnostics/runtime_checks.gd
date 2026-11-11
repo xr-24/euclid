@@ -101,8 +101,9 @@ static func capture(world: Node3D) -> void:
 			longest = maxi(longest, now - last)
 			last = now
 		print("CONSTRUCT_SHIFT %s longest frame %.1f ms" % [leg[2], maxi(worst, longest) / 1000.0])
-	world._show_menu()
+	world.wrist.raise_wrist("areas")
+	await world.get_tree().create_timer(0.8).timeout
 	await RenderingServer.frame_post_draw
-	world.get_viewport().get_texture().get_image().save_png(output.path_join("menu.png"))
+	world.get_viewport().get_texture().get_image().save_png(output.path_join("wrist.png"))
 	print("CONSTRUCT_CAPTURE_OK")
 	world.get_tree().quit()

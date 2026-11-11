@@ -4,6 +4,16 @@ const Arms = preload("res://assets/player/mannequin_arms.glb")
 const Poses = preload("res://scripts/player/hand_poses.gd")
 const Wrist = preload("res://scripts/player/hand_wrist.gd")
 const SIDES := ["l", "r"]
+## The wrist computer pose, like checking a watch: the left forearm laid across the lower middle
+## of the view, back of the hand up, a loose fist. Camera space (-Z ahead, +X right). The wrist
+## goes this fraction of the arm's reach from the shoulder, in this direction.
+const WATCH_DIRECTION := Vector3(0.55, 0.2, -0.81)
+const WATCH_EXTENT := 0.74
+const WATCH_FORWARD := Vector3(1.0, 0.1, 0.05)
+const WATCH_PALM := Vector3(0.0, -1.0, -0.35)
+const WATCH_POLE := Vector3(-0.7, -0.45, -0.25)
+## How far along the forearm, from elbow to wrist, the wrist computer's emitter sits.
+const EMITTER_ALONG := 0.78
 
 var _rig: Skeleton3D
 var _wrist := Wrist.new()
@@ -12,7 +22,10 @@ var _pose := Poses.Pose.REST
 var _point := Vector3.INF
 var _blend := 0.0
 var _pulse_left := 0.0
-var _fingers_at_rest := false
+var _watch := false
+var _watch_blend := 0.0
+var _left_elbow := -1
+var _left_hand := -1
 var _finger_rotations := {}
 var _breath_phase := 0.0
 var _stride_phase := 0.0
@@ -45,6 +58,9 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 		add_child(target)
 		add_child(pole)
 		pole.position = Vector3(handedness * 0.63, -0.71, -0.10)
+		if index == 0:
+			_left_elbow = elbow
+			_left_hand = wrist
 		ik.set_root_bone(index, upper)
 		ik.set_middle_bone(index, elbow)
 		ik.set_end_bone(index, wrist)
@@ -58,6 +74,8 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 			"reach": (_rig.get_bone_global_rest(elbow).origin - _rig.get_bone_global_rest(upper).origin).length() +
 				(rest.origin - _rig.get_bone_global_rest(elbow).origin).length(),
 			"target": target,
+			"pole": pole,
+			"pole_rest": pole.position,
 			"finger_joints": _finger_joints(side),
 			"hand_frame": _frame(to_local * finger_forward, to_local * Vector3.DOWN).inverse(),
 		})
@@ -67,6 +85,19 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 	_rig.add_child(_wrist)
 	tick(1.0, Poses.Pose.REST, Vector3.INF)
 	return mesh
+
+## Brings the left forearm up for the wrist computer, or lets it fall back.
+func set_wrist_raised(up: bool) -> void:
+	_watch = up
+
+## The point on top of the left forearm the wrist computer projects from, in camera space, and
+## how far the arm has come up (0 to 1).
+func wrist_emitter() -> Dictionary:
+	if _rig == null or _left_elbow < 0:
+		return {}
+	var elbow := to_local(_rig.to_global(_rig.get_bone_global_pose(_left_elbow).origin))
+	var hand := to_local(_rig.to_global(_rig.get_bone_global_pose(_left_hand).origin))
+	return {"point": elbow.lerp(hand, EMITTER_ALONG), "raised": smoothstep(0.0, 1.0, _watch_blend)}
 
 ## The target is in world space. INF uses the crosshair direction for an unbound gesture.
 func pulse(pose: Poses.Pose, target: Vector3) -> void:
@@ -86,6 +117,10 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 	if at_rest:
 		_blend = 0.0
 	var lift := smoothstep(0.0, 1.0, _blend)
+	_watch_blend = lerpf(_watch_blend, 1.0 if _watch else 0.0, 1.0 - exp(-delta * 10.0))
+	if absf(_watch_blend - (1.0 if _watch else 0.0)) < 0.004:
+		_watch_blend = 1.0 if _watch else 0.0
+	var watch := smoothstep(0.0, 1.0, _watch_blend)
 	_movement = lerpf(_movement, clampf(speed / 4.5, 0.0, 1.0), 1.0 - exp(-delta * 7.0))
 	_breath_phase = fposmod(_breath_phase + delta * 1.9, TAU)
 	# Advance a stride by distance so a slow walk also slows the swing.
@@ -131,23 +166,36 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 		var reaching_forward := (direction + Vector3.UP * _finger_lift).normalized()
 		var hand_forward := Vector3(-side * 0.13, 0.43, -0.90).lerp(reaching_forward, weight)
 		var palm := Vector3(-side * 0.46, -0.88, 0.12).lerp(_palm, weight)
+		var finger_pose := _pose
+		var finger_weight := smoothstep(0.05, 0.83, weight)
+		var still := at_rest
+		if index == 0:
+			var watch_wrist := shoulder + WATCH_DIRECTION.normalized() * reach * WATCH_EXTENT
+			goal.position = goal.position.lerp(watch_wrist, watch) + sin(watch * PI) * Vector3(0.02, 0.03, -0.04)
+			hand_forward = hand_forward.lerp(WATCH_FORWARD, watch)
+			palm = palm.lerp(WATCH_PALM, watch)
+			var pole: Node3D = chain.pole
+			pole.position = (chain.pole_rest as Vector3).lerp(WATCH_POLE, watch)
+			finger_pose = Poses.Pose.GRAB
+			finger_weight = watch * 0.85
+			still = watch == 0.0
 		_wrist.orientations[index] = _frame(to_rig * hand_forward, to_rig * palm) * chain.hand_frame
-		if not _fingers_at_rest or not at_rest:
-			_pose_fingers(chain.finger_joints, smoothstep(0.05, 0.83, weight), 1.0 if at_rest else amount)
-	_fingers_at_rest = at_rest
+		if not chain.get("still", false) or not still:
+			_pose_fingers(chain.finger_joints, finger_pose, finger_weight, 1.0 if still else amount)
+		chain["still"] = still
 
-func _pose_fingers(fingers: Array, weight: float, amount: float) -> void:
+func _pose_fingers(fingers: Array, pose: Poses.Pose, weight: float, amount: float) -> void:
 	for joint: Dictionary in fingers:
-		var angles: Array = Poses.CURL[_pose][joint.finger]
+		var angles: Array = Poses.CURL[pose][joint.finger]
 		var idle: Array = Poses.CURL[Poses.Pose.REST][joint.finger]
 		var bend := deg_to_rad(lerpf(idle[joint.segment], angles[joint.segment], weight))
 		var rotation := Quaternion(joint.axis, bend)
 		if joint.segment == 0:
 			if joint.finger == 0:
-				var opposition := lerpf(Poses.THUMB_OPPOSITION[Poses.Pose.REST], Poses.THUMB_OPPOSITION[_pose], weight)
+				var opposition := lerpf(Poses.THUMB_OPPOSITION[Poses.Pose.REST], Poses.THUMB_OPPOSITION[pose], weight)
 				rotation = Quaternion(joint.opposition, deg_to_rad(opposition)) * rotation
 			else:
-				var spread := lerpf(Poses.SPREAD[Poses.Pose.REST][joint.finger], Poses.SPREAD[_pose][joint.finger], weight)
+				var spread := lerpf(Poses.SPREAD[Poses.Pose.REST][joint.finger], Poses.SPREAD[pose][joint.finger], weight)
 				rotation = Quaternion(joint.spread, deg_to_rad(spread)) * rotation
 		var previous: Quaternion = _finger_rotations.get(joint.bone, rotation)
 		var blended := previous.slerp(rotation, amount)

@@ -146,6 +146,13 @@ func open_workbench() -> void:
 	workbench_panel.commit_recorded.connect(func(revision: String) -> void:
 		notice("Committed source draft %s." % revision.left(7)))
 
+## Opens Workbench from the wrist computer, optionally on one of its tabs (by title).
+func open_workbench_tab(tab := "") -> void:
+	if not (is_instance_valid(workbench_panel) and _world.overlay.visible):
+		open_workbench()
+	if not tab.is_empty() and is_instance_valid(workbench_panel):
+		workbench_panel.show_tab(tab)
+
 func _restart() -> void:
 	if _world.smoke_mode or _world.shifting or capability.is_empty():
 		return

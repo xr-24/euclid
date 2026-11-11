@@ -28,6 +28,21 @@ const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 var _failures := 0
 var _checks := 0
 
+class WristFixture extends RefCounted:
+	var ran := []
+
+	func status_line() -> String:
+		return "TEST"
+
+	func pages() -> Array:
+		return [
+			{"id": "one", "title": "ONE", "rows": [{"label": "A", "run": func() -> void: ran.append("a")},
+				{"label": "B", "enabled": false, "why": "Not here."}]},
+			{"id": "two", "title": "TWO", "rows": [{"label": "SEND", "input": true, "then": "one",
+				"run": func(line: String) -> void: ran.append(line)},
+				{"label": "QUIT", "confirm": "Again to quit.", "close": true, "run": func() -> void: ran.append("quit")}]},
+		]
+
 class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 	signal finish_poll
 	var revised := false
@@ -43,6 +58,7 @@ const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 const TerminalView = preload("res://scripts/ui/terminal_view.gd")
 const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
+const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -207,6 +223,7 @@ func _run() -> void:
 	_check_panel_swap()
 	_check_terminal_keys()
 	_check_agents_panel()
+	_check_wrist_computer()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -812,6 +829,40 @@ static func _press(code: Key, unicode := 0, ctrl := false, alt := false, shift :
 	key.shift_pressed = shift
 	key.pressed = true
 	return key
+
+func _check_wrist_computer() -> void:
+	var fixture := WristFixture.new()
+	var wrist := WristComputer.new()
+	wrist.configure(fixture)
+	_check(not wrist.handle(_press(KEY_E, 101)) and not wrist.is_open, "leave E to the world while the wrist is down")
+	_check(wrist.handle(_press(KEY_TAB)) and wrist.is_open, "raise the wrist with Tab")
+	wrist.handle(_press(KEY_ENTER))
+	_check(fixture.ran == ["a"], "run the selected row on Enter")
+	wrist.handle(_press(KEY_DOWN))
+	wrist.handle(_press(KEY_ENTER))
+	_check(wrist.cursor() == 1 and fixture.ran.size() == 1 and wrist.notice().get("text") == "Not here.", "explain a row that is not available")
+	wrist.handle(_press(KEY_DOWN))
+	_check(wrist.cursor() == 1, "keep the selection on the list")
+	wrist.handle(_press(KEY_E, 101))
+	_check(wrist.current().id == "two" and wrist.cursor() == 0, "turn pages with E, each keeping its own selection")
+	wrist.handle(_press(KEY_ENTER))
+	_check(wrist.typing and wrist.blocks_movement() and wrist.handle(_press(KEY_W, 119)), "take the keyboard for a typed line")
+	wrist.handle(_press(KEY_BACKSPACE))
+	for character in "hi":
+		wrist.handle(_press(KEY_A, character.unicode_at(0)))
+	wrist.handle(_press(KEY_ENTER))
+	_check(fixture.ran == ["a", "hi"] and not wrist.typing and wrist.current().id == "one",
+		"send one typed line, then show the page the row names")
+	wrist.handle(_press(KEY_Q, 113))
+	wrist.handle(_press(KEY_DOWN))
+	wrist.handle(_press(KEY_ENTER))
+	_check(fixture.ran.size() == 2 and wrist.is_open, "ask again before a row that needs confirming")
+	wrist.handle(_press(KEY_ENTER))
+	_check(fixture.ran[-1] == "quit" and not wrist.is_open, "run a confirmed row and lower the wrist")
+	_check(wrist.handle(_press(KEY_ESCAPE)) and wrist.is_open, "raise the wrist with Escape")
+	wrist.handle(_press(KEY_ESCAPE))
+	_check(not wrist.is_open, "lower it again with Escape")
+	wrist.free()
 
 func _check_agents_panel() -> void:
 	var connected := {"state": "connected", "url": "https://relay.test", "agent_url": "https://relay.test/mcp"}

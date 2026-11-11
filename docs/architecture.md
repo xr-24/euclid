@@ -107,7 +107,24 @@ The F2 uplink uses the same client with the active environment catalog. It dispa
 began. Native prop mutations carry the environment ID, and the world checks
 it again before dispatch.
 
-The environment library persists new Grid-template entries under stable IDs. The catalog feeds planning, MCP discovery, travel and the menu. The companion draws a stippled 3D body with a separate batch of hair fibres and projection streaks. It updates its own follow or parked position. Voice reads tool results through the OS voice service.
+The environment library persists new Grid-template entries under stable IDs. The catalog feeds planning, MCP discovery, travel and the wrist computer. The companion draws a stippled 3D body with a separate batch of hair fibres and projection streaks. It updates its own follow or parked position. Voice reads tool results through the OS voice service.
+
+## Wrist computer
+
+Euclid has no menu screen. `player/wrist_computer.gd` owns the wrist's state (open, page,
+per-page selection, typing, confirmations) and its keys, and renders it. Tab asks
+`player/first_person_hands.gd` to bring the left forearm up; the hands report a point on top of
+the forearm, and the wrist projects it to the screen as the emitter. The face is drawn by
+`ui/wrist_face.gd` into its own viewport at the size it appears, then laid over the view in 2D
+through `shaders/wrist_hologram.gdshader` (additive, scanlines, fringe, flicker) above a faint
+veil, with the light cone and corner brackets drawn as 2D lines. Drawing it in 2D keeps text sharp
+under TAA, FSR upscaling and tone mapping, and keeps it out of mirrors and shared views.
+
+Pages are plain data from `player/wrist_pages.gd`: an id, a tab title, an optional lead line,
+rows and an optional log. A row runs a Callable on Enter or takes one typed line, and can be
+disabled with a reason, ask for a second Enter, or lower the wrist first. Adding a page is a new
+function in that file; any object with `pages()` and `status_line()` can stand in for it, which
+is how `diagnostics/core_tests.gd` checks the keys without a world.
 
 ## Source workbench
 

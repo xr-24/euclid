@@ -120,7 +120,7 @@ resizes, and one request for opening and closing. `ui/terminal_view.gd` draws th
 Workbench font and colours and sends xterm key sequences, including application cursor mode,
 function keys, Ctrl and Alt combinations and bracketed paste with Ctrl+Shift+V. The **Terminal**
 tab in F4 attaches to the newest running shell or starts PowerShell. The mouse wheel scrolls
-history.
+history. To start the Codex CLI, enter `codex` at the PowerShell prompt.
 
 Not yet built: choosing PowerShell 7 or cmd from the tab, copying a selection, the glow effects,
 streaming **Run checks** into a session, opening `res://` locations from terminal output, and the

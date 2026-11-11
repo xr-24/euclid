@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--timeout', type=float, default=180)
     parser.add_argument('--coast', action='store_true')
     parser.add_argument('--text-tools', action='store_true', help='Capture the Workbench and console text effects')
+    parser.add_argument('--draft-view', action='store_true', help='Capture the default camera views in an isolated checked draft')
     parser.add_argument('--baseline', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--warmup', type=float, default=18.0, help='Coast warm-up seconds')
@@ -52,7 +53,7 @@ def main():
                 '--audio-driver', 'Dummy', '--script', script,
                 # --smoke is a second save-protection guard if an older controller is restored:
                 # it will run its isolated smoke check and fail our water marker, never a normal session.
-                '--', '--smoke', '--coast-check' if args.coast else '--water-check', '--quality=balanced',
+                '--', '--smoke', '--draft-view' if args.draft_view else '--coast-check' if args.coast else '--water-check', '--quality=balanced',
                 *(['--coast-baseline'] if args.baseline else []),
                 *(['--coast-debug'] if args.debug else [])], cwd=root, env=env, stdout=log,
                 stderr=subprocess.STDOUT, startupinfo=startup, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -78,7 +79,7 @@ def main():
                 time.sleep(0.02)
         report = (output / 'run.log').read_text(encoding='utf-8')
         print(report[-5000:])
-        marker = ('CONSTRUCT_TEXT_TOOLS_CAPTURE_OK' if args.text_tools
+        marker = ('EUCLID_DRAFT_VIEWS_OK' if args.draft_view else 'CONSTRUCT_TEXT_TOOLS_CAPTURE_OK' if args.text_tools
             else 'CONSTRUCT_COAST_CHECK_OK' if args.coast else 'CONSTRUCT_WATER_CHECK_OK')
         if process.returncode or marker not in report or 'SCRIPT ERROR:' in report or '\nERROR:' in report:
             raise RuntimeError('Background capture failed; see run.log')

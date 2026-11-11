@@ -423,13 +423,18 @@ The installation image and checksum are in `F:\Construct\downloads`. This enviro
 
 C/C++ compilers, CMake, Ninja, Git, Python virtual-environment support, and Wayland/EGL/Vulkan development libraries are installed. `scripts/linux-deps.sh` records the repeatable package setup. The source project remains in this Windows folder; use the Linux filesystem for future compositor build directories.
 
+## Working with agents in the world
+
+- Press **F2** for world commands, tasks, and messages. Use `/task local-codex Check the Grid for duplicate props and report what you find` to start a local Codex CLI session. Use `local-claude` for Claude Code. Sign in to the corresponding CLI first. A task can run multiple tools and leaves its result in F2. Workbench drafts still require player review in **F4**.
+- Use `/task muse <request>` for a connected agent named `muse`, or `/task * <request>` to let a connected agent claim it. Issue each connected agent its own credential in **F4 → Agents**. Agents use `claim_task`, `task_progress`, and `finish_task` over that MCP connection. `claim_task` can wait briefly for work. They can use `send_message` with `to: "you"` to reach the player.
+- Use `@muse <message>` or `/msg <agent> <message>` to send a message. Addressing a local worker with `@local-codex` or `@local-claude` starts a task. Use `/inbox [agent]` to reread messages, `/journal` for recent events, and `/cancel <task-id> <reason>` to cancel a task. Connected agents can check its status in their inbox. F2 displays task IDs and refreshes while open. Recently active agents appear near the environment's arrival point.
+- Use `/share-view <agent>` to share a still of the running world for five minutes. The agent retrieves it with `look_at_world`. Euclid hides the console and terminal surfaces for that frame. On Windows, full Workbench checks attempt to capture isolated Grid, villa, and beach views. Agents can see available views in `draft_status` and retrieve one with `view_check_capture`.
+- Press **E** at the Grid or villa terminal to open the local shell window. The Grid workstation shows the latest frame from its terminal window. The beach media station opens local images. **Escape** or **Return to world** closes the app view.
+
 ## What comes next
 
-1. Extend the local agent from cone creation to inspecting and editing selected entities.
-2. Add push-to-talk requests that use the same tools.
-3. Ship an example extension that registers an entity type, a tool and a behavior. Use it to shape the in-world scripting workspace.
-4. Test a real Linux application surface, input forwarding and return-to-world behavior in a nested compositor.
-
-Native app embedding, shell execution, agent chat, cloud access, avatar pathfinding, a theme editor and a dedicated Linux session are not implemented. Escape is an application-level return key here; a compositor-reserved system shortcut belongs to the Linux milestone.
+1. Validate the cloud relay with a real hosted agent and test reconnect and task recovery through a gateway restart.
+2. Add task and conversation navigation to F2, then route push-to-talk requests through the same task and message layer.
+3. Test native Linux application surfaces, keyboard and pointer forwarding, and return-to-world behavior in a nested compositor.
 
 See [the architecture notes](docs/architecture.md), [the Blender workflow](docs/asset-pipeline.md), and [water tuning and rendered checks](docs/water.md).

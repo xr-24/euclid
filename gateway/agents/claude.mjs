@@ -47,6 +47,27 @@ export function createClaudeAgent({ env = process.env,
     id: 'claude',
     label: 'Claude',
 
+    async task(input, { url, token, signal }) {
+      const { file, args, env: childEnv } = await signedIn(signal);
+      const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
+      try {
+        const config = JSON.stringify({ mcpServers: { euclid: {
+          type: 'http', url, headers: { Authorization: 'Bearer ${EUCLID_TASK_TOKEN}' },
+        } } });
+        let result;
+        const code = await streamEvents(file, [...args, '-p', '--output-format', 'stream-json', '--verbose', '--setting-sources', '',
+          '--tools', '', '--strict-mcp-config', '--mcp-config', config, '--allowedTools', 'mcp__euclid__*',
+          '--permission-mode', 'dontAsk', '--no-session-persistence', ...model, 'Carry out the Euclid task supplied on standard input.',
+        ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
+          input, timeoutMessage: 'Claude exceeded the ten-minute task limit.',
+          onEvent(event) { if (event.type === 'result') result = event.result; } });
+        if (code !== 0) throw new Error('Claude exited before completing the task. Check its sign-in and CLI availability.');
+        return result;
+      } finally {
+        await rmdir(cwd).catch(() => {});
+      }
+    },
+
     // One reply that matches a JSON schema. Every built-in and MCP tool is removed.
     async structured(input, schema, signal) {
       const { file, args, env: childEnv } = await signedIn(signal);

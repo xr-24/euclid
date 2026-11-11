@@ -76,8 +76,8 @@ test('Euclid dials out to the relay and answers cloud agents through it', async 
   });
   await new Promise(resolve => first.server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${first.server.address().port}`;
-  const manage = async (action, body = {}) => {
-    const response = await fetch(`${origin}/v1/agents/${action}`, { method: 'POST', body: JSON.stringify(body),
+  const manage = async (action, body = {}, section = 'agents') => {
+    const response = await fetch(`${origin}/v1/${section}/${action}`, { method: 'POST', body: JSON.stringify(body),
       headers: { Authorization: 'Bearer relay-test-secret', 'X-Euclid-Workbench': workbenchSecret, 'Content-Type': 'application/json' } });
     return { status: response.status, body: await response.json() };
   };
@@ -98,6 +98,13 @@ test('Euclid dials out to the relay and answers cloud agents through it', async 
   assert.equal(listed.status, 200);
   const tools = JSON.parse(listed.body).result.tools.map(item => item.name);
   assert.ok(tools.includes('submit_draft') && !tools.includes('run_checks'));
+  const assigned = (await manage('assign', { to: 'cloud', text: 'Report from the relay.' }, 'tasks')).body.task;
+  const claim = await agentCall(cloud, 'tools/call', { name: 'claim_task', arguments: {} });
+  const task = JSON.parse(JSON.parse(claim.body).result.content[0].text).task;
+  assert.equal(task.id, assigned.id);
+  const finished = await agentCall(cloud, 'tools/call', { name: 'finish_task',
+    arguments: { id: task.id, status: 'completed', text: 'Relay delivery confirmed.' } });
+  assert.equal(JSON.parse(finished.body).result.isError, false);
   assert.equal((await agentCall('eua_' + 'b'.repeat(64), 'tools/list')).status, 401);
   assert.equal((await hub.core.forward({ authorization: `Bearer ${cloud}`, contentType: 'application/json',
     body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) })).status, 202);

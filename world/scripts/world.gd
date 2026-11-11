@@ -22,6 +22,7 @@ const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
+const TaskPresence = preload("res://scripts/agents/task_presence.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
@@ -88,6 +89,8 @@ var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
 var _live := LiveExtensions.new()
 var _dev: DevelopmentHost = DevelopmentHost.new(self)
+var _task_presence: TaskPresence
+var _task_agents: Array = []
 var _world_commands := WorldCommands.new(self)
 var _development_commands := DevelopmentCommands.new(self)
 
@@ -129,7 +132,9 @@ func _ready() -> void:
 		if "--workbench-preview" not in args:
 			_warm_up()
 	get_tree().auto_accept_quit = false
-	if water_check:
+	if "--draft-view" in args:
+		call_deferred("_run_diagnostic", "draft_views.gd")
+	elif water_check:
 		var diagnostic := "coast_check.gd" if "--coast-check" in args else "water_check.gd"
 		var check: Node = load("res://scripts/diagnostics/" + diagnostic).new()
 		add_child(check)
@@ -463,7 +468,13 @@ func _setup_world_bridge() -> void:
 	world_bridge.configure(gateway_url, gateway_token, _world_context, _call_world_tool)
 
 func _submit_codex_command(prompt: String) -> void:
+	if _dev.is_task_command(prompt):
+		_dev.task_command(prompt)
+		return
 	if _dev.busy:
+		return
+	if prompt.length() > 240:
+		_console_notice("World commands take up to 240 characters. Use /task for longer requests.")
 		return
 	_dev.busy = true
 	_console_notice("> " + prompt)
@@ -916,10 +927,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if nearest.kind == "companion":
 			_dev.open_console()
 		elif nearest.kind == "application":
-			if _is_workshop(zone_id) and nearest.app_id == "terminal":
-				_dev.open_console()
-			else:
-				_open_app(nearest.app_id)
+			_open_app(nearest.app_id, nearest.get("prop"))
 		else:
 			var status: Dictionary = agent_states.get(nearest.agent_id, {})
 			_panel(nearest.label, str(status.get("summary", "No report yet.")))
@@ -937,13 +945,13 @@ func _zone_key(event: InputEvent) -> int:
 			return i
 	return -1
 
-func _open_app(app_id: String) -> void:
-	_panel("Terminal" if app_id == "terminal" else "Media", "Not connected yet.")
+func _open_app(app_id: String, station: Node3D = null) -> void:
+	_panel("", "")
 	overlay.offset_left = 0
 	overlay.offset_top = 0
 	overlay.offset_right = 0
 	overlay.offset_bottom = 0
-	_button("Back", _close_panel)
+	_dev.open_application(app_id, station)
 
 func _save() -> void:
 	if smoke_mode:
@@ -1028,9 +1036,17 @@ func _gateway_result(_result: int, code: int, _headers: PackedStringArray, body:
 	agent_states.clear()
 	for agent in data.agents:
 		agent_states[agent.agent_id] = agent
+	_task_agents = data.get("task_agents", [])
 	_update_agent_labels()
 
 func _update_agent_labels() -> void:
+	if is_instance_valid(zone_root):
+		if not is_instance_valid(_task_presence) or _task_presence.get_parent() != zone_root:
+			_task_presence = TaskPresence.new()
+			_task_presence.add_to_group("private_world_surfaces")
+			zone_root.add_child(_task_presence)
+		var spawn: Dictionary = WorldArt.spawn(zone_id)
+		_task_presence.update_agents(_task_agents if gateway_connected else [], spawn.position)
 	for id in agent_labels:
 		var state: Dictionary = agent_states.get(id, {})
 		var online: bool = gateway_connected and state.get("connected", false)

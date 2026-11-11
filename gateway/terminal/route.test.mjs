@@ -46,8 +46,10 @@ test('the terminal routes need the Workbench capability and stream a session', a
   assert.equal((await call('open', {}, 'x'.repeat(64))).status, 403);
   const opened = await call('open', { shell: 'powershell', cols: 30, rows: 6 });
   assert.equal(opened.status, 200, JSON.stringify(opened.body));
+  assert.equal(opened.body.error, undefined);
   const id = opened.body.id;
   let read = await call('read', { id, since: -1, wait: 2000 });
+  assert.equal(read.body.error, undefined);
   for (let attempt = 0; attempt < 20 && !text(read.body.screen).includes('PS>'); attempt++) {
     read = await call('read', { id, since: read.body.screen.version, wait: 500 });
   }

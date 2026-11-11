@@ -43,7 +43,7 @@ export function createTerminalSessions({ root, spawnHost = process.platform === 
 
   function describe(session) {
     const { cols, rows } = session.screen.size;
-    return { id: session.id, shell: session.shell, alive: session.alive, exit_code: session.exitCode, error: session.error,
+    return { id: session.id, shell: session.shell, alive: session.alive, exit_code: session.exitCode, exit_error: session.error,
       title: session.screen.snapshot().title, cols, rows, created_at: session.created };
   }
 

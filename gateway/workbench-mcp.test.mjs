@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createGateway } from './server.mjs';
 import { developmentTools } from './workbench-mcp.mjs';
+import { fingerprint } from './workbench-source.mjs';
 
 test('a connected agent reads source, submits and revises a draft, and runs its checks', async t => {
   const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-dev-mcp-test-'));
@@ -29,6 +30,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   git('add', '.');
   git('commit', '-qm', 'Fixture');
   const base = git('rev-parse', 'HEAD');
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
   let checks = 0;
   const runner = {
     async check(draft, log) {
@@ -36,13 +38,16 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
       const source = await readFile(path.join(draft.worktree, script), 'utf8');
       log(`Checked ${source.length} characters.\n`);
       if (!source.includes('READY := true')) throw new Error('READY must be true.');
-      return { scope: 'full' };
+      const output = path.join(draft.directory, `check-images-${fingerprint(draft.diff)}`);
+      await mkdir(output, { recursive: true });
+      await writeFile(path.join(output, 'construct.jpg'), jpeg);
+      return { scope: 'full', captures: ['construct'] };
     },
     playing: () => false,
     async stop() {},
   };
   const capability = 'd'.repeat(64);
-  const { server, developmentToken } = await createGateway({ dataDir: path.join(area, 'data'), token: 'dev-test-secret',
+  const { server, developmentToken, workbenchToken } = await createGateway({ dataDir: path.join(area, 'data'), token: 'dev-test-secret',
     developmentToken: capability, workbenchRoot: root, workbenchOptions: { runner } });
   assert.equal(developmentToken, capability);
   t.after(async () => {
@@ -175,6 +180,14 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   assert.equal(checks, 2);
   assert.equal(passed.check_status, 'passed');
   assert.equal(passed.check_scope, 'full');
+  assert.deepEqual(passed.captures, ['construct']);
+  const player = { ...headers, 'X-Euclid-Workbench': workbenchToken };
+  const issued = await (await post('/v1/agents/issue', { name: 'claude' }, player)).json();
+  const capture = await (await post('/mcp/agent', { jsonrpc: '2.0', id: 1, method: 'tools/call',
+    params: { name: 'view_check_capture', arguments: { view: 'construct' } } },
+  { ...headers, 'X-Euclid-Agent': issued.token })).json();
+  assert.deepEqual(capture.result.content[1], { type: 'image', mimeType: 'image/jpeg', data: jpeg.toString('base64') });
+  await post('/v1/agents/revoke', { name: 'claude' }, player);
   assert.deepEqual([passed.base, passed.behind_main], [base, false]);
   assert.match((await tool('rebase_draft', { version: passed.version })).message, /already based on the tip/);
   assert.match(passed.diff, /\+const READY := true/);

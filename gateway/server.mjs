@@ -10,6 +10,9 @@ import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
+import { createTaskBoard, taskTools } from './agent-tasks.mjs';
+import { createTaskWorkers, isLocalWorker } from './task-workers.mjs';
+import { createAgentViews, viewTools } from './agent-views.mjs';
 import { createAgentCredentials } from './agent-credentials.mjs';
 import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
 import { createRelayLink } from './relay-link.mjs';
@@ -46,7 +49,11 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   // A third capability, for agents: source reads, drafts and checks, without commit or preview.
   const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
   const developmentExpected = Buffer.from(developmentSecret);
-  const development = createDevelopmentBridge(workbench);
+  const tasks = await createTaskBoard(path.join(dataDir, 'tasks.json'));
+  const views = createAgentViews();
+  const development = createDevelopmentBridge(workbench, { tasks, extraTools: viewTools,
+    callExtra: (agent, name, args, signal) => name === 'look_at_world'
+      ? views.look(agent) : workbench('checkcapture', { owner: agent, view: args.view }, signal) });
   const agentCredentials = await createAgentCredentials(path.join(dataDir, 'agents.json'));
   // The person's shells. They outlive restarts of the world, not of the gateway.
   const terminals = createTerminalSessions({ root: workbenchRoot, ...terminalOptions });
@@ -60,6 +67,14 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   let gridBusy = false;
   const assets = createAssetService(path.join(dataDir, 'runtime-assets'));
   const bridge = createWorldBridge(assets);
+  const agentSeen = new Map();
+  for (const { id } of tasks.working().filter(item => isLocalWorker(item.id))) {
+    const { tasks: assigned } = await tasks.agent(id, 'inbox', {});
+    const task = assigned.find(item => item.status === 'working');
+    if (task) await tasks.agent(id, 'finish_task', { id: task.id, status: 'blocked',
+      text: 'The gateway restarted during the task. Review any changes before assigning it again.' });
+  }
+  const workers = createTaskWorkers(tasks, () => server.address());
   function reply(res, code, value) {
     res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(JSON.stringify(value));
@@ -86,19 +101,41 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 25 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 26 });
+      if (req.url === '/mcp/task') {
+        const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
+        if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
+        if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
+        const body = await readJson(req, res, 512 * 1024);
+        if (body === undefined) return;
+        const controller = new AbortController();
+        res.once('close', () => controller.abort());
+        const signal = AbortSignal.any([controller.signal, job.controller.signal]);
+        const policy = { tools: name => name !== 'claim_task' };
+        let result = await development.rpc(job.actor, body, signal, policy);
+        if (job.task.session && body?.method === 'tools/list' && result?.result) {
+          const world = await bridge.rpc(job.task.session, body, signal);
+          const names = new Set(result.result.tools.map(tool => tool.name));
+          result.result.tools.push(...world.result.tools.filter(tool => !names.has(tool.name)));
+        } else if (job.task.session && body?.method === 'tools/call' && result?.error?.message === 'Unknown workbench tool') {
+          result = await bridge.rpc(job.task.session, body, signal);
+        }
+        if (res.destroyed) return;
+        return result === null ? res.writeHead(202).end() : reply(res, 200, result);
+      }
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
-      async function serveDevelopment(agent) {
+      async function serveDevelopment(agent, policy) {
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
         // Agents poll while checks run. Their budget is separate so they cannot starve the world.
         if (Date.now() - developmentRateStart > 60000) { developmentRateStart = Date.now(); developmentRateCount = 0; }
         if (++developmentRateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
         const body = await readJson(req, res, 512 * 1024);
         if (body === undefined) return;
+        if (!policy) agentSeen.set(agent, Date.now());
         const controller = new AbortController();
         res.once('close', () => controller.abort());
-        const result = await development.rpc(agent, body, controller.signal);
+        const result = await development.rpc(agent, body, controller.signal, policy);
         if (res.destroyed) return;
         if (result === null) return res.writeHead(202).end();
         return reply(res, 200, result);
@@ -106,7 +143,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       // An agent with its own credential. The credential decides the name.
       if (req.url === '/mcp/agent') {
         const agent = agentCredentials.identify(req.headers['x-euclid-agent']);
-        if (!agent) return reply(res, 403, { error: 'Connect with an agent credential issued in Euclid.' });
+        if (!agent || isLocalWorker(agent)) return reply(res, 403, { error: 'Connect with an agent credential issued in Euclid.' });
         return serveDevelopment(agent);
       }
       // The shared development capability. The name is a label, unless an agent credential reserves it.
@@ -115,8 +152,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const capability = Buffer.from(developmentRoute[1]);
         if (capability.length !== developmentExpected.length || !timingSafeEqual(capability, developmentExpected)) return reply(res, 403, { error: 'Development tools require the current Euclid gateway capability.' });
         const agent = developmentRoute[2] ?? 'agent';
+        if (isLocalWorker(agent)) return reply(res, 403, { error: 'This name is reserved for a Euclid task worker.' });
         if (agentCredentials.reserved(agent)) return reply(res, 403, { error: `${agent} has its own agent credential. Connect at /mcp/agent with it.` });
-        return serveDevelopment(agent);
+        return serveDevelopment(agent, { tools: name => ![...taskTools, ...viewTools].some(tool => tool.name === name) });
       }
       const terminalRoute = /^\/v1\/terminal\/(open|list|write|resize|read|close)$/.exec(req.url);
       if (terminalRoute) {
@@ -149,17 +187,23 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
       const workbenchRoute = /^\/v1\/workbench\/([a-z]+)$/.exec(req.url);
       const agentsRoute = /^\/v1\/agents\/(issue|revoke|list|relay|activity)$/.exec(req.url);
-      if (workbenchRoute || agentsRoute) {
+      const tasksRoute = /^\/v1\/tasks\/(assign|cancel|inbox|send_message|task_log|share_view)$/.exec(req.url);
+      if (workbenchRoute || agentsRoute || tasksRoute) {
         const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
         if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Workbench access requires the local Euclid launcher.' });
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
-        const body = await readJson(req, res, agentsRoute ? 1024 : 512 * 1024);
+        const body = await readJson(req, res, tasksRoute && tasksRoute[1] !== 'share_view' ? 32 * 1024 : agentsRoute ? 1024 : 512 * 1024);
         if (body === undefined) return;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
+        if (tasksRoute) {
+          try { return reply(res, 200, tasksRoute[1] === 'share_view' ? views.share(body) : await tasks.player(tasksRoute[1], body)); }
+          catch (error) { return reply(res, 400, { error: error.message }); }
+        }
         // Only the person, through the Workbench capability, issues and revokes agent credentials.
         if (agentsRoute) {
           try {
             if (agentsRoute[1] === 'issue') {
+              if (isLocalWorker(body.name?.toLowerCase?.())) return reply(res, 400, { error: 'This name is reserved for a Euclid task worker.' });
               return reply(res, 200, await agentCredentials.issue(body.name, { remote: body.remote === true, checks: body.checks === true }));
             }
             if (agentsRoute[1] === 'revoke') return reply(res, 200, { name: body.name, revoked: await agentCredentials.revoke(body.name) });
@@ -219,7 +263,14 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       }
       if (req.method === 'GET' && req.url === '/v1/world') {
         const agents = Object.values(saved.agents).map(agent => ({ ...agent, connected: Date.now() - Date.parse(agent.received_at) < 30000 }));
-        return reply(res, 200, { ...world, agents });
+        const now = Date.now();
+        for (const [id, at] of agentSeen) if (now - at > 30000) agentSeen.delete(id);
+        const current = new Map(tasks.working().map(item => [item.id, item.task]));
+        const online = new Set([...agentSeen.keys(), ...agentCredentials.list()
+          .filter(agent => now - Date.parse(remote.lastSeen(agent.name)?.at) < 30000).map(agent => agent.name),
+          ...[...current.keys()].filter(isLocalWorker)]);
+        return reply(res, 200, { ...world, agents, task_agents: [...online].slice(0, 24)
+          .map(id => ({ id, task: (current.get(id) ?? '').slice(0, 120) })) });
       }
       if (req.method === 'POST' && req.url === '/v1/companion/sync') {
         const body = await readJson(req, res, 128 * 1024);
@@ -300,7 +351,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const remoteServer = createRemoteServer(remote);
   await remote.prime();
   // Started only by the gateway process itself, never by tests or the reload preflight.
-  const relay = createRelayLink({ endpoint: remote, file: path.join(dataDir, 'relay.json'), ...relayOptions });  server.on('close', () => { terminals.closeAll(); relay.stop(); });
+  const relay = createRelayLink({ endpoint: remote, file: path.join(dataDir, 'relay.json'), ...relayOptions });
+  server.on('listening', () => workers.start());
+  server.on('close', () => { workers.stop(); terminals.closeAll(); relay.stop(); });
   return { server, remoteServer, remoteAudited: remote.audited, terminals, relay, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 

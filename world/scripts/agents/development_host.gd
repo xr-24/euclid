@@ -8,11 +8,14 @@ const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
 const WorkbenchDiagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
+const TaskClient = preload("res://scripts/agents/task_client.gd")
+const ApplicationWindow = preload("res://scripts/ui/application_window.gd")
 const CONSOLE_SCROLLBACK := 300
 
 ## The local Workbench capability the launcher handed over. Empty without one.
 var capability := ""
 var client: WorldDevelopment
+var _tasks: TaskClient
 var console: Control
 var workbench_panel: Control
 var console_lines := PackedStringArray()
@@ -40,6 +43,62 @@ func connect_gateway(url: String, token: String) -> void:
 	client.changed.connect(_client_changed)
 	client.diagnostics_changed.connect(_benchmark_changed)
 	client.refresh()
+	_tasks = TaskClient.new()
+	add_child(_tasks)
+	_tasks.configure(url, token, capability)
+	_tasks.notice.connect(notice)
+	var task_poll := Timer.new()
+	task_poll.wait_time = 3
+	add_child(task_poll)
+	task_poll.timeout.connect(func() -> void:
+		if is_instance_valid(console) and _world.overlay.visible:
+			_tasks.poll())
+	task_poll.start()
+
+func is_task_command(prompt: String) -> bool:
+	return prompt.begins_with("@") or prompt.get_slice(" ", 0) in ["/task", "/msg", "/inbox", "/cancel", "/journal", "/share-view"]
+
+func task_command(prompt: String) -> void:
+	if _tasks == null:
+		notice("Tasks need the local Euclid launcher.")
+		return
+	if prompt.get_slice(" ", 0) == "/share-view":
+		_share_view(prompt.get_slice(" ", 1).to_lower())
+		return
+	var session: String = _world.world_bridge.session if is_instance_valid(_world.world_bridge) else ""
+	_tasks.submit(prompt, session)
+
+func _share_view(agent: String) -> void:
+	var valid := RegEx.create_from_string("^[a-z0-9_-]{1,32}$")
+	if not valid.search(agent):
+		notice("Use /share-view <agent>.")
+		return
+	if not _world._scene_ready() or DisplayServer.get_name() == "headless":
+		notice("Wait for the rendered world before sharing a view.")
+		return
+	_world._close_panel()
+	var hidden: Array[Node] = []
+	for surface in get_tree().get_nodes_in_group("private_world_surfaces"):
+		if surface.visible:
+			surface.hide()
+			hidden.append(surface)
+	await RenderingServer.frame_post_draw
+	var image := get_viewport().get_texture().get_image()
+	for surface in hidden:
+		if is_instance_valid(surface):
+			surface.show()
+	if image == null or image.is_empty():
+		notice("Could not capture the current world.")
+		return
+	var ratio := minf(1.0, 640.0 / float(image.get_width()))
+	image.resize(maxi(1, roundi(image.get_width() * ratio)), maxi(1, roundi(image.get_height() * ratio)), Image.INTERPOLATE_BILINEAR)
+	_tasks.share_view(agent, _world.zone_id, image.save_jpg_to_buffer(0.82))
+
+func open_application(app_id: String, station: Node3D) -> void:
+	var app := ApplicationWindow.new()
+	_world.overlay_content.add_child(app)
+	app.setup(app_id, Callable(_world, "_close_panel"),
+		{"url": _world.gateway_url, "token": _world.gateway_token, "capability": capability}, station)
 
 ## Forgets a panel the world's overlay is about to free.
 func release(child: Node) -> void:

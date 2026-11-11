@@ -4,6 +4,7 @@ extends Control
 const Look = preload("res://scripts/ui/terminal_theme.gd")
 const TerminalClient = preload("res://scripts/agents/terminal_client.gd")
 const MARGIN := 6.0
+signal frame_changed(session: Dictionary)
 
 var _client: TerminalClient
 var _session := {}
@@ -40,13 +41,9 @@ static func key_sequence(key: InputEventKey, app_cursor := false) -> String:
 	return ""
 
 func setup(url: String, token: String, capability: String) -> void:
-	_font = Look.mono_font()
-	_cell = Vector2(ceilf(_font.get_char_size(ord("M"), _font_size).x), ceilf(_font.get_height(_font_size)))
-	_ascent = _font.get_ascent(_font_size)
+	setup_display()
 	focus_mode = Control.FOCUS_ALL
-	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_client = TerminalClient.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
@@ -57,6 +54,21 @@ func setup(url: String, token: String, capability: String) -> void:
 	resized.connect(_on_resized)
 	focus_entered.connect(queue_redraw)
 	focus_exited.connect(queue_redraw)
+
+func setup_display() -> void:
+	_font = Look.mono_font()
+	_cell = Vector2(ceilf(_font.get_char_size(ord("M"), _font_size).x), ceilf(_font.get_height(_font_size)))
+	_ascent = _font.get_ascent(_font_size)
+	clip_contents = true
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+func mirror_frame(session: Dictionary) -> void:
+	var screen: Dictionary = session.get("screen", {})
+	size = Vector2(screen.get("cols", 80), screen.get("rows", 24)) * _cell + Vector2.ONE * MARGIN * 2.0
+	var viewport := get_parent() as SubViewport
+	viewport.size = Vector2i(size).max(Vector2i(32, 32))
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_on_screen(session)
 
 ## Attaches to a running shell, or starts one, the first time the terminal is shown.
 func start() -> void:
@@ -84,6 +96,7 @@ func _on_screen(session: Dictionary) -> void:
 	if session.get("alive", true):
 		_status = ""
 	queue_redraw()
+	frame_changed.emit(session)
 
 func _color(value: Variant, fallback: Color) -> Color:
 	return Color(value) if value is String and str(value).begins_with("#") else fallback
@@ -134,7 +147,9 @@ func _draw() -> void:
 			draw_rect(box, Look.ACCENT, false, 1.0)
 	var notice := ""
 	if not _session.get("alive", true):
-		notice = "The shell ended. Press Enter for a new one."
+		notice = str(_session.get("exit_error", ""))
+		if notice.is_empty():
+			notice = "The shell ended. Press Enter for a new one."
 	elif int(screen.get("offset", 0)) > 0:
 		notice = "History, %d lines back. Type or scroll down to return." % int(screen.offset)
 	elif not _status.is_empty():

@@ -6,7 +6,7 @@ const TABS := ["Source", "Diff", "Checks", "Revision", "Diagnostics"]
 const MAX_LINES := 300
 const MAX_PROMPTS := 100
 const MAX_LINE_LENGTH := 2048
-const MAX_PROMPT_LENGTH := 240
+const MAX_PROMPT_LENGTH := 4096
 const MAX_BYTES := 4 * 1024 * 1024
 
 var lines := PackedStringArray()

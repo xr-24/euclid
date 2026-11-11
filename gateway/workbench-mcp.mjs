@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { taskTools } from './agent-tasks.mjs';
 
 const text = (description, maxLength) => ({ type: 'string', description, minLength: 1, maxLength });
 const version = { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'The draft version from draft_status or submit_draft.' };
@@ -60,8 +61,9 @@ function validArguments(tool, args) {
   });
 }
 
-export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
+export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extraTools = [], callExtra } = {}) {
   const live = () => new AbortController().signal;
+  const tools = [...developmentTools, ...(tasks ? taskTools : []), ...extraTools];
 
   // Other agents' drafts, so an agent can avoid overlapping work.
   const others = (state, agent) => (state.drafts ?? []).filter(item => item.owner !== agent)
@@ -74,6 +76,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
       files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
       activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '', kinds: draft.kinds ?? [],
+      captures: draft.check_captures ?? [],
       ...(withDiff ? { diff: clip(draft.diff, 96000) } : {}),
       output: tail(draft.log, 12000), preview_output: tail(state.preview_log, 4000),
     } };
@@ -121,6 +124,8 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
   }
 
   async function call(agent, name, args, signal) {
+    if (tasks && taskTools.some(tool => tool.name === name)) return tasks.agent(agent, name, args, signal);
+    if (extraTools.some(tool => tool.name === name)) return callExtra(agent, name, args, signal);
     switch (name) {
       case 'list_source': return { ok: true, ...await workbench('files', { owner: agent }, signal) };
       case 'read_source': {
@@ -155,7 +160,8 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
 
   // policy.checks === false hides run_checks, for agents that must not run code on this machine.
   async function rpc(agent, message, signal, policy = {}) {
-    const offered = policy.checks === false ? developmentTools.filter(item => item.name !== 'run_checks') : developmentTools;
+    const offered = tools.filter(tool => (policy.checks !== false || tool.name !== 'run_checks') &&
+      (policy.tools?.(tool.name) ?? true));
     const id = message?.id ?? null;
     const reply = result => ({ jsonrpc: '2.0', id, result });
     const error = (code, text) => ({ jsonrpc: '2.0', id, error: { code, message: text } });
@@ -181,7 +187,10 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
         let result;
         try { result = await call(agent, tool.name, args, signal); }
         catch (failure) { result = { ok: false, message: failure.message }; }
-        return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        const { image, ...details } = result;
+        const content = [{ type: 'text', text: JSON.stringify(details) }];
+        if (image) content.push({ type: 'image', mimeType: 'image/jpeg', data: image });
+        return reply({ content, isError: !result.ok });
       }
       default: return error(-32601, 'Method not found');
     }

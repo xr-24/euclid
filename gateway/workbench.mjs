@@ -8,7 +8,7 @@ import { livePlugin, pluginContext, pluginFiles, proposePlugin } from './workben
 import { shorelineAppearance } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
-import { createPreviewRunner } from './workbench-runner.mjs';
+import { createPreviewRunner, validCheckView } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
 import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
@@ -195,6 +195,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
       log: authoring?.revising ? authoring.log : change.log, error: change.error,
       check_status: change.check?.status ?? '', check_scope: change.check?.scope ?? '',
+      check_captures: change.check?.captures ?? [],
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
       live: Boolean(change.plugin || appearance || tool || palette),
@@ -553,20 +554,23 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       let status = 'passed';
       let error = '';
       let scope = '';
+      let captures = [];
       try {
         await verifyReview(change);
         const appearance = appearanceFor(change.names);
         if (appearance) readAppearance((await readSource(change.worktree, appearance.file)).text, appearance);
         const tool = workshopToolFile(change.names);
         if (tool) readWorkshopTool((await readSource(change.worktree, tool)).text, tool);
-        scope = (await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal))?.scope ?? '';
+        const result = await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal);
+        scope = result?.scope ?? '';
+        captures = result?.captures ?? [];
         await verifyReview(change);
       } catch (failure) {
         status = 'failed';
         error = failure.message;
       }
       try {
-        const check = { version: fingerprint(change.diff), status, error, log: change.log, ...(scope ? { scope } : {}) };
+        const check = { version: fingerprint(change.diff), status, error, log: change.log, ...(scope ? { scope } : {}), captures };
         if (!controller.signal.aborted) await saveDraft(change, change.diff, check);
         change.check = check;
       } catch (failure) {
@@ -609,6 +613,18 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { text, hash };
     }
     if (action === 'state') return state();
+    if (action === 'checkcapture') {
+      const change = viewOf(view);
+      if (!change || change.owner !== view || !validCheckView(body.view) ||
+          !change.check?.captures?.includes(body.view) || change.check.version !== fingerprint(change.diff)) {
+        throw new Error('This screenshot is unavailable for your current checked draft.');
+      }
+      const file = path.join(change.directory, `check-images-${change.check.version}`, `${body.view}.jpg`);
+      const info = await lstat(file);
+      if (!info.isFile() || info.size > 270000) throw new Error('The check screenshot is unavailable.');
+      const image = await readFile(file);
+      return { ok: true, view: body.view, image: image.toString('base64') };
+    }
     if (action === 'extensions') {
       const table = await kinds();
       return { kinds: table.map(({ id, name, description, live, activation }) => ({ id, name, description, live, activation })),

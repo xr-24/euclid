@@ -38,6 +38,7 @@ static func scenery(appearance: Dictionary) -> Node3D:
 static func workstation(root: Node3D, at: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.name = "GridTerminal"
+	body.set_meta("terminal_screen", true)
 	body.position = at
 	root.add_child(body)
 	var casing := _material(Color("24191e"))

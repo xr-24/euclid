@@ -34,6 +34,32 @@ export function createCodexAgent({ env = process.env,
     id: 'codex',
     label: 'Codex',
 
+    async task(input, { url, token, signal }) {
+      const { file, args, env: childEnv } = await signedIn(signal);
+      const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
+      try {
+        let last = '';
+        const code = await streamEvents(file, [...args, '-a', 'never', 'exec', ...isolated, ...offline,
+          '--sandbox', 'read-only', '--disable', 'shell_tool',
+          '-c', `mcp_servers.euclid.url=${JSON.stringify(url)}`,
+          '-c', 'mcp_servers.euclid.bearer_token_env_var="EUCLID_TASK_TOKEN"',
+          '-c', 'mcp_servers.euclid.default_tools_approval_mode="approve"',
+          '-c', 'mcp_servers.euclid.tool_timeout_sec=90', '--json', '-',
+        ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
+          input, timeoutMessage: 'Codex exceeded the ten-minute task limit.',
+          onEvent(event) {
+            if (event.type === 'error' && typeof event.message === 'string') last = event.message;
+            if (event.type === 'turn.failed' && typeof event.error?.message === 'string') last = event.error.message;
+            if (event.type === 'item.completed' && event.item?.type === 'agent_message') last = event.item.text;
+          },
+        });
+        if (code !== 0 && !last) throw new Error('Codex exited before completing the task. Check its sign-in and CLI availability.');
+        return last;
+      } finally {
+        await rmdir(cwd).catch(() => {});
+      }
+    },
+
     // One reply that matches a JSON schema. No tools, shell, or network.
     async structured(input, schema, signal) {
       const { file, args, env: childEnv } = await signedIn(signal);

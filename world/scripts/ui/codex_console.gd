@@ -90,7 +90,7 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	_prompt.add_theme_color_override("font_color", ACCENT)
 	input_row.add_child(_prompt)
 	_entry = LineEdit.new()
-	_entry.max_length = 240
+	_entry.max_length = 4096
 	_entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_entry.add_theme_color_override("font_color", Look.BRIGHT)
 	_entry.add_theme_stylebox_override("normal", StyleBoxEmpty.new())

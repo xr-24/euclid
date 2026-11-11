@@ -7,6 +7,7 @@ import { fingerprint, isGatewayPath } from './workbench-source.mjs';
 
 const previewLogPath = draft => path.join(draft.directory, `preview-${fingerprint(draft.diff)}.log`);
 const isDocPath = name => name === 'README.md' || /^docs\/[\w.-]+\.md$/.test(name);
+export const validCheckView = name => typeof name === 'string' && /^[a-z0-9_-]{1,64}$/.test(name);
 
 // What a draft's checks must cover. Documentation runs nothing. Gateway code skips the
 // Godot core and smoke tests, whose code it cannot change, but keeps the import so the
@@ -26,7 +27,7 @@ function childEnvironment(godot) {
   return env;
 }
 
-function run(file, args, { cwd, env, timeout, onOutput, signal }) {
+function run(file, args, { cwd, env, timeout, phase, onOutput, signal }) {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, { cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -44,7 +45,7 @@ function run(file, args, { cwd, env, timeout, onOutput, signal }) {
       } else child.kill();
     }
     const abort = () => stopChild(signal.reason);
-    const timer = setTimeout(() => stopChild(new Error('The Godot job timed out.')), timeout);
+    const timer = setTimeout(() => stopChild(new Error(`${phase} timed out after ${timeout / 1000} seconds.`)), timeout);
     signal.addEventListener('abort', abort, { once: true });
     child.on('error', reject);
     child.on('close', code => {
@@ -103,7 +104,7 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
     onOutput('Importing the isolated Godot project.\n');
     let importFailed = false;
     const importCode = await run(godot, ['--headless', '--path', path.join(tree, 'world'), '--editor', '--import'], {
-      cwd: tree, env, timeout: 180000, signal, onOutput: chunk => {
+      cwd: tree, env, timeout: 180000, phase: 'Godot import', signal, onOutput: chunk => {
         if (/^(?:SCRIPT ERROR|ERROR):/m.test(chunk)) importFailed = true;
         onOutput(chunk);
       },
@@ -124,9 +125,31 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
         ? 'This draft changes only the gateway and docs. Running the gateway tests and command contract without the Godot core and smoke tests.\n'
         : 'Running Euclid project checks.\n');
       const code = await run(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(tree, 'scripts/check.ps1')],
-        { cwd: tree, env: scope === 'gateway' ? { ...env, EUCLID_CHECK_SCOPE: 'gateway' } : env, timeout: 180000, onOutput, signal });
+        { cwd: tree, env: scope === 'gateway' ? { ...env, EUCLID_CHECK_SCOPE: 'gateway' } : env,
+          timeout: 300000, phase: scope === 'gateway' ? 'Gateway checks' : 'Project checks', onOutput, signal });
       if (code !== 0) throw new Error('The preview failed its project checks.');
-      return { scope };
+      const captures = [];
+      if (scope === 'full' && process.platform === 'win32' && existsSync(path.join(tree, 'scripts/background-render.py'))) {
+        const output = path.join(draft.directory, `check-images-${fingerprint(draft.diff)}`);
+        try {
+          await rm(output, { recursive: true, force: true });
+          const binary = godot.replace(/_console\.exe$/i, '.exe');
+          const captureCode = await run(process.env.EUCLID_PYTHON || 'python',
+            [path.join(tree, 'scripts/background-render.py'), '--draft-view', '--output', output, '--timeout', '90'],
+            { cwd: tree, env: { ...env, GODOT_BIN: binary }, timeout: 105000, phase: 'Draft screenshots', onOutput, signal });
+          if (captureCode !== 0) throw new Error('The background renderer failed.');
+          const { zones } = JSON.parse(await readFile(path.join(tree, 'world/data/world.json'), 'utf8'));
+          for (const { id } of zones.slice(0, 12)) {
+            if (!validCheckView(id)) throw new Error('A capture has an invalid environment ID.');
+            await access(path.join(output, `${id}.jpg`));
+            captures.push(id);
+          }
+        } catch (error) {
+          signal.throwIfAborted();
+          onOutput(`Draft screenshots unavailable: ${error.message}\n`);
+        }
+      }
+      return { scope, captures };
     },
 
     async benchmark(source, output, settings, onOutput, signal) {
@@ -135,7 +158,7 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
         path.join(root, 'scripts/benchmark.ps1'), '-ProjectPath', path.join(tree, 'world'),
         '-OutputDirectory', output, '-Zone', 'villa', '-Quality', settings.profile,
         '-Width', String(settings.width), '-Height', String(settings.height), '-WindowId', String(benchmarkWindowId)],
-      { cwd: root, env, timeout: 150000, onOutput, signal });
+      { cwd: root, env, timeout: 150000, phase: 'Villa benchmark', onOutput, signal });
       if (code !== 0) throw new Error('The villa benchmark failed. See the run output.');
       for (const view of ['arrival', 'pool', 'portico']) await access(path.join(output, `villa_${view}.png`));
       const result = JSON.parse(await readFile(path.join(output, 'results.json'), 'utf8'));

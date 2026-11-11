@@ -5,6 +5,7 @@ const Poses = preload("res://scripts/player/hand_poses.gd")
 const Wrist = preload("res://scripts/player/hand_wrist.gd")
 const Motion = preload("res://scripts/animation/motion_clip.gd")
 const Follow = preload("res://scripts/player/spring_follow.gd")
+const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 const SIDES := ["l", "r"]
 ## The wrist computer pose, like checking a watch: the left forearm laid across the lower middle
 ## of the view, back of the hand up, a loose fist. Camera space (-Z ahead, +X right). The wrist
@@ -74,6 +75,8 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 	var mesh := arms.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	# The arms float in front of the eye; a mirror would show them hanging in mid-air.
+	mesh.layers = RenderLayers.REFLECTION_HIDDEN
 	_rig = arms.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	var ik := TwoBoneIK3D.new()
 	_rig.add_child(ik)

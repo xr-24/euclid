@@ -14,6 +14,7 @@ const SceneDressing = preload("res://scripts/scene_dressing.gd")
 const Props = preload("res://scripts/zones/authored_props.gd")
 const Scatter = preload("res://scripts/scatter.gd")
 const TerrainField = preload("res://scripts/terrain_field.gd")
+const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 
 const GEN := "res://assets/generated/"
 
@@ -82,7 +83,13 @@ static func _architecture(root: Node3D) -> void:
 		var key := str(mesh_node.name).to_lower().trim_prefix("col_").trim_prefix("art_")
 		if mats.has(key):
 			mesh_node.material_override = mats[key]
+		# The leaf cards are the costliest thing in the villa: over a million alpha-tested
+		# triangles. The opaque core inside them casts the clipped hedges' shadows and stands in
+		# for them in reflections, so the cards are drawn once, in the main view only.
 		if key == "hedge_leaves":
+			mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mesh_node.layers = RenderLayers.REFLECTION_HIDDEN
+		if key == "hedge_core":
 			mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		if mesh_node.name.begins_with("COL_"):
 			mesh_node.create_trimesh_collision()

@@ -1,6 +1,7 @@
 extends Node3D
 ## One pool-only mirror camera. No C# addon or second water simulation.
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 const DEFAULT_MIRROR_SIZE := Vector2i(960, 540)
 
 var material: ShaderMaterial
@@ -8,6 +9,10 @@ var water: MeshInstance3D
 var level := -0.12
 var viewport: SubViewport
 var mirror: Camera3D
+## The mirror's own sun: the scene sun's direction and colour without shadows, so the mirror never
+## renders the shadow cascades a second time. Reflections are rippled and darker; the missing
+## shadows don't read, the saved time does.
+var mirror_sun: DirectionalLight3D
 var reflected_camera := Vector4(0,0,0,-10000)
 var reflected_frames := 0
 var environment_ready := false
@@ -19,9 +24,9 @@ func configure(surface: ShaderMaterial, mesh: MeshInstance3D, height: float) -> 
 	water = mesh
 	level = height
 	# The mirror only sees ordinary scene geometry, never the pool itself.
-	water.layers = 4
+	water.layers = RenderLayers.REFLECTION_HIDDEN
 	visibility = VisibleOnScreenNotifier3D.new()
-	visibility.layers = 4
+	visibility.layers = RenderLayers.REFLECTION_HIDDEN
 	visibility.aabb = water.mesh.get_aabb().grow(0.5)
 	water.add_child(visibility)
 
@@ -41,8 +46,13 @@ func _ready() -> void:
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(viewport)
 	mirror = Camera3D.new()
-	mirror.cull_mask = 1
+	mirror.cull_mask = RenderLayers.MIRROR_VIEW
 	viewport.add_child(mirror)
+	mirror_sun = DirectionalLight3D.new()
+	mirror_sun.layers = RenderLayers.MIRROR_LIGHT
+	mirror_sun.shadow_enabled = false
+	mirror_sun.visible = false
+	add_child(mirror_sun)
 	mirror.current = true
 	material.set_shader_parameter("pool_reflection",viewport.get_texture())
 
@@ -52,9 +62,11 @@ func _process(_delta: float) -> void:
 	var active := visibility.is_on_screen() and source.global_position.y > level+0.03 and source.global_position.distance_to(water.global_position)<80
 	material.set_shader_parameter("pool_reflection_enabled",active)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if active else SubViewport.UPDATE_DISABLED
+	mirror_sun.visible = active
 	if not active:
 		_clear_clip_plane()
 		return
+	_follow_sun()
 	if not environment_ready and get_world_3d().environment != null:
 		mirror.environment = get_world_3d().environment.duplicate()
 		# Keep radiance linear in this texture; the main viewport applies exposure/tonemapping.
@@ -64,6 +76,7 @@ func _process(_delta: float) -> void:
 		mirror.environment.ssao_enabled = false
 		mirror.environment.ssil_enabled = false
 		mirror.environment.sdfgi_enabled = false
+		mirror.environment.volumetric_fog_enabled = false
 		environment_ready = true
 	var source_size := get_viewport().get_visible_rect().size
 	if source_size.x > 0:
@@ -98,3 +111,18 @@ func _clear_clip_plane() -> void:
 	if active_owner == self:
 		RenderingServer.global_shader_parameter_set("construct_reflection_camera",Vector4(0,0,0,-10000))
 		active_owner = null
+
+func _follow_sun() -> void:
+	var sun := get_tree().get_first_node_in_group("scene_sun") as DirectionalLight3D
+	if sun == null:
+		return
+	mirror_sun.global_basis = sun.global_basis
+	mirror_sun.light_color = sun.light_color
+	mirror_sun.light_energy = sun.light_energy if sun.is_visible_in_tree() else 0.0
+	# Global illumination and volumetric fog ignore camera layers, so this light must add
+	# nothing to either, or the main view's bounce light would double.
+	mirror_sun.light_indirect_energy = 0.0
+	mirror_sun.light_volumetric_fog_energy = 0.0
+	mirror_sun.light_specular = sun.light_specular
+	mirror_sun.light_angular_distance = sun.light_angular_distance
+	mirror_sun.sky_mode = sun.sky_mode

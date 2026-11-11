@@ -5,6 +5,7 @@ const WorldArt = preload("res://scripts/world_art.gd")
 const BuildContext = preload("res://scripts/zones/zone_build_context.gd")
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const ZoneCatalog = preload("res://scripts/zones/zone_catalog.gd")
 const WorldTools = preload("res://scripts/workshop/world_tools.gd")
@@ -223,6 +224,9 @@ func _setup_lighting() -> void:
 	sun.light_angular_distance = 0.6
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 70
+	# Mirrors light themselves with an unshadowed copy (see rendering/render_layers.gd).
+	sun.layers = RenderLayers.SUN
+	sun.add_to_group("scene_sun")
 	add_child(sun)
 
 func _setup_player() -> void:
@@ -241,6 +245,7 @@ func _setup_player() -> void:
 	camera = Camera3D.new()
 	camera.position.y = 1.65
 	camera.fov = 75
+	camera.cull_mask = RenderLayers.MAIN_VIEW
 	player.add_child(camera)
 	camera.current = true
 	player_avatar = PlayerAvatar.new()

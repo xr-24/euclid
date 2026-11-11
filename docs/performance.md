@@ -40,6 +40,42 @@ Use `-Width 1920 -Height 1080` to test a larger window, `-Zone beach` for a shor
 
 JSON results, logs and screenshots are written under `.local/benchmarks/`. The original reference run is `before/results.json`, and the measured Balanced run is `final-balanced/results.json`. They are machine-local artifacts and excluded from Git. The tests, benchmark code and this report remain in the repository.
 
+## Second pass: the pool mirror and the hedges
+
+By November 11 the villa had fallen to about 46 FPS at 1920 x 1080. The main view's GPU time had
+not changed, which made it look CPU-bound, but the pool's mirror camera renders in its own
+viewport and its GPU time was never counted. The costs suite (`-Suite costs`) turns one part of
+the scene or one renderer feature off at a time and records the mirror's own time. At arrival
+it showed:
+
+| Off | FPS | Where the time went |
+| --- | ---: | --- |
+| nothing | 46.5 | main view 13.4 ms GPU, mirror 6.6 ms GPU |
+| pool mirror | 63.4 | the whole mirror |
+| hedges | 62.6 | 2.9 ms main view, 2.4 ms mirror (over a million alpha-tested leaf-card triangles) |
+| sun shadows | 62.6 | 2.5 ms main view, 2.8 ms mirror (the mirror rendered the cascades again) |
+| placed props | 53.5 | about 1.8 ms main view, 0.8 ms mirror |
+| fog, SSR, SSIL, SSAO, glow, lamps, player | no change | |
+
+The changes, all in shared code so new environments get them:
+
+- `rendering/render_layers.gd` names the render layers every zone uses. The player's camera
+  draws `MAIN_VIEW`; a mirror draws `MIRROR_VIEW`.
+- The mirror lights its view with its own unshadowed copy of the sun on `MIRROR_LIGHT`, so it
+  no longer renders the sun's shadow cascades. That copy adds no indirect light or fog, because
+  GI and volumetric fog ignore camera layers. Fog is off inside the mirror.
+- Fine detail sits on `REFLECTION_HIDDEN`: hedge leaf cards, shadowless scatter planting and the
+  first-person arms. The pool itself already did.
+- Hedge leaf cards no longer cast shadows; the opaque hedge core inside them does, and stands in
+  for them in the reflection.
+
+What this trades: the reflection has no sun shadows and shows hedges as their core, and hedge
+shadows lose their leafy edge. The main view's hedges, shadows and lighting are otherwise the
+same.
+
+For future environments: put alpha-tested or tiny detail on `REFLECTION_HIDDEN` and, unless it
+is large, without shadows; run `-Suite costs` on any new zone before tuning anything by hand.
+
 ## Next performance gates
 
 Add a repeatable moving-camera route and long transition samples before claiming a minimum FPS across the whole experience. If future content exceeds the budget, inspect GPU timing, draw calls, shadows and overdraw before reducing art globally. Large scenery meshes may benefit from spatial subdivision and distant repeated props from MultiMesh or LOD; those require their own measurements and were not added speculatively in this pass. The pool's square solver grid contains substantial dry space, so a rectangular compute domain is a future option if profiling shows simulation cost becoming significant.

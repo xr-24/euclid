@@ -7,6 +7,7 @@ extends RefCounted
 ## simple collider. Placement is seeded, so the same rules always give the same landscape.
 
 const AssetLibrary = preload("res://scripts/asset_library.gd")
+const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 
 static var _parts := {}
 
@@ -65,6 +66,9 @@ static func instance_many(root: Node3D, id: String, transforms: Array, visibilit
 			mmi.position = centre
 			mmi.name = "%s_%d_%d" % [id, key.x, key.y]
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			# Small plants too slight to cast shadows are too slight to notice in a reflection.
+			if not shadows:
+				mmi.layers = RenderLayers.REFLECTION_HIDDEN
 			if visibility_end > 0.0:
 				mmi.visibility_range_end = visibility_end
 				mmi.visibility_range_end_margin = minf(visibility_end * 0.1, 20.0)

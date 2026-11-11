@@ -75,6 +75,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   // Every open draft by id. The person's Workbench shows the focused one; an agent sees its own.
   const drafts = new Map();
   let focusId = null;
+  // Set when the person chose to work on their own files. An agent's new draft then stays out of view.
+  let focusCleared = false;
   let sourceJob = null;
   let operation = '';
   let planning = false;
@@ -90,7 +92,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   const viewOf = owner => owner === undefined ? focus() : draftOf(owner);
   function forget(change) {
     drafts.delete(change.id);
-    if (focusId === change.id) focusId = drafts.keys().next().value ?? null;
+    if (focusId === change.id) focusId = draftOf(undefined)?.id ?? drafts.keys().next().value ?? null;
   }
 
   // A commit that changes gateway source only takes effect in a new gateway process.
@@ -166,12 +168,14 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const pending = { operation, playing: runner.playing(), diagnostic_notice: diagnosticNotice, gateway_notice: gatewayNotice(),
       diagnostic_job: diagnosticJob && { id: diagnosticJob.id, log: diagnosticJob.log } };
     const version = change ? fingerprint(change.diff) : '';
-    const [revision, diagnostic, previewLog] = await Promise.all([
+    const [revision, diagnostic, previewLog, main] = await Promise.all([
       git.headRevision(), diagnostics.state(change, version).catch(() => null), readPreviewLog(change),
+      drafts.size ? git.head().catch(() => '') : '',
     ]);
+    const behind = item => Boolean(main) && item.base !== main;
     const state = { ...pending, revision, diagnostic, preview_log: previewLog, focus: focusId ?? '',
       drafts: [...drafts.values()].map(item => ({ id: item.id, owner: item.owner ?? '', status: item.status, files: item.names,
-        version: fingerprint(item.diff), base: item.base, summary: item.summary ?? '' })) };
+        version: fingerprint(item.diff), base: item.base, summary: item.summary ?? '', behind_main: behind(item) })) };
     if (authoring && !authoring.revising) {
       const { id, status, error, log } = authoring;
       return { ...state, draft: { id, status, error, log, diff: '', files: [], owner: authoring.owner ?? '',
@@ -193,7 +197,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
-      owner: change.owner ?? '', base: change.base,
+      owner: change.owner ?? '', base: change.base, behind_main: behind(change),
     } };
   }
 
@@ -499,7 +503,10 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const registered = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
     drafts.set(change.id, registered);
     // The person's own drafts take focus. An agent's draft takes it only when nothing else is open.
-    if (!focusId || !drafts.has(focusId) || change.owner === undefined) focusId = change.id;
+    if (change.owner === undefined || (!focusCleared && (!focusId || !drafts.has(focusId)))) {
+      focusId = change.id;
+      focusCleared = false;
+    }
     await journal.record(kind, { draft: change.id, version: fingerprint(diff), owner: change.owner, files: names, summary: change.summary,
       ...(kind === 'rebased' ? { commit: change.base } : {}) });
     return registered;
@@ -603,9 +610,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const id = typeof body?.draft === 'string' && body.draft ? body.draft : undefined;
       return { entries: await journal.read({ limit, draft: id }) };
     }
+    // An empty id clears the focus, so the person can work on their own files beside agents' drafts.
     if (action === 'focus') {
-      if (!drafts.has(body.id)) throw new Error('There is no draft with that id.');
-      focusId = body.id;
+      if (body.id !== '' && !drafts.has(body.id)) throw new Error('There is no draft with that id.');
+      focusId = body.id || null;
+      focusCleared = !focusId;
       return state();
     }
     // A connected agent reads its own draft when it has one, otherwise the main checkout.

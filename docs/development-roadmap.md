@@ -46,8 +46,11 @@ use that name.
 Up to four drafts can be open at once, one per connected agent plus the
 person's, each in its own worktree. See [several agents at once](agents.md#several-agents-at-once).
 
-**Remaining.** Show the journal, the list of open drafts and a rebase control
-in F4. Let checks for different drafts run side by side. Bring the gateway and
+F4 lists the open drafts beside its title, offers **Rebase** when the main
+branch has moved, labels gateway reloads, and shows the journal in a
+**History** tab.
+
+**Remaining.** Let checks for different drafts run side by side. Bring the gateway and
 docs into the F4 editor, and label gateway activation in the Workbench.
 
 ## 2. Session continuity and safe activation

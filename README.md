@@ -349,16 +349,24 @@ directly and switch between open buffers.
 tests it in a disposable project and shows its logs. The first check keeps a
 2 GiB copy of the local art and import cache under `.local/workbench`. Later
 checks link to it and copy only what changed. A draft that changes only gateway
-code skips the Godot core and smoke tests, and a documentation draft runs nothing. **Play preview** opens that build with separate saves. Enter a
+code skips the Godot core and smoke tests, and a documentation draft runs
+nothing. **Play preview** opens that build with separate saves. Enter a
 message and choose **Commit** to add the reviewed changes to the local branch.
 The main checkout must be clean and still on the draft's starting commit. If
-it moved, the draft stays available. **Discard** removes the draft. **Revert
-last** adds a revert commit when the last Workbench commit is at the branch tip.
+it moved, **Rebase** replays the draft onto the new tip; run checks again
+before committing. **Discard** removes the draft. **Revert last** adds a revert
+commit when the last Workbench commit is at the branch tip.
+
+Connected agents can hold drafts at the same time as you. When any are open, a
+drafts list appears beside the Workbench title. Pick a draft to review it, or
+**Your files** to keep editing beside it. An agent's new draft does not replace
+the one you are looking at. The **History** tab lists recent drafts, checks,
+commits, discards and reverts, with the agent that made each.
 
 **Restart Euclid** saves your current environment, position, and view, then
 relaunches Euclid from the updated source. The window briefly closes during the
 restart. Workbench identifies whether a draft supports a live swap, a Grid
-scenery reload, or a restart. Preview a live change before committing to keep
+scenery reload, a gateway reload, or a restart. Preview a live change before committing to keep
 it active in the running world.
 
 The F4 editor supports up to six existing text files, 64 KiB per file and 128 KiB total.

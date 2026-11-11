@@ -67,6 +67,11 @@ var _benchmark: Callable
 var _live_output: Callable
 var _view_ready := false
 var _requested_review := ""
+var _drafts := OptionButton.new()
+var _drafts_updating := false
+var _drafts_signature := ""
+var _history: CodeEditor
+var _poll_ticks := 0
 
 ## Source locations named in a check log, as {"path": "world/...", "line": zero-based line}.
 static func error_locations(log: String) -> Array:
@@ -79,6 +84,47 @@ static func error_locations(log: String) -> Array:
 			seen[key] = true
 			found.append(entry)
 	return found
+
+## One entry in the draft picker: who holds the draft, its files and its state.
+static func draft_label(entry: Dictionary) -> String:
+	var holder: String = str(entry.get("owner", ""))
+	var files: Array = entry.get("files", [])
+	var count: String = "1 file" if files.size() == 1 else "%d files" % files.size()
+	var label := "%s · %s · %s" % ["Your draft" if holder.is_empty() else holder, count, str(entry.get("status", ""))]
+	if entry.get("behind_main", false):
+		label += " · behind main"
+	return label
+
+## The Workbench journal as text, newest first.
+static func history_text(entries: Array) -> String:
+	if entries.is_empty():
+		return "No Workbench history yet."
+	var lines := PackedStringArray()
+	for entry in entries:
+		if not (entry is Dictionary):
+			continue
+		var at := str(entry.get("at", ""))
+		var when: String = at.substr(5, 11).replace("T", " ") if at.length() >= 16 else at
+		var event := str(entry.get("event", ""))
+		var who := str(entry.get("owner", ""))
+		var parts := PackedStringArray([when, "%-17s" % event, "you" if who.is_empty() else who])
+		var id := str(entry.get("draft", ""))
+		if not id.is_empty():
+			parts.append(id.left(8))
+		match event:
+			"checked":
+				parts.append("%s (%s)" % [str(entry.get("status", "")), str(entry.get("scope", "full"))])
+			"committed", "reverted", "rebased":
+				parts.append(str(entry.get("commit", "")).left(7))
+		if entry.get("message") is String:
+			parts.append(str(entry.message))
+		var files: Variant = entry.get("files")
+		if files is Array and not files.is_empty():
+			parts.append(str(files[0]) if files.size() == 1 else "%s +%d" % [str(files[0]), files.size() - 1])
+		if entry.get("error") is String:
+			parts.append("— " + str(entry.error).get_slice("\n", 0))
+		lines.append("  ".join(parts))
+	return "\n".join(lines)
 
 func setup(url: String, token: String, capability: String, preview_behavior: Callable, finish_behavior: Callable,
 		behavior_status: Callable, plugin_context: Callable, saved_view := {}, benchmark := Callable(),
@@ -123,6 +169,11 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_sidebar.custom_minimum_size.x = 250
 	_sidebar.add_theme_constant_override("separation", 6)
 	split.add_child(_sidebar)
+	_drafts.tooltip_text = "Open drafts. Pick one to review it, or your files to edit beside agents' drafts."
+	_drafts.visible = false
+	_drafts.item_selected.connect(_on_draft_selected)
+	title.add_child(_drafts)
+	title.move_child(_drafts, _chip.get_index() + 1)
 	_filter.placeholder_text = "Filter files   Ctrl+P"
 	_filter.text_changed.connect(func(_text: String) -> void: _build_tree())
 	_sidebar.add_child(_filter)
@@ -181,6 +232,10 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_tabs.set_tab_hidden(3, true)
 	_diagnostics.setup(_benchmark_command.bind("benchmark"), _benchmark_command.bind("cancelbenchmark"))
 	_tabs.add_child(_diagnostics)
+	_history = _output_tab("History", Highlighters.check_log())
+	_tabs.tab_changed.connect(func(index: int) -> void:
+		if _tabs.get_tab_control(index) == _history:
+			_load_history())
 	main.add_child(_find)
 
 	var prompt_row := HBoxContainer.new()
@@ -210,6 +265,8 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	for index in PREVIEW_ACTIONS.size():
 		var action: String = PREVIEW_ACTIONS[index]
 		_buttons[action] = _button(controls, labels[index], _command.bind(action))
+	_buttons["rebase"] = _button(controls, "Rebase", _command.bind("rebase"))
+	_buttons.rebase.tooltip_text = "Replay this draft onto the tip of the main branch, then run checks again"
 	_buttons["restart"] = _button(controls, "Restart Euclid", func() -> void: restart_requested.emit())
 	_message.placeholder_text = "Commit message"
 	_message.max_length = 100
@@ -692,6 +749,10 @@ func _command(action: String, arguments := {}) -> void:
 		return
 	_show_state(result)
 	match action:
+		"rebase":
+			_tabs.current_tab = 1
+			_status.text = "Rebased onto the main branch. Review the diff and run checks again."
+			_sync_controls()
 		"stage", "author":
 			_tabs.current_tab = 1
 		"live":
@@ -712,7 +773,8 @@ func _command(action: String, arguments := {}) -> void:
 		"previous":
 			_tabs.current_tab = 3
 		"discard", "apply", "restore":
-			if action == "discard" and result.get("draft") is Dictionary:
+			# Cancelling a revision keeps the same draft. Another open draft may come into view instead.
+			if action == "discard" and result.get("draft") is Dictionary and result.draft.id == arguments.get("id", ""):
 				return
 			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
 			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior",
@@ -726,8 +788,15 @@ func _command(action: String, arguments := {}) -> void:
 			var short: String = result.get("commit", "").left(7)
 			if action == "apply":
 				commit_recorded.emit(result.commit)
-			var messages := {"discard": "Discarded the Git draft.",
-				"apply": "Committed %s. The %s stays active." % [short, live_subject] if finished.live else "Committed %s. Restart Euclid to load it here." % short,
+			var activation: String = draft.get("activation", "") if draft is Dictionary else ""
+			var applied := "Committed %s. Restart Euclid to load it here." % short
+			if finished.get("live", false):
+				applied = "Committed %s. The %s stays active." % [short, live_subject]
+			elif activation == "gateway_restart":
+				applied = "Committed %s." % short
+			elif activation == "none":
+				applied = "Committed %s. Nothing needs a restart." % short
+			var messages := {"discard": "Discarded the Git draft.", "apply": applied,
 				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
@@ -751,7 +820,12 @@ func _refresh_catalog() -> void:
 func _poll(force := false) -> void:
 	if _busy or not is_visible_in_tree():
 		return
-	if not force and _state.get("draft") == null and _state.get("diagnostic_job") == null and not _state.get("playing", false):
+	# Idle panels still look in now and then, so a draft a connected agent opens shows up.
+	_poll_ticks += 1
+	var open_drafts: Array = _state.get("drafts", [])
+	var idle: bool = _state.get("draft") == null and _state.get("diagnostic_job") == null \
+		and not _state.get("playing", false) and open_drafts.is_empty()
+	if not force and idle and _poll_ticks % 5 != 0:
 		if _live_status() == "failed":
 			_status.text = "Live preview failed. The previous behavior is active."
 			_sync_controls()
@@ -774,6 +848,7 @@ func show_review(logs := false) -> void:
 func _show_state(result: Dictionary) -> void:
 	var prior: Variant = _state.get("draft")
 	_state = result
+	_update_draft_picker(result)
 	var draft: Variant = result.get("draft")
 	if draft is Dictionary:
 		draft_reviewed.emit(draft.id, draft.get("version", ""))
@@ -799,7 +874,8 @@ func _show_state(result: Dictionary) -> void:
 			"revising": "Codex is revising a copy of the active draft.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
 		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload",
-			"reload_palette": "Grid palette reload", "restart": "Restart Euclid"}
+			"reload_palette": "Grid palette reload", "restart": "Restart Euclid", "gateway_restart": "Gateway reload",
+			"none": "No restart"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
 			draft.error if draft.status == "failed" else messages[draft.status]]
 		if draft.status == "staged":
@@ -807,6 +883,8 @@ func _show_state(result: Dictionary) -> void:
 				_status.text = "Previous checks passed. Run checks again to preview or commit."
 			elif not draft.get("summary", "").is_empty():
 				_status.text = draft.summary + " Review the diff before previewing."
+		if draft.get("behind_main", false) and draft.status in ["staged", "passed", "failed"]:
+			_status.text = "The main branch moved past this draft. Rebase it, then run checks again."
 		if not draft.get("revision_notice", "").is_empty():
 			_status.text = draft.revision_notice
 		elif result.get("playing", false) and draft.status != "revising":
@@ -816,7 +894,8 @@ func _show_state(result: Dictionary) -> void:
 		elif _live_status() == "active" and draft.status != "checking":
 			_status.text += " Live preview active."
 		var chip_colors := {"failed": Look.ERROR, "passed": Look.GOOD, "checking": Look.WARN, "authoring": Look.WARN, "revising": Look.WARN}
-		_chip.text = "draft · %s" % draft.status
+		var holder: String = draft.get("owner", "")
+		_chip.text = "draft · %s" % draft.status if holder.is_empty() else "draft · %s · %s" % [holder, draft.status]
 		_chip.add_theme_color_override("font_color", chip_colors.get(draft.status, Look.ACCENT))
 	else:
 		if not _diff.text.is_empty():
@@ -827,8 +906,73 @@ func _show_state(result: Dictionary) -> void:
 		var revision: String = result.get("revision", "")
 		_chip.text = "" if revision.is_empty() else "commit · " + revision.left(7)
 		_chip.add_theme_color_override("font_color", Look.GOOD)
-		if _buffers.is_empty():
+		var waiting: Array = result.get("drafts", [])
+		if not waiting.is_empty():
+			_status.text = "%d open %s. Pick one from the drafts list to review it." % [waiting.size(), "draft" if waiting.size() == 1 else "drafts"]
+		elif _buffers.is_empty():
 			_status.text = "Choose a source file to start."
+	_sync_controls()
+	if _tabs.get_current_tab_control() == _history:
+		_load_history.call_deferred()
+
+## Lists the open drafts. "Your files" shows the main checkout when the person has no draft of their own.
+func _update_draft_picker(result: Dictionary) -> void:
+	var entries: Array = result.get("drafts", [])
+	var focus := str(result.get("focus", ""))
+	var signature := "%s|%s" % [focus, JSON.stringify(entries)]
+	if signature == _drafts_signature:
+		return
+	_drafts_signature = signature
+	var own_draft := false
+	for entry in entries:
+		if entry is Dictionary and str(entry.get("owner", "")).is_empty():
+			own_draft = true
+	_drafts_updating = true
+	_drafts.clear()
+	if not own_draft:
+		_drafts.add_item("Your files")
+		_drafts.set_item_metadata(_drafts.item_count - 1, "")
+	for entry in entries:
+		if entry is Dictionary:
+			_drafts.add_item(draft_label(entry))
+			_drafts.set_item_metadata(_drafts.item_count - 1, str(entry.get("id", "")))
+	_drafts.selected = -1
+	for index in _drafts.item_count:
+		if str(_drafts.get_item_metadata(index)) == focus:
+			_drafts.selected = index
+	_drafts.visible = not entries.is_empty()
+	_drafts_updating = false
+
+func _on_draft_selected(index: int) -> void:
+	if _drafts_updating:
+		return
+	var id := str(_drafts.get_item_metadata(index))
+	if _busy or id == str(_state.get("focus", "")):
+		_drafts_signature = ""
+		_update_draft_picker(_state)
+		return
+	_busy = true
+	_sync_controls()
+	var result := await _client.send("focus", {"id": id})
+	_busy = false
+	if result.has("error"):
+		_status.text = result.error
+		_drafts_signature = ""
+		_update_draft_picker(_state)
+		_sync_controls()
+		return
+	_show_state(result)
+	_tabs.current_tab = 1 if result.get("draft") is Dictionary else 0
+
+func _load_history() -> void:
+	if _busy or _history == null:
+		return
+	_busy = true
+	var result := await _client.send("history", {"limit": 60})
+	_busy = false
+	var text: String = str(result.error) if result.has("error") else history_text(result.get("entries", []))
+	if _history.text != text:
+		_history.fx.show_text(text)
 	_sync_controls()
 
 func _show_diff(editor: CodeEditor, text: String) -> void:
@@ -912,6 +1056,9 @@ func _sync_controls() -> void:
 	_buttons.restore.disabled = blocked or staged or str(_state.get("revision", "")).is_empty()
 	_buttons.restore.tooltip_text = str(_state.get("revision", ""))
 	_buttons.restart.disabled = blocked or playing or live == "active"
+	_buttons.rebase.visible = staged and draft.get("behind_main", false)
+	_buttons.rebase.disabled = blocked or playing
+	_drafts.disabled = _busy or str(_state.get("operation", "")) in ["authoring", "revising", "discarding"]
 	var diagnostic_state := _state.duplicate()
 	if staged and _live_output.is_valid():
 		diagnostic_state["live_preview_log"] = _live_output.call(draft.id, draft.get("version", ""))

@@ -103,8 +103,10 @@ The Workbench panel shows one draft, the one in focus. A draft the person
 starts takes focus. An agent's draft takes it only when nothing else is open,
 so the person's work is never switched out from under them. When the focused
 draft is committed or discarded, the next open draft comes into view.
-`POST /v1/workbench/focus` with a draft `id` changes it, and `state` lists
-every draft under `drafts`. Committing one draft moves the main branch past the
+`POST /v1/workbench/focus` with a draft `id` changes it. An empty `id` shows
+the person's own files, and agents' new drafts then stay out of view until the
+person picks one. `state` lists every draft under `drafts`, each with
+`behind_main`. Committing one draft moves the main branch past the
 others, and each is rebased before it commits.
 
 ### Agent credentials

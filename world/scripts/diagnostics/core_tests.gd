@@ -39,6 +39,15 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 			revised = true
 		return {}
 
+class FocusFixtureClient extends "res://scripts/agents/workbench_client.gd":
+	var focused := "unset"
+	var answer := {}
+
+	func send(action: String, arguments := {}) -> Dictionary:
+		if action == "focus":
+			focused = str(arguments.get("id", ""))
+		return answer
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -128,6 +137,7 @@ func _run() -> void:
 	_check_text_tools()
 	_check_development_session()
 	await _check_development_refresh()
+	await _check_workbench_drafts()
 	_check_palette_reload()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
@@ -643,6 +653,51 @@ func _check_development_refresh() -> void:
 	_check(client.revised and not result.has("error"), "an F2 revision waits for the draft refresh")
 	await process_frame
 	development.free()
+
+func _check_workbench_drafts() -> void:
+	_check(WorkbenchPanel.draft_label({"owner": "grok", "files": ["a", "b"], "status": "passed", "behind_main": true})
+		== "grok · 2 files · passed · behind main", "label an agent's draft in the Workbench picker")
+	_check(WorkbenchPanel.draft_label({"owner": "", "files": ["a"], "status": "staged"}) == "Your draft · 1 file · staged",
+		"label the person's own draft in the Workbench picker")
+	var history := WorkbenchPanel.history_text([
+		{"at": "2026-11-10T19:02:03.000Z", "event": "committed", "owner": "grok", "draft": "1234567890ab", "commit": "abcdef0123",
+			"message": "Fix speed", "files": ["world/scripts/a.gd", "world/scripts/b.gd"]},
+		{"at": "2026-11-10T18:00:00.000Z", "event": "checked", "status": "failed", "scope": "gateway", "error": "Boom\nmore"}])
+	var rows := history.split("\n")
+	_check(rows.size() == 2 and rows[0].begins_with("11-10 19:02  committed ")
+		and rows[0].ends_with("grok  12345678  abcdef0  Fix speed  world/scripts/a.gd +1"), "summarize a commit in the Workbench history")
+	_check(rows.size() == 2 and rows[1].contains("  you  failed (gateway)  — Boom") and not rows[1].contains("more"),
+		"summarize a failed check in the Workbench history")
+	_check(WorkbenchPanel.history_text([]) == "No Workbench history yet.", "explain an empty Workbench history")
+
+	var panel := WorkbenchPanel.new()
+	root.add_child(panel)
+	panel.setup("http://127.0.0.1:9", "test", "test", func(_c: Dictionary) -> Dictionary: return {},
+		func(_a: String, _b: String) -> Dictionary: return {"live": false}, func(_id: String) -> String: return "",
+		func() -> Dictionary: return {})
+	var client := FocusFixtureClient.new()
+	panel.add_child(client)
+	panel._client.queue_free()
+	panel._client = client
+	panel._busy = false
+	var agent := {"id": "a", "owner": "grok", "files": ["world/scripts/a.gd"], "status": "passed", "version": "v", "behind_main": true}
+	var in_view: Dictionary = agent.merged({"name": "world/scripts/a.gd", "diff": "", "log": "", "activation": "restart"})
+	panel._show_state({"focus": "a", "drafts": [agent], "draft": in_view})
+	_check(panel._drafts.visible and panel._drafts.item_count == 2 and panel._drafts.selected == 1,
+		"list open drafts and select the one in view")
+	_check(panel._buttons.rebase.visible and panel._status.text.contains("Rebase"), "offer a rebase when the main branch moved")
+	_check(panel._chip.text == "draft · grok · passed", "name the agent that holds the draft in view")
+	client.answer = {"focus": "", "drafts": [agent]}
+	await panel._on_draft_selected(0)
+	_check(client.focused == "" and panel._state.get("draft") == null and panel._drafts.selected == 0
+		and not panel._buttons.rebase.visible, "step back to the person's own files beside an agent's draft")
+	_check(panel._status.text.contains("1 open draft"), "point to the open draft from the person's files")
+	var mine := {"id": "g", "owner": "", "files": ["gateway/server.mjs"], "status": "staged", "version": "w"}
+	panel._show_state({"focus": "g", "drafts": [mine, agent], "draft": mine.merged({"name": "gateway/server.mjs", "diff": "", "log": "",
+		"activation": "gateway_restart"})})
+	_check(panel._drafts.item_count == 2 and panel._drafts.selected == 0 and panel._status.text.contains("Gateway reload"),
+		"show the person's gateway draft with its gateway reload")
+	panel.free()
 
 func _check_palette_reload() -> void:
 	var zone := Node3D.new()

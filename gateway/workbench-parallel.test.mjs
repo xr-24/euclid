@@ -106,3 +106,55 @@ test('several agents hold drafts at once, and the person reviews them one at a t
   assert.equal((await call('state', { owner: 'delta' })).draft.version, delta.version);
   assert.deepEqual(checked, ['alpha', 'beta', 'beta']);
 });
+
+test('the person can step away from agents’ drafts and sees which ones fell behind', async t => {
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-focus-test-'));
+  t.after(() => rm(area, { recursive: true, force: true }));
+  const root = path.join(area, 'project');
+  await mkdir(path.join(root, 'world/scripts'), { recursive: true });
+  for (const name of scripts) await writeFile(path.join(root, name), 'extends Node\n');
+  const git = (...args) => execFileSync('git', args, { cwd: root, windowsHide: true, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  for (const [key, value] of [['core.autocrlf', 'false'], ['user.name', 'Fixture'], ['user.email', 'fixture@example.invalid']]) git('config', key, value);
+  git('add', '.');
+  git('commit', '-qm', 'Fixture');
+  const runner = { async check() { return { scope: 'full' }; }, playing: () => false, async stop() {} };
+  const workbench = createWorkbench(root, path.join(area, 'workbench'), { runner });
+  const call = (action, body = {}) => workbench(action, body, new AbortController().signal);
+  async function submit(owner, file) {
+    await call('submit', { owner, prompt: `Work by ${owner}`, files: [{ path: file, content: `extends Node\n# ${owner}\n` }] });
+    for (let attempt = 0; attempt < 150; attempt++) {
+      const state = await call('state', { owner });
+      if (state.draft?.status === 'staged' && !state.operation) return state.draft;
+      await sleep(20);
+    }
+    assert.fail('The draft was not staged.');
+  }
+
+  const alpha = await submit('alpha', scripts[0]);
+  let state = await call('state');
+  assert.deepEqual([state.focus, state.draft.id, state.draft.behind_main], [alpha.id, alpha.id, false]);
+
+  // Clearing the focus shows the main checkout. A later agent draft does not take the view back.
+  state = await call('focus', { id: '' });
+  assert.deepEqual([state.focus, state.draft], ['', null]);
+  await submit('beta', scripts[1]);
+  assert.equal((await call('state')).draft, null);
+  await assert.rejects(call('focus', { id: 'missing' }), /no draft with that id/);
+
+  // The person's own draft always comes into view, and comes back after an agent's draft is discarded.
+  const { hash } = await call('read', { name: scripts[4] });
+  await call('stage', { files: [{ name: scripts[4], hash, text: 'extends Node\n# person\n' }] });
+  const mine = (await call('state')).draft;
+  assert.equal(mine.owner, '');
+  await call('focus', { id: alpha.id });
+  state = await call('discard', { id: alpha.id, version: alpha.version });
+  assert.equal(state.draft.id, mine.id);
+
+  // A commit outside the Workbench leaves every open draft behind the main branch.
+  await writeFile(path.join(root, scripts[3]), 'extends Node\n# by hand\n');
+  git('commit', '-qam', 'By hand');
+  state = await call('state');
+  assert.equal(state.draft.behind_main, true);
+  assert.deepEqual(state.drafts.map(item => item.behind_main), [true, true]);
+});

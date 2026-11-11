@@ -12,6 +12,7 @@ import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
 import { createAgentCredentials } from './agent-credentials.mjs';
 import { createRemoteServer } from './remote.mjs';
+import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -29,7 +30,7 @@ export function validateEvent(event) {
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
-  workbenchRoot = root, workbenchOptions, developmentToken, workbenchToken: workbenchSecret,
+  workbenchRoot = root, workbenchOptions, terminalOptions, developmentToken, workbenchToken: workbenchSecret,
   reloadGateway = null, gatewayNotice = () => '' } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
@@ -46,6 +47,10 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const developmentExpected = Buffer.from(developmentSecret);
   const development = createDevelopmentBridge(workbench);
   const agentCredentials = await createAgentCredentials(path.join(dataDir, 'agents.json'));
+  // The person's shells. They outlive restarts of the world, not of the gateway.
+  const terminals = createTerminalSessions({ root: workbenchRoot, ...terminalOptions });
+  let terminalRateStart = Date.now();
+  let terminalRateCount = 0;
   let developmentRateStart = Date.now();
   let developmentRateCount = 0;
   let queue = Promise.resolve();
@@ -111,6 +116,33 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const agent = developmentRoute[2] ?? 'agent';
         if (agentCredentials.reserved(agent)) return reply(res, 403, { error: `${agent} has its own agent credential. Connect at /mcp/agent with it.` });
         return serveDevelopment(agent);
+      }
+      const terminalRoute = /^\/v1\/terminal\/(open|list|write|resize|read|close)$/.exec(req.url);
+      if (terminalRoute) {
+        const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
+        if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'The terminal requires the local Euclid launcher.' });
+        if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
+        // Keystrokes and screen reads are frequent. Their budget is separate so they cannot starve the world.
+        if (Date.now() - terminalRateStart > 60000) { terminalRateStart = Date.now(); terminalRateCount = 0; }
+        if (++terminalRateCount > 1800) return reply(res, 429, { error: 'Rate limit exceeded' });
+        const body = await readJson(req, res, 96 * 1024);
+        if (body === undefined) return;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
+        const controller = new AbortController();
+        res.once('close', () => controller.abort());
+        try {
+          switch (terminalRoute[1]) {
+            case 'open': return reply(res, 200, terminals.open({ shell: body.shell, cols: body.cols, rows: body.rows }));
+            case 'list': return reply(res, 200, { sessions: terminals.list() });
+            case 'write': return reply(res, 200, terminals.write(body.id, body.data));
+            case 'resize': return reply(res, 200, terminals.resize(body.id, body.cols, body.rows));
+            case 'close': return reply(res, 200, terminals.close(body.id));
+            default: {
+              const result = await terminals.read(body.id, { since: body.since, wait: body.wait, offset: body.offset, signal: controller.signal });
+              return res.destroyed ? undefined : reply(res, 200, result);
+            }
+          }
+        } catch (error) { return res.destroyed ? undefined : reply(res, 400, { error: error.message }); }
       }
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
@@ -254,7 +286,8 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   server.headersTimeout = 10000;
   // Listened on only when EUCLID_REMOTE_PORT is set. See createRemoteServer.
   const remote = createRemoteServer({ credentials: agentCredentials, development, auditFile: path.join(dataDir, 'remote-audit.jsonl') });
-  return { server, remoteServer: remote.server, remoteAudited: remote.audited, token: secret, workbenchToken, developmentToken: developmentSecret };
+  server.on('close', () => terminals.closeAll());
+  return { server, remoteServer: remote.server, remoteAudited: remote.audited, terminals, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

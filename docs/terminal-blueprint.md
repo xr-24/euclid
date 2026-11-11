@@ -1,11 +1,7 @@
 # Blueprint: a real terminal inside Euclid
 
-**Status** · Design proposal. The current Workbench editor and F2 uplink share the
-Grid-cyan theme and effects described in the [architecture notes](architecture.md#source-workbench).
-F2 submits Euclid requests and **↗** opens the interactive Codex CLI in a native window.
-This proposal covers embedding an interactive terminal for Codex, Git, test commands,
-and PowerShell. The [development roadmap](development-roadmap.md) tracks source authoring
-and session continuity alongside this work.
+**Status** · Built, without downloads, as a variant of option B below. See
+[what was built](#what-was-built). The rest of this page is the original proposal.
 
 ## What "full" means
 
@@ -96,6 +92,39 @@ an authenticated loopback WebSocket.
 - `res://…:line` locations in terminal output open in the editor.
 - The Grid's existing **Terminal** anchor ("Not connected yet") shows a live session on a 3D
   screen through a SubViewport.
+
+## What was built
+
+The terminal follows option B, with two changes that avoid any download:
+
+- **PTY host.** `gateway/terminal/conpty-host.ps1` compiles `conpty.cs` with the C# compiler
+  Windows PowerShell already has (`Add-Type`) and runs the shell under ConPTY. It relays raw
+  console output on stdout and reads framed keystrokes, resizes and a stop request on stdin. When
+  its stdin closes it ends the shell, so no shell outlives the gateway. Nothing is added to npm
+  or to the Godot project.
+- **Emulator in the gateway.** `gateway/terminal/screen.mjs` is a headless VT/xterm screen:
+  cursor addressing, erasing, scroll regions, insert and delete, 16, 256 and true colour,
+  attributes, the alternate screen, scrollback, cursor reports, titles and resizing. The world
+  receives snapshots of styled text runs instead of raw bytes, so **Restart Euclid** reattaches
+  to the exact screen rather than replaying output. Characters take one cell each; wide CJK and
+  emoji glyphs do not yet take two.
+
+`gateway/terminal/sessions.mjs` keeps up to four sessions, starts them in the repository root, and
+removes the gateway's own credentials from the shell's environment. The routes
+`/v1/terminal/open`, `list`, `write`, `resize`, `read` and `close` need the Workbench capability
+and have their own request budget. `read` waits up to 20 seconds for a newer screen, so output
+arrives without polling.
+
+In Godot, `agents/terminal_client.gd` holds one waiting read, one ordered queue for keystrokes and
+resizes, and one request for opening and closing. `ui/terminal_view.gd` draws the cells in the
+Workbench font and colours and sends xterm key sequences, including application cursor mode,
+function keys, Ctrl and Alt combinations and bracketed paste with Ctrl+Shift+V. The **Terminal**
+tab in F4 attaches to the newest running shell or starts PowerShell. The mouse wheel scrolls
+history.
+
+Not yet built: choosing PowerShell 7 or cmd from the tab, copying a selection, the glow effects,
+streaming **Run checks** into a session, opening `res://` locations from terminal output, and the
+in-world terminal screen.
 
 ## Security boundaries
 

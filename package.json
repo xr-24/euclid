@@ -6,7 +6,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node gateway/server.mjs",
-    "test": "node --test gateway/*.test.mjs",
+    "test": "node --test gateway/*.test.mjs gateway/terminal/*.test.mjs",
     "agent:example": "node scripts/example-agent.mjs"
   }
 }

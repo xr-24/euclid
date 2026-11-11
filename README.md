@@ -363,6 +363,10 @@ drafts list appears beside the Workbench title. Pick a draft to review it, or
 the one you are looking at. The **History** tab lists recent drafts, checks,
 commits, discards and reverts, with the agent that made each.
 
+The **Terminal** tab runs PowerShell in the repository root. The gateway keeps
+the shell, so it is still there after **Restart Euclid**, but it ends when the
+gateway restarts. Ctrl+Shift+V pastes and the mouse wheel scrolls history.
+
 **Restart Euclid** saves your current environment, position, and view, then
 relaunches Euclid from the updated source. The window briefly closes during the
 restart. Workbench identifies whether a draft supports a live swap, a Grid

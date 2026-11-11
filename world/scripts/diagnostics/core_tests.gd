@@ -41,6 +41,7 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
+const TerminalView = preload("res://scripts/ui/terminal_view.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -203,6 +204,7 @@ func _run() -> void:
 	_check_live_extensions()
 	_check_palette_reload()
 	_check_panel_swap()
+	_check_terminal_keys()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -798,6 +800,28 @@ func _check_workbench_drafts() -> void:
 	_check(panel._drafts.item_count == 2 and panel._drafts.selected == 0 and panel._status.text.contains("Gateway reload"),
 		"show the person's gateway draft with its gateway reload")
 	panel.free()
+
+static func _press(code: Key, unicode := 0, ctrl := false, alt := false, shift := false) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.keycode = code
+	key.unicode = unicode
+	key.ctrl_pressed = ctrl
+	key.alt_pressed = alt
+	key.shift_pressed = shift
+	key.pressed = true
+	return key
+
+func _check_terminal_keys() -> void:
+	_check(TerminalView.key_sequence(_press(KEY_A, 97)) == "a" and TerminalView.key_sequence(_press(KEY_ENTER)) == "\r",
+		"send typed text and Enter to the terminal")
+	_check(TerminalView.key_sequence(_press(KEY_C, 99, true)) == "\u0003" and TerminalView.key_sequence(_press(KEY_BACKSPACE)) == "\u007f",
+		"send Ctrl+C as an interrupt and Backspace as DEL")
+	_check(TerminalView.key_sequence(_press(KEY_UP)) == "\u001b[A" and TerminalView.key_sequence(_press(KEY_UP), true) == "\u001bOA",
+		"send arrow keys in normal and application cursor mode")
+	_check(TerminalView.key_sequence(_press(KEY_X, 120, false, true)) == "\u001bx" and TerminalView.key_sequence(_press(KEY_TAB, 0, false, false, true)) == "\u001b[Z",
+		"prefix Alt with Escape and send Shift+Tab as a back tab")
+	_check(TerminalView.key_sequence(_press(KEY_F5)) == "\u001b[15~" and TerminalView.key_sequence(_press(KEY_SHIFT)).is_empty(),
+		"send function keys and ignore bare modifiers")
 
 func _check_panel_swap() -> void:
 	var label_source := func(transform: String) -> String:

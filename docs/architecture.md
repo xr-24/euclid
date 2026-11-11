@@ -31,6 +31,7 @@ All paths below are relative to `world/scripts/`.
 | `agents/development_host.gd` | F4 Workbench panel, F2 console, development actions, benchmarks, native CLI and voice | Created with the world; uses its overlay and live extension lifecycle, never zones or saves directly |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |
+| `ui/terminal_view.gd`, `agents/terminal_client.gd` | The F4 terminal: drawing the gateway's screen and sending keys | The shell and its screen live in `gateway/terminal/`, behind the Workbench capability |
 | `ui/panel_swap.gd` | Hot-swapping one UI panel from reviewed source | Subclasses state the panel's contract; `ui/grid_palette_host.gd` is the Grid palette's |
 | `diagnostics/` | Benchmarks, smoke test, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save; each runner receives the world as `run(world)` |
 

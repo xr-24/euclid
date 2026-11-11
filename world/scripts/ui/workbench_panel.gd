@@ -18,6 +18,7 @@ const FindBar = preload("res://scripts/ui/find_bar.gd")
 const QuickOpen = preload("res://scripts/ui/quick_open.gd")
 const GlowLayer = preload("res://scripts/ui/glow_layer.gd")
 const Diagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
+const TerminalView = preload("res://scripts/ui/terminal_view.gd")
 const PREVIEW_ACTIONS := ["live", "check", "play", "stop", "apply", "discard", "restore"]
 
 ## Unstaged buffers are kept here between sessions. Diagnostics point it elsewhere so they never
@@ -71,6 +72,7 @@ var _drafts := OptionButton.new()
 var _drafts_updating := false
 var _drafts_signature := ""
 var _history: CodeEditor
+var _terminal: TerminalView
 var _poll_ticks := 0
 
 ## Source locations named in a check log, as {"path": "world/...", "line": zero-based line}.
@@ -233,9 +235,17 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_diagnostics.setup(_benchmark_command.bind("benchmark"), _benchmark_command.bind("cancelbenchmark"))
 	_tabs.add_child(_diagnostics)
 	_history = _output_tab("History", Highlighters.check_log())
+	_terminal = TerminalView.new()
+	_terminal.name = "Terminal"
+	_tabs.add_child(_terminal)
+	_terminal.setup(url, token, capability)
 	_tabs.tab_changed.connect(func(index: int) -> void:
-		if _tabs.get_tab_control(index) == _history:
-			_load_history())
+		var shown := _tabs.get_tab_control(index)
+		if shown == _history:
+			_load_history()
+		elif shown == _terminal:
+			_terminal.start()
+			_terminal.grab_focus.call_deferred())
 	main.add_child(_find)
 
 	var prompt_row := HBoxContainer.new()

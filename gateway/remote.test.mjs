@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createRemoteServer } from './remote.mjs';
+import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
 import { createGateway } from './server.mjs';
 
 async function listen(server) {
@@ -107,7 +107,9 @@ test('each remote agent has its own request budget', async t => {
     permissions: () => ({ remote: true, checks: false }),
   };
   const development = { async rpc(agent, message) { return { jsonrpc: '2.0', id: message.id, result: { agent } }; } };
-  const { server, audited } = createRemoteServer({ credentials, development, auditFile: path.join(area, 'audit.jsonl'), perMinute: 3 });
+  const endpoint = createRemoteEndpoint({ credentials, development, auditFile: path.join(area, 'audit.jsonl'), perMinute: 3 });
+  const server = createRemoteServer(endpoint);
+  const audited = endpoint.audited;
   t.after(async () => {
     server.closeAllConnections();
     if (server.listening) await new Promise(resolve => server.close(resolve));

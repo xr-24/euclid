@@ -19,6 +19,7 @@ const QuickOpen = preload("res://scripts/ui/quick_open.gd")
 const GlowLayer = preload("res://scripts/ui/glow_layer.gd")
 const Diagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const TerminalView = preload("res://scripts/ui/terminal_view.gd")
+const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
 const PREVIEW_ACTIONS := ["live", "check", "play", "stop", "apply", "discard", "restore"]
 
 ## Unstaged buffers are kept here between sessions. Diagnostics point it elsewhere so they never
@@ -73,6 +74,7 @@ var _drafts_updating := false
 var _drafts_signature := ""
 var _history: CodeEditor
 var _terminal: TerminalView
+var _agents_panel: AgentsPanel
 var _poll_ticks := 0
 
 ## Source locations named in a check log, as {"path": "world/...", "line": zero-based line}.
@@ -239,13 +241,23 @@ func setup(url: String, token: String, capability: String, preview_behavior: Cal
 	_terminal.name = "Terminal"
 	_tabs.add_child(_terminal)
 	_terminal.setup(url, token, capability)
+	var agents_scroll := ScrollContainer.new()
+	agents_scroll.name = "Agents"
+	agents_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_tabs.add_child(agents_scroll)
+	_agents_panel = AgentsPanel.new()
+	_agents_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	agents_scroll.add_child(_agents_panel)
+	_agents_panel.setup(url, token, capability)
 	_tabs.tab_changed.connect(func(index: int) -> void:
 		var shown := _tabs.get_tab_control(index)
 		if shown == _history:
 			_load_history()
 		elif shown == _terminal:
 			_terminal.start()
-			_terminal.grab_focus.call_deferred())
+			_terminal.grab_focus.call_deferred()
+		elif shown == agents_scroll:
+			_agents_panel.refresh())
 	main.add_child(_find)
 
 	var prompt_row := HBoxContainer.new()

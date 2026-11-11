@@ -84,7 +84,9 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
       if ((await lstat(source)).isSymbolicLink()) throw new Error('The preview project contains a symbolic link.');
       return true;
     };
-    for (const entry of ['world', 'gateway', 'scripts', 'package.json']) {
+    // The relay is copied too, because the gateway tests exercise its core. Older drafts may not have it.
+    for (const entry of ['world', 'gateway', 'scripts', 'relay', 'package.json']) {
+      if (!existsSync(path.join(worktree, entry))) continue;
       await cp(path.join(worktree, entry), path.join(tree, entry), { recursive: true, filter: async source => {
         const parts = path.relative(worktree, source).split(path.sep);
         if (parts.some(part => ['.local', '.tools', '.godot', 'override.cfg', 'node_modules', '__pycache__'].includes(part))) return false;

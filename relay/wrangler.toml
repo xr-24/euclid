@@ -1,0 +1,13 @@
+# Euclid's relay. Deploy from this folder with `npx wrangler deploy`.
+# Durable Objects on the Workers Free plan must use SQLite storage, hence new_sqlite_classes.
+name = "euclid-relay"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "EuclidRelay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["EuclidRelay"]

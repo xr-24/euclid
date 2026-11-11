@@ -42,6 +42,7 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 const TerminalView = preload("res://scripts/ui/terminal_view.gd")
+const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -205,6 +206,7 @@ func _run() -> void:
 	_check_palette_reload()
 	_check_panel_swap()
 	_check_terminal_keys()
+	_check_agents_panel()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -810,6 +812,27 @@ static func _press(code: Key, unicode := 0, ctrl := false, alt := false, shift :
 	key.shift_pressed = shift
 	key.pressed = true
 	return key
+
+func _check_agents_panel() -> void:
+	var connected := {"state": "connected", "url": "https://relay.test", "agent_url": "https://relay.test/mcp"}
+	_check(AgentsPanel.relay_summary(connected) == "Connected to https://relay.test. Cloud agents use https://relay.test/mcp",
+		"summarize a connected relay")
+	_check(AgentsPanel.relay_summary({}).begins_with("Not connected.") and AgentsPanel.relay_summary({"state": "refused", "error": "Wrong key."}) == "Wrong key.",
+		"explain an unset or refused relay")
+	var cloud := {"name": "cloud", "remote": true, "checks": false, "last_seen": {"at": "2026-11-11T06:30:00.000Z", "via": "relay"}}
+	_check(AgentsPanel.agent_line(cloud) == "cloud  ·  cloud  ·  last seen 11-11 06:30 via relay", "describe a cloud agent and when it was last seen")
+	_check(AgentsPanel.agent_line({"name": "codex", "remote": false}) == "codex  ·  local  ·  not seen yet", "describe a local agent")
+	var activity := AgentsPanel.activity_text([{"at": "2026-11-11T06:30:00.000Z", "agent": "cloud", "tool": "submit_draft", "status": 200, "via": "relay"},
+		{"at": "2026-11-11T06:29:00.000Z", "agent": "", "status": 401, "via": "tunnel"}])
+	_check(activity == "11-11 06:30  cloud  submit_draft  200  relay\n11-11 06:29  unknown agent  -  401  tunnel", "list recent outside calls")
+	_check(AgentsPanel.activity_text([]) == "No outside calls yet.", "explain an empty activity list")
+	var panel := AgentsPanel.new()
+	root.add_child(panel)
+	panel.setup("http://127.0.0.1:9", "test", "test")
+	panel.show_state({"relay": connected, "agents": [cloud, {"name": "codex", "remote": false}]}, [])
+	_check(panel._agents.get_child_count() == 2 and panel._relay_url.text == "https://relay.test" and panel._relay_status.text.begins_with("Connected"),
+		"show the relay and one row per agent")
+	panel.free()
 
 func _check_terminal_keys() -> void:
 	_check(TerminalView.key_sequence(_press(KEY_A, 97)) == "a" and TerminalView.key_sequence(_press(KEY_ENTER)) == "\r",

@@ -4,8 +4,8 @@ extends HTTPRequest
 var _url: String
 var _headers: PackedStringArray
 
-func configure(url: String, token: String, capability: String) -> void:
-	_url = url + "/v1/workbench/"
+func configure(url: String, token: String, capability: String, route := "/v1/workbench/") -> void:
+	_url = url + route
 	_headers = ["Authorization: Bearer " + token, "X-Euclid-Workbench: " + capability, "Content-Type: application/json"]
 	timeout = 85.0
 	body_size_limit = 2097152

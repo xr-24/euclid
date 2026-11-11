@@ -11,7 +11,8 @@ import { createWorldBridge, validContext, validWorldPlan } from './world-tools.m
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
 import { createAgentCredentials } from './agent-credentials.mjs';
-import { createRemoteServer } from './remote.mjs';
+import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
+import { createRelayLink } from './relay-link.mjs';
 import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
@@ -30,7 +31,7 @@ export function validateEvent(event) {
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
-  workbenchRoot = root, workbenchOptions, terminalOptions, developmentToken, workbenchToken: workbenchSecret,
+  workbenchRoot = root, workbenchOptions, terminalOptions, relayOptions, developmentToken, workbenchToken: workbenchSecret,
   reloadGateway = null, gatewayNotice = () => '' } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
@@ -147,7 +148,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
       const workbenchRoute = /^\/v1\/workbench\/([a-z]+)$/.exec(req.url);
-      const agentsRoute = /^\/v1\/agents\/(issue|revoke|list)$/.exec(req.url);
+      const agentsRoute = /^\/v1\/agents\/(issue|revoke|list|relay|activity)$/.exec(req.url);
       if (workbenchRoute || agentsRoute) {
         const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
         if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Workbench access requires the local Euclid launcher.' });
@@ -162,7 +163,17 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
               return reply(res, 200, await agentCredentials.issue(body.name, { remote: body.remote === true, checks: body.checks === true }));
             }
             if (agentsRoute[1] === 'revoke') return reply(res, 200, { name: body.name, revoked: await agentCredentials.revoke(body.name) });
-            return reply(res, 200, { agents: agentCredentials.list() });
+            if (agentsRoute[1] === 'relay') {
+              if (body.action === 'configure') return reply(res, 200, await relay.configure({ url: body.url, key: body.key }));
+              if (body.action === 'reconnect') return reply(res, 200, relay.reconnect());
+              if (body.action === 'forget') return reply(res, 200, await relay.forget());
+              return reply(res, 200, relay.status());
+            }
+            if (agentsRoute[1] === 'activity') {
+              return reply(res, 200, { entries: await remote.recent(Number.isInteger(body.limit) ? body.limit : 30) });
+            }
+            return reply(res, 200, { agents: agentCredentials.list().map(agent => ({ ...agent, last_seen: remote.lastSeen(agent.name) })),
+              relay: relay.status() });
           } catch (error) { return reply(res, 400, { error: error.message }); }
         }
         if (workbenchRoute[1] === 'reload') {
@@ -285,9 +296,12 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   server.requestTimeout = 10000;
   server.headersTimeout = 10000;
   // Listened on only when EUCLID_REMOTE_PORT is set. See createRemoteServer.
-  const remote = createRemoteServer({ credentials: agentCredentials, development, auditFile: path.join(dataDir, 'remote-audit.jsonl') });
-  server.on('close', () => terminals.closeAll());
-  return { server, remoteServer: remote.server, remoteAudited: remote.audited, terminals, token: secret, workbenchToken, developmentToken: developmentSecret };
+  const remote = createRemoteEndpoint({ credentials: agentCredentials, development, auditFile: path.join(dataDir, 'remote-audit.jsonl') });
+  const remoteServer = createRemoteServer(remote);
+  await remote.prime();
+  // Started only by the gateway process itself, never by tests or the reload preflight.
+  const relay = createRelayLink({ endpoint: remote, file: path.join(dataDir, 'relay.json'), ...relayOptions });  server.on('close', () => { terminals.closeAll(); relay.stop(); });
+  return { server, remoteServer, remoteAudited: remote.audited, terminals, relay, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -318,6 +332,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try { await listen(gateway.server, port, handoff ? 40 : 1); }
   catch (error) { console.error(`Gateway: ${error.message}`); process.exit(1); }
   gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
+  // A relay Euclid dials out to, when one is set in the Cloud Agents screen.
+  await gateway.relay.start();
   // The outside endpoint for remote agents. A tunnel points here, never at the main port.
   const remotePort = Number(process.env.EUCLID_REMOTE_PORT ?? 0);
   if (Number.isInteger(remotePort) && remotePort > 0 && remotePort !== port) {
@@ -330,5 +346,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // The launcher records the gateway it starts. A replacement records itself for stop-gateway.ps1.
   if (handoff) await writeFile(path.join(dataDir, 'gateway.pid'), String(process.pid));
   console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => gateway.server.close());
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { gateway.relay.stop(); gateway.server.close(); });
 }

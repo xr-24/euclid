@@ -59,6 +59,7 @@ const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 const TerminalView = preload("res://scripts/ui/terminal_view.gd")
 const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
+const SpringFollow = preload("res://scripts/player/spring_follow.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -224,6 +225,7 @@ func _run() -> void:
 	_check_terminal_keys()
 	_check_agents_panel()
 	_check_wrist_computer()
+	_check_spring_follow()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -829,6 +831,20 @@ static func _press(code: Key, unicode := 0, ctrl := false, alt := false, shift :
 	key.shift_pressed = shift
 	key.pressed = true
 	return key
+
+func _check_spring_follow() -> void:
+	var bouncy := SpringFollow.new(3.0, 0.5, 0.0)
+	var firm := SpringFollow.new(3.0, 1.0, 0.0)
+	var peak := 0.0
+	var firm_peak := 0.0
+	for frame in 180:
+		peak = maxf(peak, bouncy.step(1.0 / 60.0, Vector3.ONE).x)
+		firm_peak = maxf(firm_peak, firm.step(1.0 / 60.0, Vector3.ONE).x)
+	_check(absf(bouncy.value.x - 1.0) < 0.01 and absf(firm.value.x - 1.0) < 0.01, "arm springs settle on their target")
+	_check(peak > 1.05 and firm_peak <= 1.001, "light damping overshoots and full damping does not")
+	var hitch := SpringFollow.new(3.0, 0.74, 0.9)
+	hitch.step(0.5, Vector3(0, 1, 0))
+	_check(hitch.value.is_finite() and hitch.value.length() < 3.0, "a long frame does not throw an arm across the view")
 
 func _check_wrist_computer() -> void:
 	var fixture := WristFixture.new()

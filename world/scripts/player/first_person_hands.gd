@@ -4,6 +4,7 @@ const Arms = preload("res://assets/player/mannequin_arms.glb")
 const Poses = preload("res://scripts/player/hand_poses.gd")
 const Wrist = preload("res://scripts/player/hand_wrist.gd")
 const Motion = preload("res://scripts/animation/motion_clip.gd")
+const Follow = preload("res://scripts/player/spring_follow.gd")
 const SIDES := ["l", "r"]
 ## The wrist computer pose, like checking a watch: the left forearm laid across the lower middle
 ## of the view, back of the hand up, a loose fist. Camera space (-Z ahead, +X right). The wrist
@@ -15,6 +16,22 @@ const WATCH_PALM := Vector3(0.0, -1.0, -0.35)
 const WATCH_POLE := Vector3(-0.7, -0.45, -0.25)
 ## Where the right wrist goes while the wrist computer is up: down by the hip, out of view.
 const RIGHT_AWAY := Vector3(0.36, -0.95, 0.02)
+## How the arms move. Each *_FOLLOW is a spring (spring_follow.gd): frequency in Hz, damping
+## (below 1 overshoots), response (above 1 overshoots at the start). Wrists chase their poses
+## through REACH_FOLLOW and hands turn through TURN_FOLLOW, so every change of pose eases in and
+## settles. On top of that the arms trail behind turning and acceleration (SWAY_FOLLOW, with
+## LOOK_LAG metres per rad/s of yaw and pitch and ACCEL_LAG metres per m/s²) and swing with the
+## stride: BOB is the side sway, the dip at each footfall and each arm's fore-and-aft swing, in
+## metres at full speed.
+const REACH_FOLLOW := Vector3(3.0, 0.74, 0.9)
+const TURN_FOLLOW := Vector3(3.8, 0.85, 1.0)
+const SWAY_FOLLOW := Vector3(2.1, 0.5, 0.0)
+const LOOK_LAG := Vector2(0.011, 0.008)
+const ACCEL_LAG := 0.0009
+const SWAY_LIMIT := 0.045
+const BOB := Vector3(0.008, 0.013, 0.012)
+## How far the sway and bob tilt the hands, in radians per metre of offset.
+const TILT := 2.6
 ## How far along the forearm, from elbow to wrist, the wrist computer's emitter sits.
 const EMITTER_ALONG := 0.78
 
@@ -43,6 +60,10 @@ var _preview_slot := -1
 var _seek_time := -1.0
 var _clip_time := 0.0
 var _playing_slot := -1
+var _motion := {}
+var _last_basis := Basis()
+var _has_basis := false
+var _velocity := Vector3.ZERO
 
 func mount(camera: Camera3D) -> MeshInstance3D:
 	camera.add_child(self)
@@ -146,10 +167,11 @@ func wrist_emitter() -> Dictionary:
 func pulse(pose: Poses.Pose, target: Vector3) -> void:
 	_pose = pose
 	_point = target
-	_pulse_left = float(_clips[pose].duration) if _clips.has(pose) else 0.38
+	_pulse_left = float(_clips[pose].duration) if _clips.has(pose) else 0.5
 	_playing_slot = -1
 
-func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void:
+## velocity is the player's, in world space; it makes the arms lag on starts, stops and landings.
+func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocity := Vector3.ZERO) -> void:
 	_pulse_left = maxf(0.0, _pulse_left - delta)
 	if _preview_slot >= 0:
 		pose = _preview_slot as Poses.Pose
@@ -160,7 +182,8 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 		_pose = pose
 		_point = target
 	var amount := 1.0 - exp(-delta * 15.0)
-	_blend = lerpf(_blend, 1.0 if reaching else 0.0, 1.0 - exp(-delta * (12.0 if reaching else 9.0)))
+	# Fast here: the reach spring supplies the easing and the settle.
+	_blend = lerpf(_blend, 1.0 if reaching else 0.0, 1.0 - exp(-delta * (18.0 if reaching else 14.0)))
 	var at_rest := not reaching and _blend < 0.012
 	if at_rest:
 		_blend = 0.0
@@ -202,23 +225,26 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 	var offset: Vector3 = Poses.REACH.get(_pose, Vector3.ZERO)
 	_reach_offset = _reach_offset.lerp(offset, amount)
 	var breath := sin(_breath_phase)
-	# Both wrists rise and dip with each footfall, with a smaller alternating lift.
-	var bob := cos(_stride_phase * 2.0) * 0.008 * _movement * _bob_scale
+	var sway := _sway(delta, velocity)
+	# A figure eight with each pair of steps: the hands dip at every footfall, drift side to side
+	# with the weight and swing fore and aft against each other.
+	var stride := _movement * _bob_scale
+	var step_dip := (absf(sin(_stride_phase)) - 2.0 / PI) * BOB.y * stride
+	var step_side := sin(_stride_phase) * BOB.x * stride
 	for index in _chains.size():
 		var chain := _chains[index]
 		var side := -1.0 if index == 0 else 1.0
 		var weight := lift if index == 1 else 0.0
 		var shoulder: Vector3 = chain.shoulder
-		var stride := sin(_stride_phase) * side * _movement
 		var rest := Vector3(side * 0.30, -0.295, -0.49)
-		rest += Vector3(side * 0.004 * breath, breath * 0.004 + bob - stride * 0.002 * _bob_scale, 0)
+		rest += Vector3(side * 0.003 * breath, breath * 0.004, 0)
 		var reach: float = chain.reach
 		var direction := (aim - shoulder).normalized() if aim.z < -0.15 else Vector3.FORWARD
 		var distant := shoulder + direction * -_reach_offset.z + Vector3(_reach_offset.x, _reach_offset.y, 0)
 		var near_target := aim - direction * (0.19 if _pose == Poses.Pose.POINT else 0.145)
 		var wrist := near_target.lerp(distant, smoothstep(0.44, 0.82, aim.length()))
 		wrist.z = minf(wrist.z, -0.27)
-		wrist.y += 0.004 * breath + bob * 0.4
+		wrist.y += 0.003 * breath
 		wrist = shoulder + (wrist - shoulder).limit_length(reach * 0.95)
 		var goal: Node3D = chain.target
 		var lift_arc := sin(weight * PI) * Vector3(-0.025, 0.02, -0.05)
@@ -253,6 +279,15 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 			var rotation := Basis.from_euler(angles * (PI / 180.0) * authored_weight)
 			hand_forward = rotation * hand_forward
 			palm = rotation * palm
+		# Ease toward the pose, then add the sway and stride on top. A hand that is reaching, or
+		# holding up the wrist computer, stays steadier.
+		var steady := 1.0 - 0.6 * maxf(weight, watch if index == 0 else 0.0)
+		var motion := (sway + Vector3(step_side, step_dip, side * cos(_stride_phase) * BOB.z * stride)) * steady
+		var settled := _follow(chain, "reach", goal.position, delta, REACH_FOLLOW)
+		goal.position = shoulder + (settled + motion - shoulder).limit_length(reach * 0.97)
+		var tilt := Basis.from_euler(Vector3(-motion.y * TILT, motion.x * TILT, motion.x * TILT * 0.6))
+		hand_forward = tilt * _follow(chain, "forward", hand_forward.normalized(), delta, TURN_FOLLOW).normalized()
+		palm = tilt * _follow(chain, "palm", palm.normalized(), delta, TURN_FOLLOW).normalized()
 		_wrist.orientations[index] = _frame(to_rig * hand_forward, to_rig * palm) * chain.hand_frame
 		if not chain.get("still", false) or not still:
 			_pose_fingers(chain.finger_joints, finger_pose, finger_weight, 1.0 if still else amount)
@@ -261,6 +296,31 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 					var rotation := Motion.sample_rotation(bindings[joint.bone], time, clip.interpolation) * (PI / 180.0)
 					_rig.set_bone_pose_rotation(joint.bone, joint.rest * _finger_rotations[joint.bone] * Quaternion.from_euler(rotation * authored_weight))
 		chain["still"] = still
+
+## How far the arms trail behind the view: turning leaves them behind, speeding up or landing pushes
+## them back or down, and a spring brings them home with a little overshoot.
+func _sway(delta: float, velocity: Vector3) -> Vector3:
+	var view := global_basis.orthonormalized()
+	var look := Vector3.ZERO
+	if _has_basis and delta > 0.0:
+		var turn := (_last_basis.inverse() * view).get_euler()
+		look = Vector3(turn.y * LOOK_LAG.x, -turn.x * LOOK_LAG.y, 0.0) / delta
+	_last_basis = view
+	_has_basis = true
+	# The motor sets velocity outright, so smooth it before taking its change as acceleration.
+	var previous := _velocity
+	_velocity = _velocity.lerp(view.inverse() * velocity, 1.0 - exp(-delta * 8.0))
+	var accel := (_velocity - previous) / maxf(delta, 0.001)
+	accel.y *= 0.7
+	var target := (look - accel * ACCEL_LAG).limit_length(SWAY_LIMIT)
+	return _follow(_motion, "sway", target, delta, SWAY_FOLLOW)
+
+func _follow(springs: Dictionary, key: String, target: Vector3, delta: float, tuning: Vector3) -> Vector3:
+	if not springs.has(key):
+		springs[key] = Follow.new(tuning.x, tuning.y, tuning.z, target)
+		return target
+	var spring: Follow = springs[key]
+	return spring.step(minf(delta, 0.05), target)
 
 func _pose_fingers(fingers: Array, pose: Poses.Pose, weight: float, amount: float) -> void:
 	for joint: Dictionary in fingers:

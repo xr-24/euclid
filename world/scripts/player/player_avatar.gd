@@ -79,7 +79,7 @@ func tick(player: CharacterBody3D, delta: float, swimming: bool, controls: bool)
 	if _reaching:
 		hands.pulse(Poses.Pose.OPEN_PALM, target)
 		_reaching = false
-	hands.tick(delta, pose, target, speed if grounded and not swimming else 0.0)
+	hands.tick(delta, pose, target, speed if grounded and not swimming else 0.0, velocity)
 
 func _animate(grounded: bool, vertical_speed: float, speed: float, swimming: bool) -> void:
 	if swimming:

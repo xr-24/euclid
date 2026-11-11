@@ -110,6 +110,17 @@ it again before dispatch.
 
 The environment library persists new Grid-template entries under stable IDs. The catalog feeds planning, MCP discovery, travel and the wrist computer. The companion draws a stippled 3D body with a separate batch of hair fibres and projection streaks. It updates its own follow or parked position. Voice reads tool results through the OS voice service.
 
+## First-person arms
+
+`player/first_person_hands.gd` places each wrist with two-bone IK and poses the fingers. Poses
+are targets, not keyframes: every wrist target and hand direction chases its pose through a
+second-order spring (`player/spring_follow.gd`), so changes ease in and settle with a little
+overshoot. On top of that the arms trail behind turning and acceleration (including the dip on
+landing) through a looser spring, and move in a figure eight with the stride: a dip at each
+footfall, a side drift with the weight and an opposite fore-and-aft swing per arm. A hand that is
+reaching or holding up the wrist computer keeps more of its aim. The tuning constants sit at the
+top of the file; Player Rig clips and its walk bob scale layer over the same motion.
+
 ## Wrist computer
 
 Euclid has no menu screen. `player/wrist_computer.gd` owns the wrist's state (open, page,

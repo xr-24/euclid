@@ -29,7 +29,12 @@ Agent drafts can also change gateway source and tests, `README.md` and
 a commit that touches the gateway replaces the gateway process in place. See
 [what a draft may change](draft-scope.md).
 
-**Remaining.** Add durable task history, separate workspaces for concurrent
+The Workbench keeps a journal of every draft: who drafted it, each revision and
+check with its scope, and whether it was committed, discarded or reverted. It
+survives restarts and outlives the draft. Connected agents read it with
+`task_history`, and `POST /v1/workbench/history` returns it.
+
+**Remaining.** Show the journal in F4. Add separate workspaces for concurrent
 agents, and conflict review when the primary branch advances. Bring the
 gateway and docs into the F4 editor, and label gateway activation in the
 Workbench.
@@ -65,7 +70,7 @@ hard-links it into each preview. Across drives it falls back to copying.
 Checks are scoped to what a draft changes. Documentation runs nothing, and
 gateway code skips the Godot core and smoke tests.
 
-**Remaining.** Attach rendered screenshots to check results and keep a task journal. Add
+**Remaining.** Attach rendered screenshots to check results. Add
 moving routes and repeatable transition measurements, then use them to isolate
 villa regressions from inside Euclid.
 

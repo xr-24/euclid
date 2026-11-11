@@ -231,6 +231,12 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.equal(await readFile(path.join(root, other), 'utf8'), otherOriginal);
   assert.equal(git('rev-parse', 'HEAD^'), revision);
   assert.equal((await call('state')).body.revision, '');
+  // The journal outlives the gateway restart and records the commit and its revert.
+  const [reverted, committed] = (await call('history', { limit: 2 })).body.entries;
+  assert.deepEqual([reverted.event, reverted.reverted, reverted.commit], ['reverted', revision, git('rev-parse', 'HEAD')]);
+  assert.deepEqual(reverted.files.toSorted(), [path.relative(root, file).replaceAll(path.sep, '/'), other].toSorted());
+  assert.deepEqual([committed.event, committed.draft, committed.commit, committed.message], ['committed', id, revision, accept.message]);
+  assert.ok((await call('history', { draft: id })).body.entries.some(item => item.event === 'checked' && item.status === 'passed'));
 
   const before = (await call('read', { name: plugin })).body;
   const liveDraft = (await call('stage', { files: [{ name: plugin, hash: before.hash, text: files[0].text }] })).body.draft;

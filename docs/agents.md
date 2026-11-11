@@ -73,6 +73,7 @@ from F2 connects as `codex`.
 | `submit_draft` | Create a draft from complete file contents and deletions, or revise the agent's own draft on top of its current version |
 | `run_checks` | Start the isolated project checks for the agent's own draft |
 | `discard_draft` | Discard the agent's own draft |
+| `task_history` | Recent Workbench events, newest first, or one draft's events: drafts, revisions, checks, commits, discards and reverts |
 
 A submission is written into the same temporary workspace a local source
 agent edits, so the same path allowlist, 24-file and 256 KiB limits and

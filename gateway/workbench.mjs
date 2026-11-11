@@ -10,6 +10,7 @@ import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
+import { createJournal } from './workbench-journal.mjs';
 import { fingerprint, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
 import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
@@ -65,7 +66,8 @@ async function readChanges(root, files) {
 
 export function createWorkbench(root, storage, { runner = createPreviewRunner(root, { base: path.join(storage, 'preview-base') }), propose = proposeEdit,
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
-  designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '' } = {}) {
+  designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '',
+  journal = createJournal(path.join(storage, 'journal.jsonl'), { onError: error => console.error(`Workbench journal: ${error.message}`) }) } = {}) {
   const git = createWorkbenchGit(root);
   const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
   let draft = null;
@@ -341,7 +343,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const earlier = await readPrevious(change.directory, change.worktree, change.base, change.previous);
     const revisionDiff = await versionDiff(change, earlier);
     await runner.stop();
-    await registerDraft({ ...change, ...earlier, previous: checkpoint(change), revisionDiff, revisionNotice: '' });
+    await registerDraft({ ...change, ...earlier, previous: checkpoint(change), revisionDiff, revisionNotice: '' }, '', 'restored_previous');
   }
 
   async function authorDraft(body, signal) {
@@ -427,13 +429,15 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     await rename(pending, metadata);
   }
 
-  async function registerDraft(change, log = '') {
+  async function registerDraft(change, log = '', event) {
     const { worktree, base, names, binding, agentSource } = change;
     const diff = await git.review(worktree, base, names);
     if (Buffer.byteLength(diff) > maxDiff) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
     const plugin = agentSource ? null : await livePlugin(worktree, names, binding);
     await saveDraft(change, diff);
+    const kind = event ?? (draft?.id === change.id ? 'revised' : 'drafted');
     draft = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
+    await journal.record(kind, { draft: change.id, version: fingerprint(diff), owner: change.owner, files: names, summary: change.summary });
   }
 
   async function ask(body, signal) {
@@ -492,6 +496,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         change.revisionNotice = `Could not save the check output for reopening. ${failure.message}`;
         change.check = { status, error, log: change.log, ...(scope ? { scope } : {}) };
       } finally {
+        // Queued in order without holding the Workbench busy. Recording never throws.
+        journal.record('checked', { draft: change.id, version: fingerprint(change.diff), owner: change.owner, status, scope, error });
         Object.assign(change, { status, error });
         checks = null;
         if (operation === 'checking') operation = '';
@@ -511,6 +517,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   async function discardDraft(change) {
     await rename(path.join(change.directory, 'draft.json'), path.join(change.directory, 'discarded.json'));
     await removeDraft(change);
+    await journal.record('discarded', { draft: change.id, owner: change.owner, files: change.names });
   }
 
   return async function handle(action, body, signal) {
@@ -522,6 +529,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { text, hash };
     }
     if (action === 'state') return state();
+    if (action === 'history') {
+      const limit = Number.isInteger(body?.limit) ? body.limit : 50;
+      const id = typeof body?.draft === 'string' && body.draft ? body.draft : undefined;
+      return { entries: await journal.read({ limit, draft: id }) };
+    }
     // A connected agent reads the active draft when there is one, otherwise the main checkout.
     if (action === 'files') return { files: await listAgentSources(draft?.worktree ?? root) };
     if (action === 'file') return { ...await readAgentSource(draft?.worktree ?? root, body.name), draft: draft?.id ?? '' };
@@ -631,6 +643,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           await runner.stop();
           revision = await git.commit(change, message);
           draft = null;
+          await journal.record('committed', { draft: change.id, version: fingerprint(change.diff), owner: change.owner, files: change.names, commit: revision, message });
           try {
             await rename(path.join(change.directory, 'draft.json'), path.join(change.directory, 'committed.json'));
             await removeDraft(change);
@@ -655,7 +668,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           const latest = await git.headRevision();
           if (!latest || latest !== body.revision) throw new Error('The reviewed commit is no longer the tip of the main branch.');
           revision = await git.revert(latest);
-          warning = loadGateway(await git.touched(latest));
+          const touched = await git.touched(latest);
+          await journal.record('reverted', { commit: revision, reverted: latest, files: touched });
+          warning = loadGateway(touched);
           break;
         }
         default: throw new Error('Unknown workbench command.');

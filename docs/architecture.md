@@ -175,7 +175,13 @@ local runtime art and import caches from a private base in Workbench storage.
 `gateway/preview-base.mjs` keeps that base in line with the primary checkout,
 copying only files whose size or time changed, and hard-links its files into
 each preview. The primary checkout is only read. A preview that writes through a
-link changes the base, and the next sync replaces that file. The snapshot gets
+link changes the base, and the next sync replaces that file.
+
+`gateway/workbench-journal.mjs` appends one JSON line to
+`.local/workbench/journal.jsonl` for each draft, revision, restored version,
+check, commit, discard and revert. At 1 MiB it moves the file to
+`journal.1.jsonl` and starts a new one. A journal write that fails is logged
+and never fails the action. The snapshot gets
 its own Godot user-data directory and
 starts without the live gateway credentials. A failed check leaves the original
 source and live world saves untouched. Project and save isolation are filesystem

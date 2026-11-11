@@ -15,6 +15,10 @@ export const developmentTools = [
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
   { name: 'draft_status', description: 'Report the active source draft: its owner, version, files, diff, check status and check output.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
+  { name: 'task_history', description: 'List recent Workbench events, newest first: drafts, revisions, checks with their scope, ' +
+      'commits, discards and reverts. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
+    inputSchema: { type: 'object', properties: { draft: { type: 'string', pattern: '^[a-f0-9-]{36}$', description: 'A draft id from draft_status or an earlier entry.' } },
+      additionalProperties: false }, ...read },
   { name: 'submit_draft', description: 'Create your source draft, or revise it by sending changes on top of its current version. ' +
       'Send complete file contents. Euclid validates the paths and builds the reviewed Git diff. Only one draft can be active.',
     inputSchema: { type: 'object', properties: {
@@ -105,6 +109,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
         return { ok: true, path: args.path, draft, content };
       }
       case 'draft_status': return report(await workbench('state', {}, signal), agent);
+      case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
       case 'submit_draft': return submit(agent, args, signal);
       case 'run_checks': {
         const draft = await own(agent, args.version);
@@ -129,7 +134,8 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
           protocolVersion: '2025-03-26', capabilities: { tools: {} },
           serverInfo: { name: 'euclid-workbench', version: '0.1.0' },
           instructions: 'Read Euclid source with list_source and read_source. Propose a change with submit_draft, start its checks with ' +
-            'run_checks, and read the result with draft_status. A person reviews and commits the draft in Euclid’s Workbench.',
+            'run_checks, and read the result with draft_status. task_history shows what happened to earlier drafts. ' +
+            'A person reviews and commits the draft in Euclid’s Workbench.',
         });
       case 'ping': return reply({});
       case 'tools/list': return reply({ tools: developmentTools });

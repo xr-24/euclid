@@ -80,7 +80,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'submit_draft', 'run_checks', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'task_history', 'submit_draft', 'run_checks', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -170,6 +170,16 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   const discarded = await tool('discard_draft', { version: passed.version });
   assert.deepEqual([discarded.isError, discarded.draft], [false, null]);
   assert.equal(git('worktree', 'list').split('\n').length, 1);
+
+  // The journal keeps the draft's story after the draft is gone.
+  const history = await tool('task_history', { draft: passed.id });
+  assert.equal(history.isError, false);
+  assert.deepEqual(history.entries.map(item => [item.event, item.status ?? '', item.owner]).reverse(), [
+    ['drafted', '', 'claude'], ['checked', 'failed', 'claude'], ['revised', '', 'claude'], ['checked', 'passed', 'claude'], ['discarded', '', 'claude']]);
+  assert.equal(history.entries[1].scope, 'full');
+  assert.match(history.entries[3].error, /READY must be true/);
+  assert.deepEqual(history.entries[0].files, [added, script, obsolete]);
+  assert.equal((await rpc('tools/call', { name: 'task_history', arguments: { draft: 'not-an-id' } })).error.code, -32602);
 });
 
 test('a submitted draft keeps its owner across a gateway restart', async t => {

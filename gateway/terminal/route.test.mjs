@@ -32,7 +32,7 @@ test('the terminal routes need the Workbench capability and stream a session', a
   t.after(async () => {
     server.closeAllConnections();
     if (server.listening) await new Promise(resolve => server.close(resolve));
-    await rm(area, { recursive: true, force: true });
+    await rm(area, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;

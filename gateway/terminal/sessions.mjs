@@ -24,6 +24,10 @@ export function terminalEnvironment(env) {
   for (const name of Object.keys(result)) {
     if (/^(?:CONSTRUCT_GATEWAY_TOKEN|EUCLID_WORKBENCH_TOKEN|EUCLID_GATEWAY_HANDOFF|EUCLID_DEVELOPMENT_TOKEN)$/i.test(name)) delete result[name];
   }
+  for (const name of Object.keys(result)) {
+    if (name.toUpperCase() === 'TERM') delete result[name];
+  }
+  result.TERM = 'xterm-256color';
   return result;
 }
 

@@ -51,7 +51,7 @@ async function sessions(t, options = {}) {
   t.after(async () => {
     manager.closeAll();
     for (const child of spawned) if (child.exitCode === null) child.kill();
-    await rm(area, { recursive: true, force: true });
+    await rm(area, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   return manager;
 }
@@ -112,5 +112,6 @@ test('frames and the shell environment follow the host protocol', () => {
   assert.deepEqual([...frame('r', Buffer.from([1, 2, 3, 4]))], [0x72, 4, 0, 0, 0, 1, 2, 3, 4]);
   assert.deepEqual([...frame('x')], [0x78, 0, 0, 0, 0]);
   assert.deepEqual(Object.keys(terminalEnvironment({ CONSTRUCT_GATEWAY_TOKEN: 1, euclid_workbench_token: 1, EUCLID_GATEWAY_HANDOFF: 1,
-    OPENAI_API_KEY: 1, PATH: 1 })).sort(), ['OPENAI_API_KEY', 'PATH']);
+    OPENAI_API_KEY: 1, PATH: 1 })).sort(), ['OPENAI_API_KEY', 'PATH', 'TERM']);
+  assert.equal(terminalEnvironment({ Term: 'dumb' }).TERM, 'xterm-256color');
 });

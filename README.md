@@ -219,6 +219,22 @@ either named joints or its original Lift and Drift pose channels in a clip.
 The native `import_asset` tool accepts `preserve_rig: true` and returns the
 separate rigged asset ID for `spawn_entity`.
 
+### Player rig
+
+Open **Tab → Build → Player Rig**. The shell and joint swatches recolor both
+the world-space body and the first-person arms. **Walk bob** adjusts the
+amount of hand motion while walking.
+
+Choose a hand pose, then select **Wrist** or a finger joint. Scrub the timeline,
+enter an offset or rotation, and use **Set key**. Edits are additive to the
+built-in pose. A loop has up to 10 keys per track, with linked start and end
+values. Use **Play** to see the loop, **Save** to keep the rig across sessions,
+or **Discard** to restore the last saved rig. Saved clips play when their
+corresponding hand pose is active.
+
+F2 and local world MCP agents can use `inspect_player_rig`, `preview_player_rig`,
+`save_player_rig`, and `discard_player_rig` to edit the same draft.
+
 ## Develop from inside Euclid
 
 See the [in-Euclid development roadmap](docs/development-roadmap.md) for the current status and remaining milestones.

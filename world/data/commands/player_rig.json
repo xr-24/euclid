@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "inspect_player_rig",
+      "description": "Inspect the player's body and first-person materials, walking bob, editable finger joints and hand poses. Supply a target pose to retrieve its authored clip.",
+      "service": "world",
+      "handler": "_inspect_player_rig",
+      "effect": "read",
+      "surfaces": ["f2", "mcp"],
+      "fields": {"target": "player_pose"},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "preview_player_rig",
+      "description": "Preview player shell/joint colors and walking bob, or a keyframed hand clip for the selected pose. Clip offsets are additive wrist movement within ±0.12 m and rotations within ±60 degrees. Joint rotations are additive to the built-in pose. Keep pose keys at [0,0] and match loop endpoints. Open palm plays when the player interacts.",
+      "service": "world",
+      "handler": "_preview_player_rig",
+      "effect": "preview",
+      "surfaces": ["f2", "mcp"],
+      "fields": {"target": "player_pose", "shell": "color", "joints": "color", "bob": "player_bob", "clip": "clip", "reset_clip": "reset_clip"},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    },
+    {
+      "name": "save_player_rig",
+      "description": "Save the current player rig draft across sessions.",
+      "service": "world",
+      "handler": "_finish_player_rig",
+      "effect": "write",
+      "mode": "save",
+      "surfaces": ["f2", "mcp"],
+      "fields": {},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    },
+    {
+      "name": "discard_player_rig",
+      "description": "Discard the player rig draft and restore the saved player colors and animations.",
+      "service": "world",
+      "handler": "_finish_player_rig",
+      "effect": "preview",
+      "mode": "discard",
+      "surfaces": ["f2", "mcp"],
+      "fields": {},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    }
+  ]
+}

@@ -7,6 +7,8 @@ const Poses = preload("res://scripts/player/hand_poses.gd")
 
 var hands := Hands.new()
 var _meshes: Array[MeshInstance3D] = []
+var _materials := {}
+var _original_colors := {}
 var _animation: AnimationPlayer
 var _camera: Camera3D
 var _grounded := true
@@ -21,7 +23,6 @@ func mount(player: CharacterBody3D, camera: Camera3D) -> void:
 	# Keep the eye ahead of the animated chest even when the jog leans forward.
 	body.position.z = 0.34
 	add_child(body)
-	var materials := {}
 	for child in body.find_children("*", "MeshInstance3D", true, false):
 		var mesh := child as MeshInstance3D
 		_meshes.append(mesh)
@@ -29,9 +30,11 @@ func mount(player: CharacterBody3D, camera: Camera3D) -> void:
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		for surface in mesh.mesh.get_surface_count():
 			var material := mesh.mesh.surface_get_material(surface)
-			materials[material.resource_name] = material
+			if not _materials.has(material.resource_name):
+				_materials[material.resource_name] = material.duplicate()
+				_original_colors[material.resource_name] = material.albedo_color
 	_meshes.append(hands.mount(camera))
-	set_materials(materials)
+	set_materials(_materials)
 	_animation = body.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	_animation.play(_current)
 
@@ -41,6 +44,15 @@ func set_materials(materials: Dictionary) -> void:
 			var original := mesh.mesh.surface_get_material(surface)
 			if materials.has(original.resource_name):
 				mesh.set_surface_override_material(surface, materials[original.resource_name])
+
+func default_colors() -> Dictionary:
+	return {"shell": _original_colors["M_Main"].to_html(false), "joints": _original_colors["M_Joints"].to_html(false)}
+
+func apply_colors(colors: Dictionary) -> void:
+	var defaults := default_colors()
+	for slot in ["shell", "joints"]:
+		var name_key := "M_Main" if slot == "shell" else "M_Joints"
+		_materials[name_key].albedo_color = _original_colors[name_key] if colors[slot] == defaults[slot] else Color.html(colors[slot])
 
 func interact() -> void:
 	_reaching = true

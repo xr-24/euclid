@@ -24,6 +24,8 @@ const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const TaskPresence = preload("res://scripts/agents/task_presence.gd")
 const PlayerAvatar = preload("res://scripts/player/player_avatar.gd")
+const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
+const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const WristPages = preload("res://scripts/player/wrist_pages.gd")
@@ -42,6 +44,7 @@ var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
 var player_avatar: PlayerAvatar
+var player_rig: RigAuthoring
 var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
 var wrist: WristComputer
@@ -242,6 +245,7 @@ func _setup_player() -> void:
 	camera.current = true
 	player_avatar = PlayerAvatar.new()
 	player_avatar.mount(player, camera)
+	player_rig = RigAuthoring.new(player_avatar, "" if smoke_mode else "user://player-rig.json")
 	wrist = WristComputer.new()
 	wrist.mount(self, camera, player_avatar.hands, WristPages.new(self))
 
@@ -355,6 +359,17 @@ func _button(title: String, callback: Callable) -> void:
 func _close_panel() -> void:
 	overlay.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+func _open_player_rig() -> void:
+	if shifting:
+		return
+	_panel("", "")
+	var viewport_size := get_viewport().get_visible_rect().size
+	overlay.offset_top = 28
+	overlay.offset_bottom = 414 - viewport_size.y
+	var editor := PlayerRigPanel.new()
+	overlay_content.add_child(editor)
+	editor.setup(player_rig, _close_panel)
 
 ## Every kind of live extension shares one lifecycle. See scripts/extensions/.
 func _register_live_extensions() -> void:
@@ -486,6 +501,7 @@ func _submit_codex_command(prompt: String) -> void:
 		context["scene_assets"] = world_tools.execute("list_scene_assets").get("assets", [])
 	if scene_animations:
 		context["animation"] = scene_animations.context(world_tools if _scene_ready() else null)
+	context["player_rig"] = player_rig.planning_context()
 	var response: Dictionary = await grid_agent.plan(prompt, context)
 	_dev.busy = false
 	if response.has("error"):

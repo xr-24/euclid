@@ -3,6 +3,7 @@ extends Node3D
 const Arms = preload("res://assets/player/mannequin_arms.glb")
 const Poses = preload("res://scripts/player/hand_poses.gd")
 const Wrist = preload("res://scripts/player/hand_wrist.gd")
+const Motion = preload("res://scripts/animation/motion_clip.gd")
 const SIDES := ["l", "r"]
 ## The wrist computer pose, like checking a watch: the left forearm laid across the lower middle
 ## of the view, back of the hand up, a loose fist. Camera space (-Z ahead, +X right). The wrist
@@ -35,6 +36,13 @@ var _movement := 0.0
 var _reach_offset := Vector3.ZERO
 var _palm := Vector3.DOWN
 var _finger_lift := 0.0
+var _clips := {}
+var _track_bindings := {}
+var _bob_scale := 1.0
+var _preview_slot := -1
+var _seek_time := -1.0
+var _clip_time := 0.0
+var _playing_slot := -1
 
 func mount(camera: Camera3D) -> MeshInstance3D:
 	camera.add_child(self)
@@ -92,6 +100,39 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 func set_wrist_raised(up: bool) -> void:
 	_watch = up
 
+func editable_joints() -> PackedStringArray:
+	var names := PackedStringArray()
+	for chain in _chains:
+		for joint: Dictionary in chain.finger_joints:
+			names.append(_rig.get_bone_name(joint.bone))
+	return names
+
+func set_authored_clips(clips: Dictionary, bob: float) -> void:
+	_clips = clips
+	_bob_scale = bob
+	_track_bindings.clear()
+	for slot in clips:
+		var bindings := {}
+		for track in clips[slot].get("joint_tracks", []):
+			bindings[_rig.find_bone(track.joint)] = track.keyframes
+		_track_bindings[slot] = bindings
+	for chain in _chains:
+		chain["still"] = false
+
+func preview_pose(slot: int, time := -1.0) -> void:
+	if slot != _preview_slot or (time < 0 and _seek_time >= 0):
+		_clip_time = maxf(0.0, time)
+	_preview_slot = slot
+	_seek_time = time
+
+func stop_pose_preview() -> void:
+	_preview_slot = -1
+	_seek_time = -1.0
+	_playing_slot = -1
+
+func authored_time() -> float:
+	return _clip_time
+
 ## The point on top of the left forearm the wrist computer projects from, in camera space, and
 ## how far the arm has come up (0 to 1).
 func wrist_emitter() -> Dictionary:
@@ -105,10 +146,15 @@ func wrist_emitter() -> Dictionary:
 func pulse(pose: Poses.Pose, target: Vector3) -> void:
 	_pose = pose
 	_point = target
-	_pulse_left = 0.38
+	_pulse_left = float(_clips[pose].duration) if _clips.has(pose) else 0.38
+	_playing_slot = -1
 
 func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void:
 	_pulse_left = maxf(0.0, _pulse_left - delta)
+	if _preview_slot >= 0:
+		pose = _preview_slot as Poses.Pose
+		target = Vector3.INF
+		_pulse_left = 0.0
 	var reaching := _pulse_left > 0.0 or pose != Poses.Pose.REST
 	if _pulse_left == 0.0 and pose != Poses.Pose.REST:
 		_pose = pose
@@ -119,6 +165,18 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 	if at_rest:
 		_blend = 0.0
 	var lift := smoothstep(0.0, 1.0, _blend)
+	var slot := int(_pose) if not at_rest else int(Poses.Pose.REST)
+	if slot != _playing_slot:
+		_clip_time = 0.0
+		_playing_slot = slot
+	var clip: Dictionary = _clips.get(slot, {})
+	var bindings: Dictionary = _track_bindings.get(slot, {})
+	var sample := {}
+	var time := 0.0
+	if not clip.is_empty():
+		_clip_time = fposmod(_clip_time + delta, clip.duration)
+		time = _seek_time if _preview_slot >= 0 and _seek_time >= 0 else _clip_time
+		sample = Motion.sample(clip, time)
 	_watch_blend = lerpf(_watch_blend, 1.0 if _watch else 0.0, 1.0 - exp(-delta * 10.0))
 	if absf(_watch_blend - (1.0 if _watch else 0.0)) < 0.004:
 		_watch_blend = 1.0 if _watch else 0.0
@@ -145,7 +203,7 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 	_reach_offset = _reach_offset.lerp(offset, amount)
 	var breath := sin(_breath_phase)
 	# Both wrists rise and dip with each footfall, with a smaller alternating lift.
-	var bob := cos(_stride_phase * 2.0) * 0.008 * _movement
+	var bob := cos(_stride_phase * 2.0) * 0.008 * _movement * _bob_scale
 	for index in _chains.size():
 		var chain := _chains[index]
 		var side := -1.0 if index == 0 else 1.0
@@ -153,7 +211,7 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 		var shoulder: Vector3 = chain.shoulder
 		var stride := sin(_stride_phase) * side * _movement
 		var rest := Vector3(side * 0.30, -0.295, -0.49)
-		rest += Vector3(side * 0.004 * breath, breath * 0.004 + bob - stride * 0.002, 0)
+		rest += Vector3(side * 0.004 * breath, breath * 0.004 + bob - stride * 0.002 * _bob_scale, 0)
 		var reach: float = chain.reach
 		var direction := (aim - shoulder).normalized() if aim.z < -0.15 else Vector3.FORWARD
 		var distant := shoulder + direction * -_reach_offset.z + Vector3(_reach_offset.x, _reach_offset.y, 0)
@@ -170,7 +228,7 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 		var palm := Vector3(-side * 0.46, -0.88, 0.12).lerp(_palm, weight)
 		var finger_pose := _pose
 		var finger_weight := smoothstep(0.05, 0.83, weight)
-		var still := at_rest
+		var still := at_rest and bindings.is_empty()
 		if index == 0:
 			var watch_wrist := shoulder + WATCH_DIRECTION.normalized() * reach * WATCH_EXTENT
 			goal.position = goal.position.lerp(watch_wrist, watch) + sin(watch * PI) * Vector3(0.02, 0.03, -0.04)
@@ -180,12 +238,28 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 			pole.position = (chain.pole_rest as Vector3).lerp(WATCH_POLE, watch)
 			finger_pose = Poses.Pose.GRAB
 			finger_weight = watch * 0.85
-			still = watch == 0.0
+			still = watch == 0.0 and bindings.is_empty()
 		elif watch > 0.0:
 			goal.position = goal.position.lerp(RIGHT_AWAY, watch)
+		var authored_weight := (1.0 - watch) * ((1.0 - lift) if slot == Poses.Pose.REST else lift)
+		if not sample.is_empty() and (slot == Poses.Pose.REST or index == 1):
+			var translation: Vector3 = sample.offset
+			translation.x *= side
+			goal.position += translation * authored_weight
+			goal.position = shoulder + (goal.position - shoulder).limit_length(reach * 0.97)
+			var angles: Vector3 = sample.rotation
+			angles.y *= side
+			angles.z *= side
+			var rotation := Basis.from_euler(angles * (PI / 180.0) * authored_weight)
+			hand_forward = rotation * hand_forward
+			palm = rotation * palm
 		_wrist.orientations[index] = _frame(to_rig * hand_forward, to_rig * palm) * chain.hand_frame
 		if not chain.get("still", false) or not still:
 			_pose_fingers(chain.finger_joints, finger_pose, finger_weight, 1.0 if still else amount)
+			for joint: Dictionary in chain.finger_joints:
+				if bindings.has(joint.bone):
+					var rotation := Motion.sample_rotation(bindings[joint.bone], time, clip.interpolation) * (PI / 180.0)
+					_rig.set_bone_pose_rotation(joint.bone, joint.rest * _finger_rotations[joint.bone] * Quaternion.from_euler(rotation * authored_weight))
 		chain["still"] = still
 
 func _pose_fingers(fingers: Array, pose: Poses.Pose, weight: float, amount: float) -> void:

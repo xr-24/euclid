@@ -107,7 +107,7 @@
         },
         "joint_tracks": {
           "type": "array",
-          "description": "Up to 16 rig joint tracks. Empty for unrigged props or companion Lift/Drift clips.",
+          "description": "Up to 30 player finger tracks, or 16 tracks for props and companions. Empty for unrigged props or companion Lift/Drift clips.",
           "items": {
             "type": "object",
             "properties": {
@@ -147,7 +147,7 @@
             ],
             "additionalProperties": false
           },
-          "maxItems": 16
+          "maxItems": 30
         }
       },
       "required": [
@@ -243,6 +243,20 @@
       "type": "string",
       "description": "Six RGB hex digits",
       "pattern": "^[a-fA-F0-9]{6}$"
+    },
+    "player_pose": {
+      "type": "string",
+      "enum": ["rest", "point", "grab", "pinch", "open_palm"]
+    },
+    "player_bob": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Walking bob multiplier. Default is 1."
+    },
+    "reset_clip": {
+      "type": "boolean",
+      "description": "Restore the built-in motion for the selected player pose."
     },
     "prop_name": {
       "type": "string",

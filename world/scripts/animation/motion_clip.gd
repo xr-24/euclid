@@ -1,7 +1,7 @@
 extends RefCounted
 ## Bounded, data-only animation clips. The first and last keys close the loop.
 
-static func valid(clip: Variant) -> bool:
+static func valid(clip: Variant, max_joint_tracks := 16) -> bool:
 	if not clip is Dictionary or not clip.get("name") is String:
 		return false
 	if clip.keys().any(func(key: String) -> bool: return key not in ["name", "duration", "interpolation", "keyframes", "joint_tracks"]):
@@ -28,7 +28,7 @@ static func valid(clip: Variant) -> bool:
 	if not _same_rotation(first.rotation, last.rotation):
 		return false
 	var tracks: Variant = clip.get("joint_tracks", [])
-	if not tracks is Array or tracks.size() > 16:
+	if not tracks is Array or tracks.size() > max_joint_tracks:
 		return false
 	var names := {}
 	for track in tracks:
@@ -71,13 +71,13 @@ static func bind_joints(clip: Dictionary, skeleton: Skeleton3D) -> Array[Diction
 
 static func apply_joints(skeleton: Skeleton3D, tracks: Array[Dictionary], time: float, interpolation: String) -> void:
 	for track in tracks:
-		var keys: Array = track.keys
-		var index := _next_key(keys, time)
-		var a: Dictionary = keys[index - 1]
-		var b: Dictionary = keys[index]
-		var t := _weight(a.time, b.time, time, interpolation)
-		var rotation := _vec3(a.rotation).lerp(_vec3(b.rotation), t) * (PI / 180.0)
-		skeleton.set_bone_pose_rotation(track.index, track.rest * Quaternion.from_euler(rotation))
+		skeleton.set_bone_pose_rotation(track.index, track.rest * Quaternion.from_euler(sample_rotation(track.keys, time, interpolation) * (PI / 180.0)))
+
+static func sample_rotation(keys: Array, time: float, interpolation: String) -> Vector3:
+	var index := _next_key(keys, time)
+	var a: Dictionary = keys[index - 1]
+	var b: Dictionary = keys[index]
+	return _vec3(a.rotation).lerp(_vec3(b.rotation), _weight(a.time, b.time, time, interpolation))
 
 static func sample(clip: Dictionary, seconds: float) -> Dictionary:
 	var time := fposmod(seconds, clip.duration)

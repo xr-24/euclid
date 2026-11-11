@@ -36,6 +36,8 @@ func _build() -> Dictionary:
 	return {"id": "build", "title": "BUILD", "rows": [
 		{"label": "GRID TOOLS" if _world._is_workshop(_world.zone_id) else "SCENE TOOLS", "value": "B",
 			"enabled": _world._scene_ready(), "why": "LOADING", "run": Callable(_world, "_request_grid_palette"), "close": true},
+		{"label": "PLAYER RIG", "enabled": not _world.shifting, "why": "SHIFTING",
+			"run": Callable(_world, "_open_player_rig"), "close": true},
 		{"label": "DESCRIBE", "input": true, "then": "codex", "value": codex, "tone": "warn" if not codex.is_empty() else "",
 			"enabled": codex.is_empty(), "why": codex, "run": Callable(_world, "_submit_codex_command")},
 	]}

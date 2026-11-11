@@ -25,6 +25,7 @@ All paths below are relative to `world/scripts/`.
 | `simulation/water_system.gd` | Water construction, probes, wakes and buoyancy | Consumes a zone root and player; GPU solver remains under `thirdparty/` |
 | `simulation/water_interactions.gd` | Bounded, time-scaled wake, splash and fountain impulses | Pure functions; separate pool and shore profiles |
 | `player/player_motor.gd` | Walking, jumping, wading and swimming | Inputs and water state go in; one body movement step comes out |
+| `player/rig_authoring.gd`, `ui/player_rig_panel.gd` | Player material and hand clip drafts | UI and registered world tools share one preview and save service; edits live in a separate player profile |
 | `ui/world_ui.gd` | Menus and application previews | Emits user-intent signals; cannot load zones or save the world |
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |

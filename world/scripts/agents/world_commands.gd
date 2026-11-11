@@ -18,6 +18,16 @@ func execute(definition: Dictionary, plan: Dictionary) -> Dictionary:
 func _run_registered_action(plan: Dictionary) -> Dictionary:
 	return _world._run_registered_action(plan)
 
+func _inspect_player_rig(plan: Dictionary) -> Dictionary:
+	return _world.player_rig.inspect(plan.get("target", ""))
+
+func _preview_player_rig(plan: Dictionary) -> Dictionary:
+	var slot: String = plan.get("target", "")
+	return _world.player_rig.preview("rest" if slot.is_empty() else slot, plan)
+
+func _finish_player_rig(plan: Dictionary) -> Dictionary:
+	return _world.player_rig.finish(Commands.command(plan.tool).mode == "save")
+
 func _list_registered_actions(_plan: Dictionary) -> Dictionary:
 	var catalog: Array = _world._workshop_action_catalog()
 	var labels := PackedStringArray()

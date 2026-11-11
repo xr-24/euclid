@@ -140,6 +140,10 @@ test('Claude authoring reports failures and stops when cancelled', async t => {
   const author = (FAKE_MODE, signal) => createClaudeAgent({ ...options, env: { ...options.env, FAKE_MODE } })
     .author('brief', { workspace, onProgress() {}, signal, timeout: 30000 });
   await assert.rejects(author('failed', live()), /did not finish editing the workspace/);
+  // Cancelling while the sign-in check runs reports the cancellation, not a sign-out.
+  const early = new AbortController();
+  early.abort(new Error('Source authoring cancelled.'));
+  await assert.rejects(author('hang', early.signal), /Source authoring cancelled/);
   const controller = new AbortController();
   const running = author('hang', controller.signal);
   setTimeout(() => controller.abort(new Error('Source authoring cancelled.')), 300);
@@ -151,6 +155,9 @@ test('Claude authoring reports failures and stops when cancelled', async t => {
 test('Codex keeps its ChatGPT sign-in, schema file and workspace sandbox', async t => {
   const { options, workspace, calls } = await fixture(t, fakeCodex, { ANTHROPIC_API_KEY: 'anthropic', FAKE_FORBID: 'ANTHROPIC_API_KEY' });
   const agent = createCodexAgent(options);
+  const early = new AbortController();
+  early.abort(new Error('Planning cancelled.'));
+  await assert.rejects(agent.structured('Plan: a cone', schema, early.signal), /Planning cancelled/);
   assert.deepEqual(await agent.structured('Plan: a cone', schema, live()), { action: 'spawn_cone' });
   const progress = [];
   assert.equal(await agent.author('brief', { workspace, onProgress: line => progress.push(line), signal: live(), timeout: 30000 }), 'Added edited.gd.');

@@ -35,6 +35,8 @@ export function createClaudeAgent({ env = process.env,
     try {
       await run(file, [...args, 'auth', 'status'], { env: childEnv, signal, timeout: 10000 });
     } catch (error) {
+      // A request cancelled during the sign-in check is cancelled, not signed out.
+      if (signal?.aborted) throw signal.reason ?? error;
       if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new Error('Install Claude Code or set EUCLID_CLAUDE_BIN to its executable.');
       throw new Error('Sign in to Claude Code using claude auth login.');
     }

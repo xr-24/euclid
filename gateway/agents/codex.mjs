@@ -19,6 +19,8 @@ export function createCodexAgent({ env = process.env,
     try {
       login = await run(file, [...args, 'login', 'status'], { env: childEnv, signal, timeout: 5000 });
     } catch (error) {
+      // A request cancelled during the sign-in check is cancelled, not signed out.
+      if (signal?.aborted) throw signal.reason ?? error;
       if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new Error('Install the Codex CLI or set EUCLID_CODEX_BIN to its executable.');
       throw new Error('Sign in to Codex with your ChatGPT account using codex login.');
     }

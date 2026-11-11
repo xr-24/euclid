@@ -16,6 +16,12 @@ Agent drafts are the F2 source agent and drafts submitted over the
 The draft reports `activation` as `restart`, `gateway_restart` or `none`. The
 Workbench status line still reads **Restart Euclid** for the last two.
 
+Checks follow the same table. A draft of documentation alone runs nothing. A
+draft of gateway code and docs imports the preview project and runs the gateway
+tests, including the command contract against Godot, but skips the Godot core
+and smoke tests. Any other change, or a draft mixing them, runs every check.
+The check result reports this as `scope`: `docs`, `gateway` or `full`.
+
 ## The kernel
 
 Five gateway files cannot be changed by any draft:

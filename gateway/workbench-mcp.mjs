@@ -56,7 +56,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
     if (!draft) return { ok: true, draft: null, busy: state.operation ?? '' };
     return { ok: true, busy: state.operation ?? '', draft: {
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
-      files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '',
+      files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
       activation: draft.activation ?? '', notice: draft.revision_notice ?? '',
       ...(withDiff ? { diff: clip(draft.diff, 96000) } : {}),
       output: tail(draft.log, 12000), preview_output: tail(state.preview_log, 4000),

@@ -162,7 +162,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       id: change.id, name: change.names.length === 1 ? change.names[0] : `${change.names.length} files`, files: change.names,
       diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
       log: authoring?.revising ? authoring.log : change.log, error: change.error,
-      check_status: change.check?.status ?? '',
+      check_status: change.check?.status ?? '', check_scope: change.check?.scope ?? '',
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
       live: Boolean(change.plugin || appearance || tool || palette),
@@ -471,25 +471,26 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const finished = (async () => {
       let status = 'passed';
       let error = '';
+      let scope = '';
       try {
         await verifyReview(change);
         const appearance = appearanceFor(change.names);
         if (appearance) readAppearance((await readSource(change.worktree, appearance.file)).text, appearance);
         const tool = workshopToolFile(change.names);
         if (tool) readWorkshopTool((await readSource(change.worktree, tool)).text, tool);
-        await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal);
+        scope = (await runner.check(change, chunk => { change.log = (change.log + chunk).slice(-24000); }, controller.signal))?.scope ?? '';
         await verifyReview(change);
       } catch (failure) {
         status = 'failed';
         error = failure.message;
       }
       try {
-        const check = { version: fingerprint(change.diff), status, error, log: change.log };
+        const check = { version: fingerprint(change.diff), status, error, log: change.log, ...(scope ? { scope } : {}) };
         if (!controller.signal.aborted) await saveDraft(change, change.diff, check);
         change.check = check;
       } catch (failure) {
         change.revisionNotice = `Could not save the check output for reopening. ${failure.message}`;
-        change.check = { status, error, log: change.log };
+        change.check = { status, error, log: change.log, ...(scope ? { scope } : {}) };
       } finally {
         Object.assign(change, { status, error });
         checks = null;

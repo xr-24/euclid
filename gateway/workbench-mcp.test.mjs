@@ -36,6 +36,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
       const source = await readFile(path.join(draft.worktree, script), 'utf8');
       log(`Checked ${source.length} characters.\n`);
       if (!source.includes('READY := true')) throw new Error('READY must be true.');
+      return { scope: 'full' };
     },
     playing: () => false,
     async stop() {},
@@ -160,6 +161,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   const passed = await until('passed');
   assert.equal(checks, 2);
   assert.equal(passed.check_status, 'passed');
+  assert.equal(passed.check_scope, 'full');
   assert.match(passed.diff, /\+const READY := true/);
 
   // Passing checks do not install anything. The commit stays in the Workbench.

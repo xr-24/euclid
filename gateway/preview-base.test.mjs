@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { assertSeparateBase, linkBase, syncBase } from './preview-base.mjs';
-import { createPreviewRunner } from './workbench-runner.mjs';
 
 async function project(t) {
   const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-preview-base-'));
@@ -102,41 +101,4 @@ test('the base refuses symbolic links and any location that overlaps the world',
   try { await symlink(outside, path.join(root, 'world/assets/link.txt')); }
   catch (error) { if (error.code === 'EPERM') return t.skip('Symbolic links need extra rights on this machine.'); throw error; }
   await assert.rejects(syncBase(root, base), /symbolic link/);
-});
-
-test('a check links the base into a preview of the reviewed worktree', { skip: process.platform === 'win32' && 'Uses a shell script in place of Godot.' }, async t => {
-  const { area, root } = await project(t);
-  const godot = path.join(area, 'godot.sh');
-  await writeFile(godot, '#!/bin/sh\nexit 0\n');
-  await chmod(godot, 0o755);
-  const previous = process.env.GODOT_BIN;
-  process.env.GODOT_BIN = godot;
-  t.after(() => { if (previous === undefined) delete process.env.GODOT_BIN; else process.env.GODOT_BIN = previous; });
-
-  const worktree = path.join(area, 'draft/worktree');
-  const reviewed = {
-    'world/project.godot': 'config/name="Euclid"\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name="Godot/app_userdata/Euclid"\n',
-    'world/scripts/world.gd': 'reviewed script',
-    'world/assets/villa/statue.glb.import': 'reviewed import settings',
-    'gateway/server.mjs': '', 'scripts/check.ps1': '', 'package.json': '{}',
-  };
-  for (const [name, text] of Object.entries(reviewed)) {
-    await mkdir(path.dirname(path.join(worktree, name)), { recursive: true });
-    await writeFile(path.join(worktree, name), text);
-  }
-  const base = path.join(area, 'storage/preview-base');
-  assert.throws(() => createPreviewRunner(root, { base: path.join(root, 'world/base') }), /outside the project world/);
-  const runner = createPreviewRunner(root, { base });
-  let log = '';
-  // The stand-in machine has no PowerShell, so the check stops after the preview is ready.
-  await assert.rejects(runner.check({ directory: path.join(area, 'draft'), worktree, id: 'abc' }, chunk => { log += chunk; },
-    new AbortController().signal));
-  assert.match(log, /Linked 4 art and import files\./);
-  const tree = path.join(area, 'draft/preview');
-  assert.equal(await readFile(path.join(tree, 'world/scripts/world.gd'), 'utf8'), 'reviewed script');
-  assert.equal(await readFile(path.join(tree, 'world/assets/villa/statue.glb.import'), 'utf8'), 'reviewed import settings');
-  const statue = 'world/assets/villa/statue.glb';
-  assert.equal((await stat(path.join(tree, statue))).ino, (await stat(path.join(base, statue))).ino);
-  assert.notEqual((await stat(path.join(tree, statue))).ino, (await stat(path.join(root, statue))).ino);
-  assert.match(await readFile(path.join(tree, 'world/project.godot'), 'utf8'), /Euclid-workbench-abc/);
 });

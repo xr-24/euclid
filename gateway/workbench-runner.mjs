@@ -3,9 +3,20 @@ import { existsSync } from 'node:fs';
 import { access, cp, lstat, mkdir, open, statfs, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { assertSeparateBase, linkBase, syncBase } from './preview-base.mjs';
-import { fingerprint } from './workbench-source.mjs';
+import { fingerprint, isGatewayPath } from './workbench-source.mjs';
 
 const previewLogPath = draft => path.join(draft.directory, `preview-${fingerprint(draft.diff)}.log`);
+const isDocPath = name => name === 'README.md' || /^docs\/[\w.-]+\.md$/.test(name);
+
+// What a draft's checks must cover. Documentation runs nothing. Gateway code skips the
+// Godot core and smoke tests, whose code it cannot change, but keeps the import so the
+// command contract test can compare the gateway with Godot. Anything else gets every check.
+export function checkScope(names) {
+  if (!Array.isArray(names) || !names.length || !names.every(name => typeof name === 'string')) return 'full';
+  if (names.every(isDocPath)) return 'docs';
+  if (names.every(name => isDocPath(name) || isGatewayPath(name))) return 'gateway';
+  return 'full';
+}
 
 function childEnvironment(godot) {
   const env = { ...process.env, GODOT_BIN: godot };
@@ -45,7 +56,7 @@ function run(file, args, { cwd, env, timeout, onOutput, signal }) {
   });
 }
 
-export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.join(root, '.local/preview-base') } = {}) {
+export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.join(root, '.local/preview-base'), powershell = 'powershell.exe' } = {}) {
   const godot = process.env.GODOT_BIN || path.join(root, '.tools/godot/Godot_v4.7.2-stable_win64_console.exe');
   const env = childEnvironment(godot);
   assertSeparateBase(root, base);
@@ -101,16 +112,24 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
 
   return {
     async check(draft, onOutput, signal) {
+      const scope = checkScope(draft.names);
+      if (scope === 'docs') {
+        onOutput('This draft changes only documentation, so there is nothing to run.\n');
+        return { scope };
+      }
       const tree = await prepare(draft, onOutput, signal);
-      onOutput('Running Euclid project checks.\n');
-      const code = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(tree, 'scripts/check.ps1')],
-        { cwd: tree, env, timeout: 180000, onOutput, signal });
+      onOutput(scope === 'gateway'
+        ? 'This draft changes only the gateway and docs. Running the gateway tests and command contract without the Godot core and smoke tests.\n'
+        : 'Running Euclid project checks.\n');
+      const code = await run(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(tree, 'scripts/check.ps1')],
+        { cwd: tree, env: scope === 'gateway' ? { ...env, EUCLID_CHECK_SCOPE: 'gateway' } : env, timeout: 180000, onOutput, signal });
       if (code !== 0) throw new Error('The preview failed its project checks.');
+      return { scope };
     },
 
     async benchmark(source, output, settings, onOutput, signal) {
       const tree = await prepare(source, onOutput, signal);
-      const code = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+      const code = await run(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
         path.join(root, 'scripts/benchmark.ps1'), '-ProjectPath', path.join(tree, 'world'),
         '-OutputDirectory', output, '-Zone', 'villa', '-Quality', settings.profile,
         '-Width', String(settings.width), '-Height', String(settings.height), '-WindowId', String(benchmarkWindowId)],

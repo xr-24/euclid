@@ -348,7 +348,8 @@ directly and switch between open buffers.
 **Review diff** creates a separate Git worktree for the draft. **Run checks**
 tests it in a disposable project and shows its logs. The first check keeps a
 2 GiB copy of the local art and import cache under `.local/workbench`. Later
-checks link to it and copy only what changed. **Play preview** opens that build with separate saves. Enter a
+checks link to it and copy only what changed. A draft that changes only gateway
+code skips the Godot core and smoke tests, and a documentation draft runs nothing. **Play preview** opens that build with separate saves. Enter a
 message and choose **Commit** to add the reviewed changes to the local branch.
 The main checkout must be clean and still on the draft's starting commit. If
 it moved, the draft stays available. **Discard** removes the draft. **Revert

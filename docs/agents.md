@@ -69,7 +69,7 @@ from F2 connects as `codex`.
 | Tool | Effect |
 | --- | --- |
 | `list_source`, `read_source` | Read draft-eligible source plus `README.md`, `AGENTS.md` and `docs/*.md`. With a draft active, reads return the draft's version |
-| `draft_status` | Owner, version, files, diff, check status and check output of the active draft |
+| `draft_status` | Owner, version, files, diff, check status, scope and output of the active draft |
 | `submit_draft` | Create a draft from complete file contents and deletions, or revise the agent's own draft on top of its current version |
 | `run_checks` | Start the isolated project checks for the agent's own draft |
 | `discard_draft` | Discard the agent's own draft |

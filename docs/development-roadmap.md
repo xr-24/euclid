@@ -62,8 +62,10 @@ Checks and benchmarks no longer copy about 2 GiB of art and import cache each
 time. The runner keeps one private copy, updates only changed files, and
 hard-links it into each preview. Across drives it falls back to copying.
 
-**Remaining.** Split checks so a gateway-only draft skips the Godot import.
-Attach rendered screenshots to check results and keep a task journal. Add
+Checks are scoped to what a draft changes. Documentation runs nothing, and
+gateway code skips the Godot core and smoke tests.
+
+**Remaining.** Attach rendered screenshots to check results and keep a task journal. Add
 moving routes and repeatable transition measurements, then use them to isolate
 villa regressions from inside Euclid.
 

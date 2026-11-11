@@ -39,6 +39,45 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 			revised = true
 		return {}
 
+const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
+
+class FixtureKind extends "res://scripts/extensions/live_kind.gd":
+	var name := ""
+	var key := ""
+	var held := {}
+	var reloads := 0
+	var on_commit := false
+	var warning := ""
+
+	func _init(kind_name: String, candidate_key: String, reload_on_commit := false) -> void:
+		name = kind_name
+		key = candidate_key
+		on_commit = reload_on_commit
+
+	func id() -> String:
+		return name
+
+	func accepts(candidate: Dictionary) -> bool:
+		return key.is_empty() or candidate.has(key)
+
+	func preview(candidate: Dictionary) -> Dictionary:
+		held[candidate.draft] = "active"
+		return {"ok": true, "message": name}
+
+	func status(draft: String) -> String:
+		return held.get(draft, "")
+
+	func finish(draft: String, _keep: bool) -> Dictionary:
+		var was_live := held.has(draft)
+		held.erase(draft)
+		return {"live": was_live, "warning": warning}
+
+	func reload_committed() -> void:
+		reloads += 1
+
+	func reloads_on_commit() -> bool:
+		return on_commit
+
 class FocusFixtureClient extends "res://scripts/agents/workbench_client.gd":
 	var focused := "unset"
 	var answer := {}
@@ -138,6 +177,7 @@ func _run() -> void:
 	_check_development_session()
 	await _check_development_refresh()
 	await _check_workbench_drafts()
+	_check_live_extensions()
 	_check_palette_reload()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
@@ -653,6 +693,32 @@ func _check_development_refresh() -> void:
 	_check(client.revised and not result.has("error"), "an F2 revision waits for the draft refresh")
 	await process_frame
 	development.free()
+
+func _check_live_extensions() -> void:
+	var live := LiveExtensions.new()
+	var palette := FixtureKind.new("grid_palette", "grid_palette")
+	var tools := FixtureKind.new("workshop_tool", "workshop_tool", true)
+	var behavior := FixtureKind.new("behavior", "")
+	behavior.warning = "Released the test link."
+	for kind in [palette, tools, behavior]:
+		live.register(kind)
+	_check(live.kind_ids() == PackedStringArray(["grid_palette", "workshop_tool", "behavior"]), "list live extension kinds in order")
+	_check(live.preview({"draft": "p", "grid_palette": {}}).message == "grid_palette"
+		and live.preview({"draft": "t", "workshop_tool": {}}).message == "workshop_tool"
+		and live.preview({"draft": "b", "plugin": "pulse"}).message == "behavior", "route each live draft to the first kind that accepts it")
+	_check(live.status("t") == "active" and live.status("b") == "active" and live.status("missing").is_empty(),
+		"report a live draft's status from the kind that holds it")
+	var kept: Dictionary = live.finish("t", true)
+	_check(kept.live and kept.warning.is_empty() and tools.held.is_empty() and live.status("t").is_empty(),
+		"finish a live draft in the kind that holds it")
+	var released: Dictionary = live.finish("b", false)
+	_check(released.live and released.warning == "Released the test link.", "pass the catch-all kind's warning through")
+	_check(not live.finish("never", false).live, "finish a draft no kind holds")
+	live.reload_committed(true)
+	_check(tools.reloads == 1 and palette.reloads == 0 and behavior.reloads == 0, "reload only commit-time kinds after a commit")
+	live.reload_committed()
+	_check(tools.reloads == 2 and palette.reloads == 1 and behavior.reloads == 1, "reload every kind after a revert")
+	_check(not LiveExtensions.new().preview({"draft": "x"}).ok, "refuse a draft no kind accepts")
 
 func _check_workbench_drafts() -> void:
 	_check(WorkbenchPanel.draft_label({"owner": "grok", "files": ["a", "b"], "status": "passed", "behind_main": true})

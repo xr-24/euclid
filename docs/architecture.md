@@ -29,7 +29,8 @@ All paths below are relative to `world/scripts/`.
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
-| `diagnostics/` | Benchmarks, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save |
+| `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |
+| `diagnostics/` | Benchmarks, smoke test, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save; each runner receives the world as `run(world)` |
 
 ```mermaid
 flowchart TD
@@ -252,6 +253,31 @@ The workshop validates every target before writing a single save update and
 recording a single undo entry. Door opening is included in that runtime undo
 entry. Installed behaviors continue to drive doors after a reset. Running an
 action is a separate operation from registering, committing, or discarding it.
+
+## Live extensions
+
+A reviewed Workbench draft can run in the world before it is committed. Every
+kind of draft that can do so follows one lifecycle, defined by
+`extensions/live_kind.gd`:
+
+| Step | Meaning |
+| --- | --- |
+| `accepts(candidate)` | Whether this kind owns the candidate the gateway served for the draft |
+| `preview(candidate)` | Activate it in the running world; returns `ok` and a message |
+| `status(draft)` | `active` or `failed` while the kind holds the draft |
+| `finish(draft, keep)` | Keep it after a commit or drop it after a discard; reports whether it was live |
+| `reload_committed()` | Load committed definitions again after a revert, or after any commit when `reloads_on_commit()` |
+
+`extensions/live_extensions.gd` routes each candidate to the first registered
+kind that accepts it. The world registers five kinds in `extensions/live_kinds.gd`:
+the Grid palette, the shoreline look, the Grid scenery, workshop actions, and
+behavior plugins, which accept every remaining candidate and are registered
+last. Each adapter wraps the service that already owned that kind. Kinds get a
+context of callables for the current zone, the Grid workshop tools and the
+palette's action catalog, so they never reach into the world coordinator.
+
+To add a kind, subclass `live_kind.gd`, register it in `world.gd` before the
+behavior kind, and teach the gateway to serve its candidate.
 
 ## Live behavior plugins
 

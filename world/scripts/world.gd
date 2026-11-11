@@ -32,6 +32,8 @@ const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
+const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
+const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 var manifest: Dictionary
 var asset_client: Node
 var zone_id := "construct"
@@ -100,6 +102,7 @@ var _benchmark_display := {}
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
+var _live := LiveExtensions.new()
 var _world_commands := WorldCommands.new(self)
 var _development_commands := DevelopmentCommands.new(self)
 var _development_action_busy := false
@@ -127,6 +130,7 @@ func _ready() -> void:
 	_setup_player()
 	behavior_runtime = BehaviorRuntime.new(player)
 	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library, behavior_runtime)
+	_register_live_extensions()
 	companion = BinaryAvatar.new()
 	companion.name = "CodexAvatar"
 	add_child(companion)
@@ -150,10 +154,10 @@ func _ready() -> void:
 		await get_tree().process_frame
 		load("res://scripts/diagnostics/benchmark.gd").run(self)
 	elif "--smoke" in args:
-		call_deferred("_smoke_test")
+		call_deferred("_run_diagnostic", "world_smoke.gd")
 	elif "--capture" in OS.get_cmdline_user_args():
 		smoke_mode = true
-		call_deferred("_capture_previews")
+		call_deferred("_run_diagnostic", "world_capture.gd")
 	else:
 		_report_boot_ready()
 
@@ -413,70 +417,39 @@ func _open_workbench() -> void:
 	_workbench_panel.commit_recorded.connect(func(revision: String) -> void:
 		_console_notice("Committed source draft %s." % revision.left(7)))
 
+## Every kind of live extension shares one lifecycle. See scripts/extensions/.
+func _register_live_extensions() -> void:
+	var context := {}
+	context["zone"] = func() -> String: return zone_id
+	context["workshop"] = func() -> Variant: return world_tools if _is_workshop(zone_id) else null
+	context["catalog"] = _workshop_action_catalog
+	context["run_action"] = _run_palette_action
+	_live.register(LiveKinds.Palette.new(_palette_host, context))
+	_live.register(LiveKinds.Appearance.new("shoreline", _shoreline))
+	_live.register(LiveKinds.Appearance.new("grid", _grid_scenery))
+	_live.register(LiveKinds.WorkshopAction.new(_workshop_actions, context))
+	_live.register(LiveKinds.Behavior.new(behavior_runtime, context))
+
 func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
 	if shifting or building:
 		return {"ok": false, "message": "Wait for the environment to finish loading before starting a live preview."}
-	if candidate.has("grid_palette"):
-		if not _is_workshop(zone_id):
-			return {"ok": false, "message": "Enter The Grid to preview its palette."}
-		var palette: Dictionary = candidate.grid_palette.merged({"draft": candidate.draft, "version": candidate.version})
-		return _palette_host.preview(palette, zone_id, world_tools, _workshop_action_catalog, _run_palette_action)
-	if candidate.has("shoreline"):
-		return _shoreline.preview(candidate)
-	if candidate.has("grid"):
-		return _grid_scenery.preview(candidate)
-	if candidate.has("workshop_tool"):
-		return _workshop_actions.preview(candidate, zone_id, world_tools if _is_workshop(zone_id) else null)
-	var binding: Dictionary = candidate.get("binding", {})
-	if not binding.is_empty() and (not _is_workshop(zone_id) or binding.get("zone") != zone_id):
-		return {"ok": false, "message": "Return to the Grid space used to author this plugin."}
-	var result := behavior_runtime.preview(candidate)
-	if not result.ok or binding.is_empty():
-		return result
-	var request := {"id": candidate.plugin, "settings": {}}
-	if not str(binding.get("target", "")).is_empty():
-		request["target"] = binding.target
-	var linked: Dictionary = world_tools.preview_behavior(candidate.draft, binding.get("source", ""), request)
-	if not linked.ok:
-		behavior_runtime.finish(candidate.draft, false)
-		return {"ok": false, "message": linked.error}
-	return {"ok": true, "message": "Plugin and test link active. Try the interaction in The Grid."}
+	return _live.preview(candidate)
 
 func _live_change_status(draft_id: String) -> String:
-	var palette_status := _palette_host.status(draft_id)
-	if not palette_status.is_empty():
-		return palette_status
-	var action_status := _workshop_actions.status(draft_id)
-	if not action_status.is_empty():
-		return action_status
-	var shore_status := _shoreline.status(draft_id)
-	if not shore_status.is_empty():
-		return shore_status
-	var grid_status := _grid_scenery.status(draft_id)
-	return grid_status if not grid_status.is_empty() else behavior_runtime.preview_status(draft_id)
+	return _live.status(draft_id)
 
 func _finish_live_change(action: String, draft_id: String) -> Dictionary:
 	if action == "stop_palette":
 		return {"live": _palette_host.finish(draft_id, false)}
-	if action in ["apply", "restore"]:
-		_workshop_actions.reload_committed()
 	if action == "restore":
-		behavior_runtime.reload_committed()
-		_shoreline.reload_committed()
-		_grid_scenery.reload_committed()
-		_palette_host.reload_committed()
+		_live.reload_committed()
 		return {"live": false}
-	var keep := action == "apply"
+	if action == "apply":
+		_live.reload_committed(true)
 	if _development:
 		_development.forget(draft_id)
-	if _palette_host.finish(draft_id, keep):
-		return {"live": true}
-	if _shoreline.finish(draft_id, keep) or _grid_scenery.finish(draft_id, keep) or _workshop_actions.finish(draft_id, keep):
-		return {"live": true}
-	var was_live := behavior_runtime.finish(draft_id, keep)
-	var result: Dictionary = world_tools.finish_behavior_preview(draft_id, keep and was_live) if _is_workshop(zone_id) else {"ok": true}
-	return {"live": was_live, "warning": result.get("error", "")}
+	return _live.finish(draft_id, action == "apply")
 
 func _workbench_plugin_context() -> Dictionary:
 	if not _is_workshop(zone_id) or shifting:
@@ -1353,106 +1326,5 @@ func _quit() -> void:
 	_save()
 	get_tree().quit()
 
-func _smoke_test() -> void:
-	for zone in manifest.zones:
-		_load_zone(zone.id)
-		if zone.id == "construct":
-			assert(zone_root.get_node_or_null("GridFloor") is StaticBody3D)
-		else:
-			assert(zone_root.get_child_count() > 5)
-		assert(not interactables.is_empty())
-		await get_tree().process_frame
-	_open_app("terminal")
-	assert(overlay.visible)
-	_close_panel()
-	assert(not overlay.visible)
-	_load_zone("villa")
-	player.position = Vector3(4,0.1,2) # on the walk beside the reflecting pool
-	player.rotation.y = 0.6
-	_write_state("user://smoke-state.json")
-	_load_zone("construct")
-	_read_state("user://smoke-state.json")
-	assert(zone_id == "villa")
-	assert(player.position.distance_to(Vector3(4,0.1,2)) < 0.01)
-	assert(absf(player.rotation.y - 0.6) < 0.01)
-	DirAccess.remove_absolute("user://smoke-state.json")
-	for frame in range(15):
-		await get_tree().physics_frame
-	assert(player.position.y > -0.1)
-	# Shift in place: the new zone replaces the old one around the player, who stays put.
-	var before := player.position
-	var old_root := zone_root
-	await _shift("beach", 0.5)
-	await get_tree().process_frame # the old zone is queued for deletion
-	assert(zone_id == "beach" and not is_instance_valid(old_root) and zone_root.get_child_count() > 5)
-	assert(not interactables.is_empty() and not shifting)
-	assert(Vector2(player.position.x, player.position.z).distance_to(Vector2(before.x, before.z)) < 0.5)
-	if not gateway_url.is_empty():
-		if request_pending:
-			await request.request_completed
-		assert(gateway_connected, "Configured gateway must return a valid authenticated snapshot")
-		print("CONSTRUCT_GATEWAY_OK: authenticated snapshot received in Godot")
-	print("CONSTRUCT_SMOKE_OK: three zones, anchors, collision, application return, saved location round trip, in-place shift")
-	get_tree().quit()
-
-func _capture_previews() -> void:
-	var output := OS.get_environment("CONSTRUCT_CAPTURE_DIR")
-	if output.is_empty():
-		get_tree().quit(1)
-		return
-	for zone in manifest.zones:
-		_load_zone(zone.id)
-		_close_panel()
-		# Let global illumination, volumetric fog and temporal effects converge; on the shore, give
-		# the simulated surf time to roll in from the wavemaker.
-		for frame in range(90):
-			await get_tree().process_frame
-		var warmup: float = Packages.definition(zone.id).capture_warmup
-		if warmup > 0.0:
-			await get_tree().create_timer(warmup).timeout
-		print("CONSTRUCT_FPS %s %d" % [zone.id, Engine.get_frames_per_second()])
-		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(output.path_join(str(zone.id) + ".png"))
-		for view in Packages.views(zone.id, "capture"):
-			player.position = view[1]
-			camera.global_position = player.position + Vector3(0,1.65,0)
-			var target: Vector3 = view[2]
-			var flat := Vector3(target.x - player.position.x, 0, target.z - player.position.z)
-			player.rotation.y = atan2(-flat.x, -flat.z)
-			camera.rotation.x = atan2(target.y - 1.65, flat.length())
-			for frame in range(60):
-				await get_tree().process_frame
-			await RenderingServer.frame_post_draw
-			get_viewport().get_texture().get_image().save_png(output.path_join(str(zone.id) + "_" + view[0] + ".png"))
-	# The shift itself, mid-flight: villa to shore and back to the hub.
-	for leg in [["villa", "beach", "shift_villa_beach"], ["beach", "construct", "shift_beach_hub"]]:
-		_load_zone(leg[0])
-		for frame in range(60):
-			await get_tree().process_frame
-		var start := Time.get_ticks_msec()
-		var worst := 0
-		var tick := Time.get_ticks_usec()
-		_shift(leg[1])
-		for moment in [0.6, 1.3, 2.4, 3.6, 4.4]:
-			while (Time.get_ticks_msec() - start) / 1000.0 < moment:
-				await get_tree().process_frame
-				var now := Time.get_ticks_usec()
-				worst = maxi(worst, now - tick)
-				tick = now
-			await RenderingServer.frame_post_draw
-			get_viewport().get_texture().get_image().save_png(output.path_join("%s_%d.png" % [leg[2], int(moment * 10)]))
-			await get_tree().process_frame
-			tick = Time.get_ticks_usec() # screenshot frames are left out of the timing
-		var longest := 0
-		var last := Time.get_ticks_usec()
-		while shifting:
-			await get_tree().process_frame
-			var now := Time.get_ticks_usec()
-			longest = maxi(longest, now - last)
-			last = now
-		print("CONSTRUCT_SHIFT %s longest frame %.1f ms" % [leg[2], maxi(worst, longest) / 1000.0])
-	_show_menu()
-	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(output.path_join("menu.png"))
-	print("CONSTRUCT_CAPTURE_OK")
-	get_tree().quit()
+func _run_diagnostic(script: String) -> void:
+	load("res://scripts/diagnostics/" + script).run(self)

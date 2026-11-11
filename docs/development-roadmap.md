@@ -44,7 +44,8 @@ The gateway takes the agent's name from it, and the shared route can no longer
 use that name.
 
 Up to four drafts can be open at once, one per connected agent plus the
-person's, each in its own worktree. See [several agents at once](agents.md#several-agents-at-once).
+person's, each in its own worktree. Agents running elsewhere connect through a separate
+[outside endpoint](agents.md#cloud-agents) with remote credentials. See [several agents at once](agents.md#several-agents-at-once).
 
 F4 lists the open drafts beside its title, offers **Rebase** when the main
 branch has moved, labels gateway reloads, and shows the journal in a

@@ -153,7 +153,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
     }
   }
 
-  async function rpc(agent, message, signal) {
+  // policy.checks === false hides run_checks, for agents that must not run code on this machine.
+  async function rpc(agent, message, signal, policy = {}) {
+    const offered = policy.checks === false ? developmentTools.filter(item => item.name !== 'run_checks') : developmentTools;
     const id = message?.id ?? null;
     const reply = result => ({ jsonrpc: '2.0', id, result });
     const error = (code, text) => ({ jsonrpc: '2.0', id, error: { code, message: text } });
@@ -170,9 +172,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
             'A person reviews and commits the draft in Euclid’s Workbench.',
         });
       case 'ping': return reply({});
-      case 'tools/list': return reply({ tools: developmentTools });
+      case 'tools/list': return reply({ tools: offered });
       case 'tools/call': {
-        const tool = developmentTools.find(item => item.name === message.params?.name);
+        const tool = offered.find(item => item.name === message.params?.name);
         const args = message.params?.arguments ?? {};
         if (!tool) return error(-32602, 'Unknown workbench tool');
         if (!validArguments(tool, args)) return error(-32602, 'Invalid workbench tool arguments');

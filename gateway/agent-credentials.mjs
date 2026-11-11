@@ -14,7 +14,9 @@ export async function createAgentCredentials(file, { now = () => new Date() } = 
   try {
     const saved = JSON.parse(await readFile(file, 'utf8'));
     for (const [name, entry] of Object.entries(saved?.agents ?? {})) {
-      if (agentName.test(name) && /^[a-f0-9]{64}$/.test(entry?.hash ?? '') && typeof entry.created_at === 'string') agents[name] = entry;
+      if (agentName.test(name) && /^[a-f0-9]{64}$/.test(entry?.hash ?? '') && typeof entry.created_at === 'string') {
+        agents[name] = { hash: entry.hash, created_at: entry.created_at, remote: entry.remote === true, checks: entry.checks === true };
+      }
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw new Error(`The agent credential file could not be read: ${error.message}`);
@@ -37,15 +39,17 @@ export async function createAgentCredentials(file, { now = () => new Date() } = 
   }
 
   return {
-    // Issuing again replaces the agent's previous credential.
-    async issue(name) {
+    // Issuing again replaces the agent's previous credential and its permissions.
+    // remote: the agent may connect through the outside endpoint. checks: it may run checks there.
+    async issue(name, { remote = false, checks = false } = {}) {
       requireName(name);
+      if (checks && !remote) throw new Error('Only a remote credential needs the checks permission; local agents always have it.');
       const token = `eua_${randomBytes(32).toString('hex')}`;
       const created_at = now().toISOString();
       const previous = agents;
-      agents = { ...agents, [name]: { hash: digest(token).toString('hex'), created_at } };
+      agents = { ...agents, [name]: { hash: digest(token).toString('hex'), created_at, remote: remote === true, checks: checks === true } };
       try { await persist(); } catch (error) { agents = previous; throw error; }
-      return { name, token, created_at };
+      return { name, token, created_at, remote: remote === true, checks: checks === true };
     },
     async revoke(name) {
       requireName(name);
@@ -55,7 +59,9 @@ export async function createAgentCredentials(file, { now = () => new Date() } = 
       try { await persist(); } catch (error) { agents = previous; throw error; }
       return true;
     },
-    list: () => Object.entries(agents).map(([name, { created_at }]) => ({ name, created_at })).sort((a, b) => a.name.localeCompare(b.name)),
+    list: () => Object.entries(agents).map(([name, { created_at, remote, checks }]) => ({ name, created_at, remote, checks }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    permissions: name => Object.hasOwn(agents, name) ? { remote: agents[name].remote, checks: agents[name].checks } : null,
     reserved: name => Object.hasOwn(agents, name),
     // The name a credential belongs to, or null. Every stored hash is compared.
     identify(token) {

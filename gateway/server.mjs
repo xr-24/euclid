@@ -11,6 +11,7 @@ import { createWorldBridge, validContext, validWorldPlan } from './world-tools.m
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
 import { createAgentCredentials } from './agent-credentials.mjs';
+import { createRemoteServer } from './remote.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -125,7 +126,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         // Only the person, through the Workbench capability, issues and revokes agent credentials.
         if (agentsRoute) {
           try {
-            if (agentsRoute[1] === 'issue') return reply(res, 200, await agentCredentials.issue(body.name));
+            if (agentsRoute[1] === 'issue') {
+              return reply(res, 200, await agentCredentials.issue(body.name, { remote: body.remote === true, checks: body.checks === true }));
+            }
             if (agentsRoute[1] === 'revoke') return reply(res, 200, { name: body.name, revoked: await agentCredentials.revoke(body.name) });
             return reply(res, 200, { agents: agentCredentials.list() });
           } catch (error) { return reply(res, 400, { error: error.message }); }
@@ -249,7 +252,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   });
   server.requestTimeout = 10000;
   server.headersTimeout = 10000;
-  return { server, token: secret, workbenchToken, developmentToken: developmentSecret };
+  // Listened on only when EUCLID_REMOTE_PORT is set. See createRemoteServer.
+  const remote = createRemoteServer({ credentials: agentCredentials, development, auditFile: path.join(dataDir, 'remote-audit.jsonl') });
+  return { server, remoteServer: remote.server, remoteAudited: remote.audited, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -280,6 +285,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try { await listen(gateway.server, port, handoff ? 40 : 1); }
   catch (error) { console.error(`Gateway: ${error.message}`); process.exit(1); }
   gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
+  // The outside endpoint for remote agents. A tunnel points here, never at the main port.
+  const remotePort = Number(process.env.EUCLID_REMOTE_PORT ?? 0);
+  if (Number.isInteger(remotePort) && remotePort > 0 && remotePort !== port) {
+    try {
+      await listen(gateway.remoteServer, remotePort, handoff ? 40 : 1);
+      console.log(`Remote agent endpoint on 127.0.0.1:${remotePort}/mcp. Point a tunnel at this port only.`);
+    } catch (error) { console.error(`Gateway: the remote endpoint could not start. ${error.message}`); }
+  }
   await writeFile(path.join(dataDir, 'gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, ...credentials }), { mode: 0o600 });
   // The launcher records the gateway it starts. A replacement records itself for stop-gateway.ps1.
   if (handoff) await writeFile(path.join(dataDir, 'gateway.pid'), String(process.pid));

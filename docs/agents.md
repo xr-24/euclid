@@ -88,6 +88,34 @@ Checks run the draft's code in the disposable preview project with the local
 account's permissions and without the gateway credentials. An agent can now
 start them for its own draft without a person reviewing the diff first.
 
+### Cloud agents
+
+An agent that runs elsewhere, such as a cloud agent, connects through a
+separate outside endpoint. It is its own server on its own port, so a tunnel
+exposes that one route and nothing else: not the main gateway, the world, the
+Workbench or the terminal.
+
+1. Issue a remote credential:
+   `node scripts/agent-credential.mjs issue cloud-claude --remote`
+2. Set `EUCLID_REMOTE_PORT`, for example `setx EUCLID_REMOTE_PORT 4318`, and
+   restart Euclid. The gateway then also listens on `127.0.0.1:4318`.
+3. Point a tunnel at that port only, for example
+   `cloudflared tunnel --url http://127.0.0.1:4318` or `tailscale funnel 4318`.
+4. Give the agent the tunnel URL with `/mcp` and the header
+   `Authorization: Bearer <credential>`.
+
+The endpoint accepts only credentials issued with `--remote`, never the
+gateway credential or a local agent's. It serves the development tools.
+`run_checks` is left out unless the credential was also issued with
+`--checks`, because checks run the draft's code on this machine without a
+person reviewing it first. Without it, a person runs the checks in the
+Workbench. Each remote agent has its own budget of 120 requests a minute.
+Every call is written to `.local/remote-audit.jsonl` with the agent, address,
+method, tool and result, never the arguments. Revoking the credential stops the
+agent at once. Browser origins are refused.
+
+The tunnel provides TLS. Keep the tunnel pointed at the remote port only.
+
 ### Several agents at once
 
 Euclid holds up to four drafts at once: one for each connected agent, plus one

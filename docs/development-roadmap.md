@@ -63,7 +63,7 @@ The Grid palette now has a live reload boundary for checked palette-only
 drafts. It carries the view into the preview, restores the working panel on
 failure or discard, and keeps a committed preview active.
 
-Expand reload boundaries to other UI and scene subsystems. Test save
+That boundary is now the shared `ui/panel_swap.gd`, so another panel becomes hot-swappable by stating its contract in a subclass. Extend it to the remaining UI and to scene subsystems. Test save
 migrations on copies before activation and extend independent fallback
 coverage for launcher, gateway, and runtime failures.
 

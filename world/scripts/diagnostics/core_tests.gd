@@ -79,6 +79,28 @@ class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	func reloads_on_commit() -> bool:
 		return on_commit
 
+## A second, unrelated hot-swappable panel: a Label whose contract is one show_view method.
+class LabelSwap extends "res://scripts/ui/panel_swap.gd":
+	static var base_code: GDScript
+
+	func _builtin() -> GDScript:
+		return base_code
+
+	func _label() -> String:
+		return "test panel"
+
+	func _base_type() -> StringName:
+		return &"Label"
+
+	func _valid_code(code: GDScript) -> bool:
+		return code.has_script_method(&"show_view")
+
+	func _initialize(widget: Control, _mount_context: Dictionary, view: Dictionary, _live: bool) -> Dictionary:
+		return {"ok": widget.show_view(str(view.get("text", ""))) == true}
+
+	func _capture_widget(widget: Control) -> Variant:
+		return {"text": str(widget.get("shown")), "zone": _context.get("zone")}
+
 class FocusFixtureClient extends "res://scripts/agents/workbench_client.gd":
 	var focused := "unset"
 	var answer := {}
@@ -180,6 +202,7 @@ func _run() -> void:
 	await _check_workbench_drafts()
 	_check_live_extensions()
 	_check_palette_reload()
+	_check_panel_swap()
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
@@ -775,6 +798,34 @@ func _check_workbench_drafts() -> void:
 	_check(panel._drafts.item_count == 2 and panel._drafts.selected == 0 and panel._status.text.contains("Gateway reload"),
 		"show the person's gateway draft with its gateway reload")
 	panel.free()
+
+func _check_panel_swap() -> void:
+	var label_source := func(transform: String) -> String:
+		return "extends Label\nvar shown := \"\"\nfunc show_view(value: String) -> bool:\n\tshown = value\n\ttext = %s\n\treturn true\n" % transform
+	var builtin := GDScript.new()
+	builtin.source_code = label_source.call("value")
+	builtin.reload()
+	LabelSwap.base_code = builtin
+	var host := LabelSwap.new()
+	var parent := VBoxContainer.new()
+	root.add_child(host)
+	root.add_child(parent)
+	host._mount({"parent": parent, "zone": "lab"}, {"text": "hello"})
+	_check(host.panel is Label and host.panel.text == "hello", "mount a hot-swappable panel with its view")
+	var louder: String = label_source.call("value.to_upper()")
+	var started: Dictionary = host._preview({"draft": "d", "version": "1", "source": louder, "digest": louder.sha256_text()}, {"zone": "lab"})
+	_check(started.ok and host.panel.text == "HELLO" and host.status("d") == "active", "swap a checked panel candidate in with the same view")
+	var broken := "extends Label\n"
+	var refused: Dictionary = host._preview({"draft": "d", "version": "2", "source": broken, "digest": broken.sha256_text()}, {"zone": "lab"})
+	_check(not refused.ok and refused.message.contains("working test panel") and host.panel.get_script() == builtin
+		and host.panel.text == "hello" and host.status("d") == "failed", "fall back to the working panel when a candidate breaks its contract")
+	host._preview({"draft": "d", "version": "3", "source": louder, "digest": louder.sha256_text()}, {"zone": "lab"})
+	_check(host.finish("d", true) and host.panel.text == "HELLO" and host.status("d").is_empty(), "keep a committed panel candidate")
+	host.clear_view()
+	host._mount({"parent": parent, "zone": "lab"}, {"text": "again"})
+	_check(host.panel.text == "AGAIN", "mount the committed candidate afterwards")
+	host.free()
+	parent.free()
 
 func _check_palette_reload() -> void:
 	var zone := Node3D.new()

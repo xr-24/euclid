@@ -31,6 +31,7 @@ All paths below are relative to `world/scripts/`.
 | `agents/development_host.gd` | F4 Workbench panel, F2 console, development actions, benchmarks, native CLI and voice | Created with the world; uses its overlay and live extension lifecycle, never zones or saves directly |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |
+| `ui/panel_swap.gd` | Hot-swapping one UI panel from reviewed source | Subclasses state the panel's contract; `ui/grid_palette_host.gd` is the Grid palette's |
 | `diagnostics/` | Benchmarks, smoke test, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save; each runner receives the world as `run(world)` |
 
 ```mermaid
@@ -292,6 +293,23 @@ a core test fails if the two disagree.
 To add a live kind, add it to the table before `behavior`, subclass
 `live_kind.gd`, register it in `register_all` at the same position, and teach
 the Workbench to serve its candidate.
+
+### Hot-swappable panels
+
+`ui/panel_swap.gd` swaps one UI panel from reviewed source while the world
+keeps running. It compiles the candidate, checks it against the panel's
+contract, builds it in place of the working panel with the same view, watches
+the engine log for errors raised from that script, and falls back to the
+committed panel and then the built-in one. Commit keeps the candidate; discard
+or a newer reviewed version restores the working panel.
+
+A panel's contract is a subclass. `ui/grid_palette_host.gd` is the Grid
+palette's: its built-in script and source path, the API version, methods and
+signal a candidate must have, a setup sandbox that refuses world edits, and
+the view it carries across a swap. To make another panel hot-swappable,
+subclass `panel_swap.gd`, give the panel a `capture_view` and a way to restore
+it, add a live kind for it to the shared table and `register_all`, and have the
+Workbench serve its reviewed source and digest as the candidate.
 
 ## Live behavior plugins
 

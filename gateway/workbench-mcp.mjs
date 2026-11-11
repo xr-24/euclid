@@ -7,21 +7,22 @@ const sourcePath = { type: 'string', maxLength: 200, description: 'A path from l
 
 // Development tools for a connected agent. They cover reading source, submitting
 // a draft, running its checks and reading the results. Committing, previewing
-// and reverting stay with the person in Euclid's Workbench.
+// and reverting stay with the person in Euclid's Workbench. Each agent sees its own draft.
 export const developmentTools = [
   { name: 'list_source', description: 'List the files you can read. A draft may change Godot source in world/, gateway source and tests in gateway/, README.md and docs/. The kernel files, AGENTS.md, package.json and scripts/ are read-only.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
-  { name: 'draft_status', description: 'Report the active source draft: its owner, version, files, diff, check status and output, ' +
-      'and whether the main branch has moved past the draft’s base.',
+  { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
+      'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'task_history', description: 'List recent Workbench events, newest first: drafts, revisions, checks with their scope, ' +
       'commits, discards and reverts. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
     inputSchema: { type: 'object', properties: { draft: { type: 'string', pattern: '^[a-f0-9-]{36}$', description: 'A draft id from draft_status or an earlier entry.' } },
       additionalProperties: false }, ...read },
   { name: 'submit_draft', description: 'Create your source draft, or revise it by sending changes on top of its current version. ' +
-      'Send complete file contents. Euclid validates the paths and builds the reviewed Git diff. Only one draft can be active.',
+      'Send complete file contents. Euclid validates the paths and builds the reviewed Git diff. Each agent has at most one draft, ' +
+      'and other agents may hold drafts at the same time; draft_status lists theirs under other_drafts.',
     inputSchema: { type: 'object', properties: {
       request: text('What this change is for, in one or two sentences.', 600),
       summary: text('What changed, for the reviewer.', 320),
@@ -59,10 +60,14 @@ function validArguments(tool, args) {
 export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
   const live = () => new AbortController().signal;
 
+  // Other agents' drafts, so an agent can avoid overlapping work.
+  const others = (state, agent) => (state.drafts ?? []).filter(item => item.owner !== agent)
+    .map(({ owner, files, status, summary }) => ({ owner: owner || 'workbench', files, status, summary }));
+
   function report(state, agent, withDiff = true) {
     const draft = state.draft;
-    if (!draft) return { ok: true, draft: null, busy: state.operation ?? '' };
-    return { ok: true, busy: state.operation ?? '', draft: {
+    if (!draft) return { ok: true, draft: null, busy: state.operation ?? '', other_drafts: others(state, agent) };
+    return { ok: true, busy: state.operation ?? '', other_drafts: others(state, agent), draft: {
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
       files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
       activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '',
@@ -71,34 +76,41 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
     } };
   }
 
+  const belongsTo = owner => owner ? `That draft belongs to ${owner}.` : 'That draft belongs to Euclid’s Workbench.';
+
   async function own(agent, supplied) {
-    const { draft } = await workbench('state', {}, live());
-    if (!draft) throw new Error('There is no active draft. Use submit_draft to create one.');
-    if (draft.owner !== agent) throw new Error(draft.owner ? `The active draft belongs to ${draft.owner}.` : 'The active draft belongs to Euclid’s Workbench.');
+    const { draft, drafts = [] } = await workbench('state', { owner: agent }, live());
+    if (!draft) {
+      const other = supplied !== undefined && drafts.find(item => item.version === supplied);
+      throw new Error(other ? belongsTo(other.owner) : 'You have no active draft. Use submit_draft to create one.');
+    }
+    if (draft.owner !== agent) throw new Error(belongsTo(draft.owner));
     if (supplied !== undefined && supplied !== draft.version) throw new Error('The draft changed. Read draft_status and use its current version.');
     return draft;
   }
 
   async function submit(agent, args, signal) {
-    const { draft } = await workbench('state', {}, live());
+    const { draft, drafts = [] } = await workbench('state', { owner: agent }, live());
     let identity = {};
     if (draft) {
-      if (args.version === undefined) throw new Error(draft.owner === agent ? 'Send the current version to revise your draft.'
-        : 'Another draft is active. It must be committed or discarded in Euclid first.');
+      if (args.version === undefined) throw new Error('Send the current version to revise your draft.');
       const mine = await own(agent, args.version);
       identity = { id: mine.id, version: mine.version };
-    } else if (args.version !== undefined) throw new Error('There is no active draft to revise. Omit version to create one.');
+    } else if (args.version !== undefined) {
+      const other = drafts.find(item => item.version === args.version);
+      throw new Error(other ? belongsTo(other.owner) : 'There is no active draft to revise. Omit version to create one.');
+    }
     await workbench('submit', { ...identity, owner: agent, prompt: args.request, summary: args.summary, files: args.files ?? [], delete: args.delete ?? [] }, signal);
     const deadline = Date.now() + settle;
-    let state = await workbench('state', {}, live());
+    let state = await workbench('state', { owner: agent }, live());
     while (['authoring', 'revising'].includes(state.draft?.status) && Date.now() < deadline) {
       await delay(40);
-      state = await workbench('state', {}, live());
+      state = await workbench('state', { owner: agent }, live());
     }
     const result = state.draft;
     if (result?.status === 'failed' && !result.files.length) {
       // A submission that never became a draft leaves only its failed job. Release it.
-      await workbench('discard', { id: result.id }, live());
+      await workbench('discard', { id: result.id, owner: agent }, live());
       throw new Error(result.error || 'The submission could not be turned into a draft.');
     }
     if (draft && result?.version === draft.version) throw new Error(result.revision_notice || 'The revision did not change the draft.');
@@ -107,13 +119,13 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
 
   async function call(agent, name, args, signal) {
     switch (name) {
-      case 'list_source': return { ok: true, ...await workbench('files', {}, signal) };
+      case 'list_source': return { ok: true, ...await workbench('files', { owner: agent }, signal) };
       case 'read_source': {
-        const { text: content, draft } = await workbench('file', { name: args.path }, signal);
+        const { text: content, draft } = await workbench('file', { name: args.path, owner: agent }, signal);
         return { ok: true, path: args.path, draft, content };
       }
       case 'draft_status': {
-        const result = report(await workbench('state', {}, signal), agent);
+        const result = report(await workbench('state', { owner: agent }, signal), agent);
         if (result.draft) {
           const { head } = await workbench('head', {}, signal);
           result.draft.behind_main = Boolean(result.draft.base) && head !== result.draft.base;
@@ -122,17 +134,17 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
       }
       case 'rebase_draft': {
         const draft = await own(agent, args.version);
-        return report(await workbench('rebase', { id: draft.id, version: draft.version }, signal), agent, false);
+        return report(await workbench('rebase', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
       }
       case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
       case 'submit_draft': return submit(agent, args, signal);
       case 'run_checks': {
         const draft = await own(agent, args.version);
-        return report(await workbench('check', { id: draft.id, version: draft.version }, signal), agent, false);
+        return report(await workbench('check', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
       }
       case 'discard_draft': {
         const draft = await own(agent, args.version);
-        return report(await workbench('discard', { id: draft.id, version: draft.version }, signal), agent, false);
+        return report(await workbench('discard', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
       }
     }
   }

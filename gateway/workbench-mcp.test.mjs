@@ -95,7 +95,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   for (const name of ['world/project.godot', '.git/config', '.local/gateway.json', '../project/README.md', 'world/scripts/../../package.json']) {
     assert.equal((await tool('read_source', { path: name })).isError, true, name);
   }
-  assert.deepEqual(await tool('draft_status'), { ok: true, draft: null, busy: '', isError: false });
+  assert.deepEqual(await tool('draft_status'), { ok: true, draft: null, busy: '', other_drafts: [], isError: false });
 
   // Submissions are validated before and after they are written.
   const rejected = async (args, pattern) => {
@@ -129,16 +129,27 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   assert.equal((await tool('read_source', { path: script })).content, 'extends Node\nconst READY := maybe\n');
   assert.equal((await tool('read_source', { path: obsolete })).isError, true);
 
-  // Another agent can see the draft but cannot check, revise or discard it.
-  const seen = (await tool('draft_status', {}, 'codex')).draft;
-  assert.deepEqual([seen.owner, seen.yours, seen.version], ['claude', false, staged.version]);
+  // Another agent sees claude's draft only as a neighbour and cannot check, revise or discard it.
+  const seen = await tool('draft_status', {}, 'codex');
+  assert.equal(seen.draft, null);
+  assert.deepEqual(seen.other_drafts.map(item => [item.owner, item.status, item.files]), [['claude', 'staged', [added, script, obsolete]]]);
   for (const [name, args] of [['run_checks', { version: staged.version }], ['discard_draft', { version: staged.version }],
-    ['submit_draft', { request: 'Take over', version: staged.version, files: [{ path: script, content: 'x' }] }],
-    ['submit_draft', { request: 'Second draft', files: [{ path: script, content: 'x' }] }]]) {
+    ['rebase_draft', { version: staged.version }],
+    ['submit_draft', { request: 'Take over', version: staged.version, files: [{ path: script, content: 'x' }] }]]) {
     const answer = await tool(name, args, 'codex');
     assert.equal(answer.isError, true, name);
-    assert.match(answer.message, /belongs to claude|Another draft is active/);
+    assert.match(answer.message, /belongs to claude/, name);
   }
+  // It can hold a draft of its own at the same time. Each agent reads and sees its own.
+  const parallel = await tool('submit_draft', { request: 'Second draft', files: [{ path: obsolete, content: 'extends Node\n# codex\n' }] }, 'codex');
+  assert.equal(parallel.isError, false, parallel.message);
+  assert.deepEqual([parallel.draft.owner, parallel.draft.files], ['codex', [obsolete]]);
+  assert.equal((await tool('draft_status')).draft.version, staged.version);
+  assert.deepEqual((await tool('draft_status')).other_drafts.map(item => item.owner), ['codex']);
+  assert.equal((await tool('read_source', { path: obsolete }, 'codex')).content, 'extends Node\n# codex\n');
+  assert.equal((await tool('read_source', { path: obsolete })).isError, true, 'claude’s draft deletes this file');
+  assert.match((await tool('submit_draft', { request: 'Third', files: [{ path: script, content: 'x' }] }, 'codex')).message, /current version to revise/);
+  assert.equal((await tool('discard_draft', { version: parallel.draft.version }, 'codex')).isError, false);
   assert.equal(checks, 0);
 
   // The owner runs checks, reads the failure, and revises on top of the draft.
@@ -227,7 +238,12 @@ test('a submitted draft keeps its owner across a gateway restart', async t => {
   assert.deepEqual([draft.owner, draft.agent_source, draft.from_world, draft.can_revise], ['grok', true, true, true]);
   const recovered = await staged(connect());
   assert.deepEqual([recovered.id, recovered.version, recovered.owner], [draft.id, draft.version, 'grok']);
-  await call(first, 'submit', { owner: 'Not A Name', id: draft.id, version: draft.version, prompt: 'Revise',
+  // Only the owner revises its draft, and the revision keeps the owner.
+  await assert.rejects(call(first, 'submit', { owner: 'Not A Name', id: draft.id, version: draft.version, prompt: 'Revise',
+    files: [{ path: script, content: 'extends Node\n# Revised\n' }] }), /only revise its own draft/);
+  await call(first, 'submit', { owner: 'grok', id: draft.id, version: draft.version, prompt: 'Revise',
     files: [{ path: script, content: 'extends Node\n# Revised\n' }] });
-  assert.equal((await staged(first)).owner, 'grok');
+  const revised = await staged(first);
+  assert.deepEqual([revised.owner, revised.id], ['grok', draft.id]);
+  assert.notEqual(revised.version, draft.version);
 });

@@ -21,6 +21,8 @@ const commitId = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/;
 const draftFolder = /^git-draft-[a-f0-9-]{36}$/;
 const revisionFolder = /^revision-[a-f0-9-]{36}$/;
 const maxFiles = 6;
+// Drafts held at once: one per connected agent, plus one shared by the person and the local agent.
+const maxDrafts = 4;
 const maxBytes = 128 * 1024;
 const maxDiff = 256 * 1024;
 const paletteSource = 'world/scripts/ui/grid_palette.gd';
@@ -70,7 +72,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   journal = createJournal(path.join(storage, 'journal.jsonl'), { onError: error => console.error(`Workbench journal: ${error.message}`) }) } = {}) {
   const git = createWorkbenchGit(root);
   const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
-  let draft = null;
+  // Every open draft by id. The person's Workbench shows the focused one; an agent sees its own.
+  const drafts = new Map();
+  let focusId = null;
   let sourceJob = null;
   let operation = '';
   let planning = false;
@@ -78,6 +82,16 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   let diagnosticJob = null;
   let diagnosticNotice = '';
   let recovery;
+
+  const ownerKey = owner => owner ?? '';
+  const focus = () => drafts.get(focusId) ?? null;
+  const draftOf = owner => [...drafts.values()].find(change => ownerKey(change.owner) === ownerKey(owner)) ?? null;
+  // The person's view (no owner) is the focused draft. An agent's view is its own draft.
+  const viewOf = owner => owner === undefined ? focus() : draftOf(owner);
+  function forget(change) {
+    drafts.delete(change.id);
+    if (focusId === change.id) focusId = drafts.keys().next().value ?? null;
+  }
 
   // A commit that changes gateway source only takes effect in a new gateway process.
   function loadGateway(names) {
@@ -118,7 +132,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const owner = ownerName(metadata.owner);
       const allowed = agentSource === true ? isAgentSourcePath : isSourcePath;
       if (item.name !== `git-draft-${id}` || !commitId.test(base) || typeof branch !== 'string' || !branch.startsWith('refs/heads/') ||
-          !Array.isArray(names) || names.length < 1 || names.length > (agentSource === true ? sourceDraftLimit : maxFiles) || !names.every(allowed) || draft) {
+          !Array.isArray(names) || names.length < 1 || names.length > (agentSource === true ? sourceDraftLimit : maxFiles) || !names.every(allowed) ||
+          drafts.has(id) || draftOf(owner) || drafts.size >= maxDrafts) {
         throw new Error('The staged Git draft could not be recovered.');
       }
       const worktree = checkoutPath(directory, metadata.checkout ?? 'worktree');
@@ -132,25 +147,31 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         const earlier = await readPrevious(directory, worktree, base, previous);
         revisionDiff = await versionDiff(earlier, { worktree, names });
       }
-      draft = { id, names, base, branch, directory, worktree, diff, binding, summary,
+      drafts.set(id, { id, names, base, branch, directory, worktree, diff, binding, summary,
         previous, revisionDiff, request, owner,
         agentSource: agentSource === true,
         fromWorld: fromWorld ?? (appearanceFor(names)?.payload === 'shoreline'),
         plugin: agentSource === true ? null : await livePlugin(worktree, names, binding),
-        status: check?.status === 'failed' ? 'failed' : 'staged', check, log: check?.log ?? '', error: check?.error ?? '' };
+        status: check?.status === 'failed' ? 'failed' : 'staged', check, log: check?.log ?? '', error: check?.error ?? '' });
+      if (!focusId || owner === undefined) focusId = id;
     }
   }
 
-  async function state() {
-    const change = draft;
-    const authoring = sourceJob;
+  async function currentState(view) {
+    const change = viewOf(view);
+    const job = sourceJob;
+    // A new source job shows in the view that started it. The person also sees an agent's job when nothing else is open.
+    const authoring = job && (job.revising ? job.id === change?.id
+      : view === undefined ? (!job.owner || !change) : job.owner === view) ? job : null;
     const pending = { operation, playing: runner.playing(), diagnostic_notice: diagnosticNotice, gateway_notice: gatewayNotice(),
       diagnostic_job: diagnosticJob && { id: diagnosticJob.id, log: diagnosticJob.log } };
     const version = change ? fingerprint(change.diff) : '';
     const [revision, diagnostic, previewLog] = await Promise.all([
       git.headRevision(), diagnostics.state(change, version).catch(() => null), readPreviewLog(change),
     ]);
-    const state = { ...pending, revision, diagnostic, preview_log: previewLog };
+    const state = { ...pending, revision, diagnostic, preview_log: previewLog, focus: focusId ?? '',
+      drafts: [...drafts.values()].map(item => ({ id: item.id, owner: item.owner ?? '', status: item.status, files: item.names,
+        version: fingerprint(item.diff), base: item.base, summary: item.summary ?? '' })) };
     if (authoring && !authoring.revising) {
       const { id, status, error, log } = authoring;
       return { ...state, draft: { id, status, error, log, diff: '', files: [], owner: authoring.owner ?? '',
@@ -181,11 +202,12 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   }
 
   function requireDraft(id, version) {
-    if (!draft || id !== draft.id) throw new Error('Review the current Git draft first.');
-    if (draft.agentSource && (draft.previous || version) && version !== fingerprint(draft.diff)) {
+    const change = drafts.get(id);
+    if (!change) throw new Error('Review the current Git draft first.');
+    if (change.agentSource && (change.previous || version) && version !== fingerprint(change.diff)) {
       throw new Error('Review the current source draft version first.');
     }
-    return draft;
+    return change;
   }
 
   async function verifyReview(change) {
@@ -211,8 +233,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     return { worktree, names, diff, summary };
   }
 
-  async function draftBase() {
-    if (draft || sourceJob) throw new Error('Commit or discard the current Git draft first.');
+  async function draftBase(owner) {
+    if (sourceJob || draftOf(owner)) throw new Error('Commit or discard the current Git draft first.');
+    if (drafts.size >= maxDrafts) throw new Error(`Euclid already holds ${maxDrafts} drafts. Commit or discard one first.`);
     const { head: base, branch, clean } = await git.primary();
     if (!clean) throw new Error('The main checkout has local changes. Commit or set them aside before creating a draft.');
     return { base, branch };
@@ -227,7 +250,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
 
   async function startBenchmark(body) {
     if (runner.playing()) throw new Error('Close the preview before benchmarking.');
-    const change = draft || body.id ? requireDraft(body.id, body.version) : null;
+    const change = focus() || body.id ? requireDraft(body.id, body.version) : null;
     if (change && (body.version !== fingerprint(change.diff) || change.status !== 'passed')) {
       throw new Error('Review the current draft and pass checks before benchmarking it.');
     }
@@ -260,7 +283,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
 
   // `submitted` replaces the local source agent with files a connected agent sent.
   async function startSource(body, submitted) {
-    const { base, branch } = await draftBase();
+    const { base, branch } = await draftBase(ownerName(body.owner));
     if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 600) throw new Error('Describe a source change in 1 to 600 characters.');
     const id = randomUUID();
     const directory = path.join(storage, `git-draft-${id}`);
@@ -397,8 +420,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       throw new Error(`A plugin file already exists at ${name}. Open it to make an edit.`);
     }
     const fromWorld = body.from_world === true;
-    await writeDraft(base, files, binding, summary, fromWorld);
-    if (fromWorld) runChecks(draft.id);
+    const created = await writeDraft(base, files, binding, summary, fromWorld);
+    if (fromWorld) runChecks(created.id);
   }
 
   async function authorTool(body, signal) {
@@ -409,8 +432,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const { file, text, summary } = workshopToolPackage(proposal, context);
     const existing = await lstat(path.join(root, file)).catch(error => { if (error.code !== 'ENOENT') throw error; });
     if (existing) throw new Error('A workshop tool with that ID already exists. Open its definition to edit it.');
-    await writeDraft(base, new Map([[file, text]]), { zone: context.zone }, summary, true);
-    runChecks(draft.id);
+    runChecks((await writeDraft(base, new Map([[file, text]]), { zone: context.zone }, summary, true)).id);
   }
 
   async function developAppearance(body, signal, appearance, design) {
@@ -426,8 +448,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const text = JSON.stringify({ schema_version: 1, ...settings }, null, 2) + '\n';
     const next = readAppearance(text, appearance);
     if (fields.every(key => current[key] === next[key])) throw new Error('The proposal kept the current appearance. Try a different request.');
-    await writeDraft(base, new Map([[appearance.file, text]]), undefined, summary, true);
-    runChecks(draft.id);
+    runChecks((await writeDraft(base, new Map([[appearance.file, text]]), undefined, summary, true)).id);
   }
 
   async function writeDraft({ base, branch }, files, binding, summary, fromWorld = false) {
@@ -451,7 +472,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         }
       }
       if (binding) await git.intent(worktree, names);
-      await registerDraft({ id, names, base, branch, directory, worktree, binding, summary, fromWorld });
+      return await registerDraft({ id, names, base, branch, directory, worktree, binding, summary, fromWorld });
     } catch (error) {
       await git.remove(worktree).catch(() => {});
       await rm(directory, { recursive: true, force: true });
@@ -474,10 +495,14 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     if (Buffer.byteLength(diff) > maxDiff) throw new Error('The Git diff exceeds 256 KiB. Review fewer changes at a time.');
     const plugin = agentSource ? null : await livePlugin(worktree, names, binding);
     await saveDraft(change, diff);
-    const kind = event ?? (draft?.id === change.id ? 'revised' : 'drafted');
-    draft = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
+    const kind = event ?? (drafts.has(change.id) ? 'revised' : 'drafted');
+    const registered = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
+    drafts.set(change.id, registered);
+    // The person's own drafts take focus. An agent's draft takes it only when nothing else is open.
+    if (!focusId || !drafts.has(focusId) || change.owner === undefined) focusId = change.id;
     await journal.record(kind, { draft: change.id, version: fingerprint(diff), owner: change.owner, files: names, summary: change.summary,
       ...(kind === 'rebased' ? { commit: change.base } : {}) });
+    return registered;
   }
 
   async function ask(body, signal) {
@@ -543,11 +568,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         if (operation === 'checking') operation = '';
       }
     })();
-    checks = { controller, finished };
+    checks = { controller, finished, id };
   }
 
   async function removeDraft(change) {
-    draft = null;
+    forget(change);
     const checkouts = (await readdir(change.directory, { withFileTypes: true })).filter(item => item.isDirectory() &&
       (item.name === 'worktree' || revisionFolder.test(item.name)));
     for (const item of checkouts) await git.remove(checkoutPath(change.directory, item.name));
@@ -563,6 +588,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   return async function handle(action, body, signal) {
     recovery ??= recoverDraft();
     await recovery;
+    // A connected agent's requests carry its name and see its own draft.
+    const view = ownerName(body?.owner);
+    const state = () => currentState(view);
     if (action === 'catalog') return { files: await listSources(root) };
     if (action === 'read') {
       const { text, hash } = await readSource(root, body.name);
@@ -575,9 +603,17 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const id = typeof body?.draft === 'string' && body.draft ? body.draft : undefined;
       return { entries: await journal.read({ limit, draft: id }) };
     }
-    // A connected agent reads the active draft when there is one, otherwise the main checkout.
-    if (action === 'files') return { files: await listAgentSources(draft?.worktree ?? root) };
-    if (action === 'file') return { ...await readAgentSource(draft?.worktree ?? root, body.name), draft: draft?.id ?? '' };
+    if (action === 'focus') {
+      if (!drafts.has(body.id)) throw new Error('There is no draft with that id.');
+      focusId = body.id;
+      return state();
+    }
+    // A connected agent reads its own draft when it has one, otherwise the main checkout.
+    if (action === 'files') return { files: await listAgentSources(viewOf(view)?.worktree ?? root) };
+    if (action === 'file') {
+      const own = viewOf(view);
+      return { ...await readAgentSource(own?.worktree ?? root, body.name), draft: own?.id ?? '' };
+    }
     if (action === 'propose') return ask(body, signal);
     if (action === 'cancelbenchmark') {
       if (!diagnosticJob || body.id !== diagnosticJob.id) throw new Error('There is no matching benchmark running.');
@@ -585,7 +621,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return state();
     }
     if (action === 'discard' && body.cancel_revision === true && !sourceJob?.revising) throw new Error('There is no revision running.');
-    if (action === 'discard' && sourceJob) {
+    if (action === 'discard' && sourceJob && (body.id === sourceJob.id || !drafts.has(body.id))) {
       if (operation === 'discarding') throw new Error('The source workspace is already being discarded.');
       if (body.id !== sourceJob.id) throw new Error('Select the current source workspace first.');
       const job = sourceJob;
@@ -598,7 +634,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       try {
         job.controller.abort(new Error(job.revising ? 'Revision cancelled. The active draft is available.' : 'Source authoring cancelled.'));
         await job.finished;
-        if (!job.revising && draft?.id === job.id) await discardDraft(draft);
+        if (!job.revising && drafts.has(job.id)) await discardDraft(drafts.get(job.id));
         sourceJob = null;
       } finally { operation = ''; }
       return state();
@@ -616,8 +652,12 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         case 'revise': operation = 'revising'; await reviseSource(body); break;
         case 'submit': {
           const submitted = sourceSubmission(body);
-          operation = draft ? 'revising' : 'authoring';
-          await (draft ? reviseSource(body, submitted) : startSource(body, submitted));
+          // A connected agent revises only its own draft. Without an id it starts a new one.
+          if (body.id !== undefined && ownerKey(requireDraft(body.id, body.version).owner) !== ownerKey(view)) {
+            throw new Error('A connected agent can only revise its own draft.');
+          }
+          operation = body.id !== undefined ? 'revising' : 'authoring';
+          await (body.id !== undefined ? reviseSource(body, submitted) : startSource(body, submitted));
           break;
         }
         case 'previous': await restorePrevious(body); break;
@@ -684,7 +724,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           await verifyReview(change);
           await runner.stop();
           revision = await git.commit(change, message);
-          draft = null;
+          forget(change);
           await journal.record('committed', { draft: change.id, version: fingerprint(change.diff), owner: change.owner, files: change.names, commit: revision, message });
           try {
             await rename(path.join(change.directory, 'draft.json'), path.join(change.directory, 'committed.json'));
@@ -697,7 +737,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         }
         case 'discard': {
           const change = requireDraft(body.id, body.version);
-          if (checks) {
+          if (checks?.id === change.id) {
             checks.controller.abort(new Error('Checks cancelled.'));
             await checks.finished;
           }
@@ -706,7 +746,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           break;
         }
         case 'restore': {
-          if (draft || sourceJob) throw new Error('Discard the current draft before reverting a commit.');
+          // Open drafts stay. A revert moves the main branch past them, and each can be rebased.
+          if (sourceJob) throw new Error('Wait for the current source job before reverting a commit.');
           const latest = await git.headRevision();
           if (!latest || latest !== body.revision) throw new Error('The reviewed commit is no longer the tip of the main branch.');
           revision = await git.revert(latest);

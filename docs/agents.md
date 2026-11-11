@@ -68,7 +68,7 @@ from F2 connects as `codex`.
 
 | Tool | Effect |
 | --- | --- |
-| `list_source`, `read_source` | Read draft-eligible source plus `README.md`, `AGENTS.md` and `docs/*.md`. With a draft active, reads return the draft's version |
+| `list_source`, `read_source` | Read draft-eligible source plus `README.md`, `AGENTS.md` and `docs/*.md`. While the agent has a draft, reads return its draft's version |
 | `draft_status` | Owner, version, files, diff, check status, scope and output of the active draft, its `base` commit, and `behind_main` when the main branch has moved past it |
 | `submit_draft` | Create a draft from complete file contents and deletions, or revise the agent's own draft on top of its current version |
 | `run_checks` | Start the isolated project checks for the agent's own draft |
@@ -87,8 +87,25 @@ Checks run the draft's code in the disposable preview project with the local
 account's permissions and without the gateway credentials. An agent can now
 start them for its own draft without a person reviewing the diff first.
 
-One draft is active at a time. A second agent can read it and must wait for it
-to be committed or discarded.
+### Several agents at once
+
+Euclid holds up to four drafts at once: one for each connected agent, plus one
+shared by the person and the local F2 agent. Each draft has its own Git
+worktree. An agent sees and reads only its own draft, and `draft_status` lists
+the others under `other_drafts` so agents can avoid overlapping files. An agent
+cannot check, revise, rebase or discard another agent's draft.
+
+Long jobs still run one at a time: authoring, revising and checks. A second
+agent that starts one meanwhile is told the Workbench is busy and tries again.
+Discarding a draft does not cancel another draft's checks.
+
+The Workbench panel shows one draft, the one in focus. A draft the person
+starts takes focus. An agent's draft takes it only when nothing else is open,
+so the person's work is never switched out from under them. When the focused
+draft is committed or discarded, the next open draft comes into view.
+`POST /v1/workbench/focus` with a draft `id` changes it, and `state` lists
+every draft under `drafts`. Committing one draft moves the main branch past the
+others, and each is rebased before it commits.
 
 ### Agent credentials
 

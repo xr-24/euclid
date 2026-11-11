@@ -10,6 +10,7 @@ import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
+import { createAgentCredentials } from './agent-credentials.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -43,6 +44,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
   const developmentExpected = Buffer.from(developmentSecret);
   const development = createDevelopmentBridge(workbench);
+  const agentCredentials = await createAgentCredentials(path.join(dataDir, 'agents.json'));
   let developmentRateStart = Date.now();
   let developmentRateCount = 0;
   let queue = Promise.resolve();
@@ -80,10 +82,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 25 });
       const supplied = Buffer.from(req.headers.authorization ?? '');
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(res, 401, { error: 'Unauthorized' });
-      const developmentRoute = /^\/mcp\/dev\/([a-f0-9]{64})(?:\/([a-z0-9_-]{1,32}))?$/.exec(req.url);
-      if (developmentRoute) {
-        const capability = Buffer.from(developmentRoute[1]);
-        if (capability.length !== developmentExpected.length || !timingSafeEqual(capability, developmentExpected)) return reply(res, 403, { error: 'Development tools require the current Euclid gateway capability.' });
+      async function serveDevelopment(agent) {
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
         // Agents poll while checks run. Their budget is separate so they cannot starve the world.
         if (Date.now() - developmentRateStart > 60000) { developmentRateStart = Date.now(); developmentRateCount = 0; }
@@ -92,21 +91,45 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         if (body === undefined) return;
         const controller = new AbortController();
         res.once('close', () => controller.abort());
-        const result = await development.rpc(developmentRoute[2] ?? 'agent', body, controller.signal);
+        const result = await development.rpc(agent, body, controller.signal);
         if (res.destroyed) return;
         if (result === null) return res.writeHead(202).end();
         return reply(res, 200, result);
       }
+      // An agent with its own credential. The credential decides the name.
+      if (req.url === '/mcp/agent') {
+        const agent = agentCredentials.identify(req.headers['x-euclid-agent']);
+        if (!agent) return reply(res, 403, { error: 'Connect with an agent credential issued in Euclid.' });
+        return serveDevelopment(agent);
+      }
+      // The shared development capability. The name is a label, unless an agent credential reserves it.
+      const developmentRoute = /^\/mcp\/dev\/([a-f0-9]{64})(?:\/([a-z0-9_-]{1,32}))?$/.exec(req.url);
+      if (developmentRoute) {
+        const capability = Buffer.from(developmentRoute[1]);
+        if (capability.length !== developmentExpected.length || !timingSafeEqual(capability, developmentExpected)) return reply(res, 403, { error: 'Development tools require the current Euclid gateway capability.' });
+        const agent = developmentRoute[2] ?? 'agent';
+        if (agentCredentials.reserved(agent)) return reply(res, 403, { error: `${agent} has its own agent credential. Connect at /mcp/agent with it.` });
+        return serveDevelopment(agent);
+      }
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });
       const workbenchRoute = /^\/v1\/workbench\/([a-z]+)$/.exec(req.url);
-      if (workbenchRoute) {
+      const agentsRoute = /^\/v1\/agents\/(issue|revoke|list)$/.exec(req.url);
+      if (workbenchRoute || agentsRoute) {
         const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
         if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Workbench access requires the local Euclid launcher.' });
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
-        const body = await readJson(req, res, 512 * 1024);
+        const body = await readJson(req, res, agentsRoute ? 1024 : 512 * 1024);
         if (body === undefined) return;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
+        // Only the person, through the Workbench capability, issues and revokes agent credentials.
+        if (agentsRoute) {
+          try {
+            if (agentsRoute[1] === 'issue') return reply(res, 200, await agentCredentials.issue(body.name));
+            if (agentsRoute[1] === 'revoke') return reply(res, 200, { name: body.name, revoked: await agentCredentials.revoke(body.name) });
+            return reply(res, 200, { agents: agentCredentials.list() });
+          } catch (error) { return reply(res, 400, { error: error.message }); }
+        }
         if (workbenchRoute[1] === 'reload') {
           // Loads gateway code that changed on disk, such as after a merge made outside Euclid.
           if (!reloadGateway) return reply(res, 400, { error: 'This gateway cannot replace itself.' });

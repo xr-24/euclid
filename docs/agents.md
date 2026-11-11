@@ -88,8 +88,33 @@ account's permissions and without the gateway credentials. An agent can now
 start them for its own draft without a person reviewing the diff first.
 
 One draft is active at a time. A second agent can read it and must wait for it
-to be committed or discarded. The owner name is a label for attribution. Every
-local agent shares the same two credentials.
+to be committed or discarded.
+
+### Agent credentials
+
+On the shared route above, the agent name is only a label. Any local process
+with the development capability can use any name. To give an agent an
+identity of its own, issue it a credential:
+
+```
+node scripts/agent-credential.mjs issue grok
+```
+
+The credential is printed once. Issuing again replaces it, `revoke grok`
+removes it, and `list` shows the names. The gateway keeps only a hash, in
+`.local/agents.json`. The script calls `POST /v1/agents/issue`, `revoke` or
+`list`, which need the Workbench capability, so only the person can issue a
+credential.
+
+The agent connects to `POST http://127.0.0.1:4317/mcp/agent` with the gateway
+bearer credential and an `X-Euclid-Agent` header carrying its own credential.
+The gateway takes the agent's name from the credential. It offers the same
+tools. Once a name has a credential, the shared route refuses it, so no other
+agent can submit, check, rebase or discard drafts as that name.
+
+This separates agents that cooperate and keeps attribution honest. It does not
+contain a hostile local process. Anything that can read `.local/gateway.json`
+holds the Workbench capability and can issue itself a credential.
 
 ## Verification
 

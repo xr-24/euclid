@@ -39,6 +39,10 @@ the reviewed patch onto the new tip with a three-way merge. The draft keeps its
 id, loses its earlier versions, and needs fresh checks. A conflict names the
 files and leaves the draft as it was. Agents use `rebase_draft`.
 
+Each connected agent can have [its own credential](agents.md#agent-credentials).
+The gateway takes the agent's name from it, and the shared route can no longer
+use that name.
+
 **Remaining.** Show the journal and a rebase control in F4. Add separate
 workspaces for concurrent agents. Bring the gateway and docs into the F4
 editor, and label gateway activation in the Workbench.

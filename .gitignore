@@ -13,6 +13,8 @@ __pycache__/
 !/world/assets/**/*.md
 !/world/assets/**/*.json
 !/world/assets/**/*.import
+!/world/assets/player/mannequin.glb
+!/world/assets/player/mannequin_arms.glb
 /world/override.cfg
 
 # Local credentials and configuration overrides.

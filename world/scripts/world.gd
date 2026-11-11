@@ -23,6 +23,8 @@ const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const TaskPresence = preload("res://scripts/agents/task_presence.gd")
+const PlayerAvatar = preload("res://scripts/player/player_avatar.gd")
+const PlayerMotor = preload("res://scripts/player/player_motor.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
@@ -37,6 +39,8 @@ var zone_id := "construct"
 var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
+var player_avatar: PlayerAvatar
+var _player_motor := PlayerMotor.new()
 var environment: Environment
 var sky_material: ProceduralSkyMaterial
 var sun: DirectionalLight3D
@@ -63,7 +67,6 @@ var shifting := false
 var building := false
 var zone_title_tween: Tween
 const SHIFT_SECONDS := 4.5
-const JUMP_SPEED := 4.8
 # A zone is built off-screen into these, then committed on the main thread.
 var build_root: Node3D
 ## Builders share build_root and friends, so only one zone may be under construction at a time,
@@ -232,6 +235,8 @@ func _setup_player() -> void:
 	camera.fov = 75
 	player.add_child(camera)
 	camera.current = true
+	player_avatar = PlayerAvatar.new()
+	player_avatar.mount(player, camera)
 
 func _setup_ui() -> void:
 	add_child(_palette_host)
@@ -833,26 +838,8 @@ func _physics_process(delta: float) -> void:
 	water = WorldArt.water_tick(self, delta)
 	var depth: float = water.level - player.position.y if water.has else -1.0
 	var swimming := depth > 1.3
-	var speed := 4.5
-	if depth > 0.25:
-		speed *= lerpf(1.0, 0.55, clampf((depth - 0.25) / 1.0, 0.0, 1.0)) # wading drags
-	if swimming:
-		speed = 2.6
-	player.velocity.x = direction.x * speed
-	player.velocity.z = direction.z * speed
-	if swimming:
-		# Buoyancy holds the eyes just above the surface; Space climbs, C dives.
-		var target: float = water.level - 1.42
-		if controls and Input.is_action_pressed("jump"):
-			target += 0.9
-		if controls and Input.is_action_pressed("dive"):
-			target = player.position.y - 2.5
-		player.velocity.y = lerpf(player.velocity.y, clampf((target - player.position.y) * 2.5, -2.5, 3.0), 1.0 - exp(-5.0 * delta))
-	else:
-		player.velocity.y -= 16 * delta * (0.7 if depth > 0.0 else 1.0)
-		if controls and Input.is_action_just_pressed("jump") and player.is_on_floor():
-			player.velocity.y = JUMP_SPEED
-	player.move_and_slide()
+	_player_motor.step(player, delta, direction, water, controls)
+	player_avatar.tick(player, delta, swimming, controls and not shifting)
 	if is_instance_valid(companion):
 		companion.tick(player, delta)
 	if player.position.y < -100:
@@ -924,6 +911,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif not overlay.visible and _zone_key(event) >= 0:
 		_shift(str(manifest.zones[_zone_key(event)].id))
 	elif event.is_action_pressed("interact") and not overlay.visible and not nearest.is_empty():
+		player_avatar.interact()
 		if nearest.kind == "companion":
 			_dev.open_console()
 		elif nearest.kind == "application":

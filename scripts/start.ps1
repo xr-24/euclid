@@ -12,7 +12,23 @@ if ($Recovery) {
 }
 $worldPath = Join-Path $projectRoot 'world'
 Remove-Item Env:EUCLID_WORKBENCH_TOKEN -ErrorAction SilentlyContinue
-if (-not (Test-Path -LiteralPath (Join-Path $worldPath '.godot\imported'))) {
+$needsImport = -not (Test-Path -LiteralPath (Join-Path $worldPath '.godot\imported'))
+foreach ($model in Get-ChildItem -LiteralPath (Join-Path $worldPath 'assets\player') -Filter '*.glb' -ErrorAction SilentlyContinue) {
+    $remap = Select-String -LiteralPath ($model.FullName + '.import') -Pattern '^path="res://([^"]+)"$' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $remap) {
+        $needsImport = $true
+        break
+    }
+    $cache = Join-Path $worldPath $remap.Matches[0].Groups[1].Value
+    $stamp = [IO.Path]::ChangeExtension($cache, '.md5')
+    $importedHash = Select-String -LiteralPath $stamp -Pattern '^source_md5="([a-f0-9]{32})"$' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not (Test-Path -LiteralPath $cache) -or -not $importedHash -or
+        $importedHash.Matches[0].Groups[1].Value -ne (Get-FileHash -LiteralPath $model.FullName -Algorithm MD5).Hash) {
+        $needsImport = $true
+        break
+    }
+}
+if ($needsImport) {
     & $godotPath --headless --path $worldPath --editor --import
     if ($LASTEXITCODE -ne 0) { throw 'Initial Godot asset import failed.' }
 }

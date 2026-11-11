@@ -19,6 +19,9 @@ Allow about 2.25 GiB for the temporary art copy. Startup logs are under
 | WASD and mouse | Move and look |
 | Space | Jump; swim up in deep water |
 | C | Dive while swimming |
+| Hold right mouse | Point |
+| Hold left mouse | Grab pose |
+| Hold Shift + left mouse | Pinch pose |
 | 1, 2, 3 | Shift the world around you to The Grid, the villa or the shore |
 | E while near and facing an object | Open an application preview, inspect an agent |
 | E while near and facing the Codex avatar | Open the Codex uplink |

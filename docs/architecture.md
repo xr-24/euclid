@@ -10,7 +10,7 @@ All paths below are relative to `world/scripts/`.
 
 | Module | Owns | Boundary |
 | --- | --- | --- |
-| `world.gd` | Startup, active zone, input routing and main-thread commits | Coordinates services; no asset authoring or HTTP parsing |
+| `world.gd` | Startup, active zone, input routing, the F2 command planner and main-thread commits | Coordinates services; no asset authoring, HTTP parsing or development UI |
 | `zones/zone_catalog.gd` | Version 1 content validation | Zone and anchor identities remain data |
 | `zones/zone_build_context.gd` | One detached root and its interaction registry | Reviewed package builder; no live scene tree, player, UI or network access |
 | `zones/zone_packages.gd` | Validated environment packages | Project-owned builder paths, spawn, bounds, views, capabilities and appearance |
@@ -28,6 +28,7 @@ All paths below are relative to `world/scripts/`.
 | `ui/world_ui.gd` | Menus and application previews | Emits user-intent signals; cannot load zones or save the world |
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
+| `agents/development_host.gd` | F4 Workbench panel, F2 console, development actions, benchmarks, native CLI and voice | Created with the world; uses its overlay and live extension lifecycle, never zones or saves directly |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |
 | `diagnostics/` | Benchmarks, smoke test, captures, tests and the opt-in F3 overlay | Automated runs never use the normal world save; each runner receives the world as `run(world)` |

@@ -21,7 +21,7 @@ func _request_development_draft(definition: Dictionary, request: Dictionary) -> 
 			_world._console_notice("This environment can no longer preview that change.")
 			return
 	var context: Dictionary = _world._workbench_plugin_context() if definition.get("workshop_context", false) else {}
-	var result: Dictionary = await _world._development.request(definition, request.prompt, context)
+	var result: Dictionary = await _world._dev.client.request(definition, request.prompt, context)
 	if result.has("error"):
 		_world._console_notice(result.error)
 	elif result.draft.status == "authoring":
@@ -36,18 +36,18 @@ func _request_development_draft(definition: Dictionary, request: Dictionary) -> 
 func _revise_command(_definition: Dictionary, request: Dictionary) -> void:
 	var reviewed: Dictionary = request.reviewed
 	var output: String = _world._palette_host.error_log(reviewed.id, reviewed.version)
-	var result: Dictionary = await _world._development.revise(request.prompt, reviewed, output)
+	var result: Dictionary = await _world._dev.client.revise(request.prompt, reviewed, output)
 	if result.has("error"):
 		_world._console_notice(result.error)
 
 func _benchmark_command(_definition: Dictionary, request: Dictionary) -> void:
-	var result: Dictionary = await _world._run_workbench_benchmark("benchmark", request.benchmark)
+	var result: Dictionary = await _world._dev.run_benchmark("benchmark", request.benchmark)
 	if result.has("error"):
 		_world._console_notice(result.error)
 
 func _villa_results_command(_definition: Dictionary, _request: Dictionary) -> void:
-	await _world._development.refresh()
-	if _world._development.diagnostic_job.is_empty():
-		_world._console_notice(WorkbenchDiagnostics.summary(_world._development.diagnostic))
+	await _world._dev.client.refresh()
+	if _world._dev.client.diagnostic_job.is_empty():
+		_world._console_notice(WorkbenchDiagnostics.summary(_world._dev.client.diagnostic))
 	else:
 		_world._console_notice("The villa benchmark is still running.")

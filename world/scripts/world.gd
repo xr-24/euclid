@@ -21,17 +21,13 @@ const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
-const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
-const WorkbenchPanel = preload("res://scripts/ui/workbench_panel.gd")
-const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
-const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
-const WorkbenchDiagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const ShorelineLook = preload("res://scripts/rendering/shoreline_look.gd")
 const GridScenery = preload("res://scripts/zones/grid_scenery.gd")
 const WorkshopToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
 const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd")
+const DevelopmentHost = preload("res://scripts/agents/development_host.gd")
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 var manifest: Dictionary
@@ -87,37 +83,25 @@ var world_bridge: HTTPRequest
 var environment_library: RefCounted
 var companion: Node3D
 var scene_animations: RefCounted
-var codex_console: Control
-var cli_process := -1
-var console_busy := false
-var voice_enabled := false
-const CONSOLE_SCROLLBACK := 300
-var console_lines := PackedStringArray()
-var _workbench_capability := ""
-var _workbench_panel: Control
-var _development: WorldDevelopment
-var _development_session: DevelopmentSession
-var _benchmark_id := ""
-var _benchmark_display := {}
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
 var _live := LiveExtensions.new()
+var _dev: DevelopmentHost = DevelopmentHost.new(self)
 var _world_commands := WorldCommands.new(self)
 var _development_commands := DevelopmentCommands.new(self)
-var _development_action_busy := false
-var _development_status := ""
 
 func _ready() -> void:
+	add_child(_dev)
 	manifest = ZoneCatalog.read("res://data/world.json")
 	var args := OS.get_cmdline_user_args()
 	var water_check := "--water-check" in args or "--coast-check" in args
 	var benchmark := "--benchmark" in args
 	smoke_mode = "--smoke" in args or "--capture" in args or water_check or benchmark
 	if not smoke_mode and "--workbench-preview" not in args:
-		_workbench_capability = OS.get_environment("EUCLID_WORKBENCH_TOKEN")
-		if not _workbench_capability.is_empty():
-			_resume_development("user://development-session.json")
+		_dev.capability = OS.get_environment("EUCLID_WORKBENCH_TOKEN")
+		if not _dev.capability.is_empty():
+			_dev.resume("user://development-session.json")
 	OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
 	environment_library = EnvironmentLibrary.new("" if smoke_mode else "user://environments.json")
 	manifest.zones.append_array(environment_library.environments())
@@ -319,10 +303,7 @@ func _panel(title: String, description: String, height := 500.0, remember_palett
 	overlay.offset_bottom = -overlay.offset_top
 	_palette_host.unmount(remember_palette)
 	for child in overlay_content.get_children():
-		if child == codex_console:
-			codex_console = null
-		if child == _workbench_panel:
-			_workbench_panel = null
+		_dev.release(child)
 		overlay_content.remove_child(child)
 		child.queue_free()
 	if not title.is_empty():
@@ -361,8 +342,8 @@ func _show_menu() -> void:
 		_button("%d    %s" % [i + 1, zone.name], _travel.bind(str(zone.id)))
 	if not shifting:
 		_button("Grid tools  [B]" if _is_workshop(zone_id) else "Scene tools  [B]", _request_grid_palette)
-	_button("Codex  [F2]", _open_codex_console)
-	_button("Workbench  [F4]", _open_workbench)
+	_button("Codex  [F2]", _dev.open_console)
+	_button("Workbench  [F4]", _dev.open_workbench)
 	if manifest.zones.size() > 3:
 		var spaces := OptionButton.new()
 		spaces.add_item("Custom spaces")
@@ -377,45 +358,6 @@ func _show_menu() -> void:
 func _close_panel() -> void:
 	overlay.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-func _open_workbench() -> void:
-	if shifting:
-		return
-	if _workbench_capability.is_empty() or gateway_url.is_empty() or gateway_token.is_empty():
-		_panel("Workbench", "Workbench needs the local gateway. Open your main Euclid session with Start Euclid.cmd.", 240)
-		_button("Back", _close_panel)
-		return
-	if is_instance_valid(_workbench_panel):
-		if overlay.visible:
-			_close_panel()
-		else:
-			_show_panel()
-		return
-	_panel("", "", 500.0, true)
-	overlay.offset_left = 68
-	overlay.offset_top = 55
-	overlay.offset_right = -68
-	overlay.offset_bottom = -55
-	var frame := CodexConsole.frame_style()
-	frame.content_margin_left = 18
-	frame.content_margin_right = 18
-	frame.content_margin_top = 12
-	frame.content_margin_bottom = 12
-	overlay.add_theme_stylebox_override("panel", frame)
-	_workbench_panel = WorkbenchPanel.new()
-	overlay_content.add_child(_workbench_panel)
-	var saved_view := {}
-	if _development_session:
-		saved_view = {"file": _development_session.file, "tab": _development_session.tab}
-		_workbench_panel.view_changed.connect(_development_session.save_view)
-	_workbench_panel.setup(gateway_url, gateway_token, _workbench_capability, _preview_live_change,
-		_finish_live_change, _live_change_status, _workbench_plugin_context, saved_view, _run_workbench_benchmark,
-		_palette_host.error_log)
-	_workbench_panel.draft_reviewed.connect(_palette_host.observe)
-	_workbench_panel.close_requested.connect(_close_panel)
-	_workbench_panel.restart_requested.connect(_restart_workbench)
-	_workbench_panel.commit_recorded.connect(func(revision: String) -> void:
-		_console_notice("Committed source draft %s." % revision.left(7)))
 
 ## Every kind of live extension shares one lifecycle. See scripts/extensions/.
 func _register_live_extensions() -> void:
@@ -447,9 +389,16 @@ func _finish_live_change(action: String, draft_id: String) -> Dictionary:
 		return {"live": false}
 	if action == "apply":
 		_live.reload_committed(true)
-	if _development:
-		_development.forget(draft_id)
+	if _dev.client:
+		_dev.client.forget(draft_id)
 	return _live.finish(draft_id, action == "apply")
+
+func _save_for_restart() -> Error:
+	return _write_state(SAVE_PATH)
+
+## Messages for the F2 console. Commands and services report here.
+func _console_notice(line: String) -> void:
+	_dev.notice(line)
 
 func _workbench_plugin_context() -> Dictionary:
 	if not _is_workshop(zone_id) or shifting:
@@ -457,40 +406,6 @@ func _workbench_plugin_context() -> Dictionary:
 	var entities: Array = world_tools.execute("list_entities").get("entities", [])
 	entities = entities.filter(func(item: Dictionary) -> bool: return not item.get("authored", false))
 	return {"zone": zone_id, "entities": entities.slice(maxi(0, entities.size() - 64))}
-
-func _restart_workbench() -> void:
-	if smoke_mode or shifting or _workbench_capability.is_empty():
-		return
-	if _write_state(SAVE_PATH) != OK:
-		_workbench_panel.show_error("Euclid could not save your place. Restart cancelled.")
-		return
-	var arguments := OS.get_cmdline_args()
-	if DisplayServer.get_name() == "headless":
-		arguments.append("--headless")
-	else:
-		var window := get_window()
-		if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
-			arguments.append("--fullscreen")
-		elif window.mode == Window.MODE_MAXIMIZED:
-			arguments.append("--maximized")
-		else:
-			arguments.append_array(PackedStringArray(["--windowed", "--resolution", "%dx%d" % [window.size.x, window.size.y]]))
-		arguments.append_array(PackedStringArray(["--rendering-method", RenderingServer.get_current_rendering_method()]))
-	arguments.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "--"]))
-	arguments.append_array(OS.get_cmdline_user_args())
-	OS.set_environment("EUCLID_WORKBENCH_TOKEN", _workbench_capability)
-	var supervisor := OS.get_environment("EUCLID_BOOT_NODE")
-	if supervisor.is_empty():
-		OS.set_restart_on_exit(true, arguments)
-	else:
-		var command := PackedStringArray([ProjectSettings.globalize_path("res://../scripts/recovery.mjs"),
-			"restart", OS.get_executable_path(), str(OS.get_process_id())])
-		command.append_array(arguments)
-		if OS.create_process(supervisor, command) == -1:
-			OS.unset_environment("EUCLID_WORKBENCH_TOKEN")
-			_workbench_panel.show_error("Euclid could not start the recovery supervisor. Restart cancelled.")
-			return
-	get_tree().quit()
 
 func _request_grid_palette() -> void:
 	grid_palette_requested = true
@@ -526,191 +441,6 @@ func _run_grid_agent(prompt: String, placement: Array, palette: Control) -> void
 	})
 	palette.finish_agent_request(result)
 
-func _open_codex_console() -> void:
-	if is_instance_valid(codex_console):
-		if codex_console.is_visible_in_tree():
-			_close_panel()
-		else:
-			_show_panel()
-			codex_console.focus_entry()
-		return
-	_panel("", "", 500.0, true)
-	overlay.add_theme_stylebox_override("panel", CodexConsole.frame_style())
-	codex_console = CodexConsole.new()
-	codex_console.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	overlay_content.add_child(codex_console)
-	codex_console.submitted.connect(_submit_codex_command)
-	codex_console.cli_requested.connect(_open_native_cli)
-	codex_console.minimize_requested.connect(_close_panel)
-	codex_console.layout_requested.connect(_layout_codex_console)
-	codex_console.voice_requested.connect(_set_voice)
-	codex_console.development_requested.connect(_codex_development_action)
-	_layout_codex_console(false)
-	codex_console.setup(console_lines, console_busy, voice_enabled)
-	_refresh_development_actions()
-	if _development:
-		_development.refresh()
-
-func _refresh_development_actions() -> void:
-	if is_instance_valid(codex_console) and _development:
-		var draft := _development.draft
-		var available := false
-		match draft.get("subject", ""):
-			"shoreline": available = _shoreline.available()
-			"grid": available = _grid_scenery.available()
-			"grid_palette": available = draft.get("status") != "passed" or _is_workshop(zone_id)
-			"behavior", "workshop_tool": available = _grid_scenery.available() and zone_id == draft.get("preview_zone")
-		if draft.get("agent_source", false) and draft.get("subject") != "grid_palette":
-			available = true
-		codex_console.update_development(draft, available and not shifting and not _development_action_busy,
-			_live_change_status(draft.get("id", "")) == "active")
-
-func _development_changed() -> void:
-	var reviewed := _development.benchmark_target
-	_palette_host.observe(reviewed.get("id", ""), reviewed.get("version", ""))
-	var draft := _development.draft
-	var status: String = draft.get("status", "")
-	var notice: String = draft.get("revision_notice", "")
-	var stamp := "%s/%s/%s/%s" % [draft.get("id", ""), draft.get("version", ""), status, notice]
-	if stamp != _development_status:
-		_development_status = stamp
-		if not notice.is_empty():
-			_console_notice(notice)
-		elif status == "revising":
-			_console_notice("Codex is revising a copy of the active draft. Open Workbench to see progress.")
-		else:
-			_announce_development_status(draft, status)
-	_refresh_development_actions()
-
-func _announce_development_status(draft: Dictionary, status: String) -> void:
-	match status:
-		"staged":
-			if draft.get("agent_source", false):
-				_console_notice(draft.summary if not draft.summary.is_empty() else "Codex prepared the source draft.")
-				_console_notice("Review the diff, then run checks to prepare a playable build.")
-		"passed": _console_notice("Draft checks passed. Preview the change or review the diff.")
-		"failed":
-			if draft.get("has_patch", false):
-				var guidance := "Open Workbench to inspect the results."
-				if draft.get("can_revise", false):
-					guidance = "Ask Codex to fix the failing check, or open Workbench to inspect it."
-				_console_notice("The draft failed checks. " + guidance)
-			else:
-				_console_notice("Source authoring failed. " + draft.error)
-
-func _codex_development_action(action: String) -> void:
-	if not _development or _development.draft.is_empty() or _development_action_busy or shifting:
-		return
-	if action == "review":
-		_open_workbench()
-		if is_instance_valid(_workbench_panel):
-			_workbench_panel.show_review(_development.draft.status in ["failed", "authoring", "revising"])
-		return
-	var id: String = _development.draft.id
-	var revising: bool = _development.draft.status == "revising"
-	if action == "live" and _development.draft.get("agent_source", false):
-		if _development.draft.status != "passed":
-			action = "check"
-		elif _development.draft.get("subject") != "grid_palette":
-			action = "play"
-	_development_action_busy = true
-	_refresh_development_actions()
-	var result := await _development.command(action)
-	if result.has("error"):
-		_console_notice(result.error)
-	elif action == "live":
-		var activated := await _preview_live_change(result.live)
-		_console_notice(activated.message)
-	elif action == "play":
-		_console_notice("Opened the checked build in a separate Euclid window.")
-	elif action == "check":
-		_console_notice("Running checks in the isolated preview project.")
-	elif action == "discard" and not revising:
-		var finished := _finish_live_change("discard", id)
-		_console_notice("Discarded the draft and restored the previous version." if finished.live else "Discarded the draft.")
-	_development_action_busy = false
-	_refresh_development_actions()
-
-func _layout_codex_console(expanded: bool) -> void:
-	overlay.offset_left = 46 if expanded else 835
-	overlay.offset_top = 45 if expanded else 96
-	overlay.offset_right = -46 if expanded else -46
-	overlay.offset_bottom = -45 if expanded else -108
-
-func _console_notice(line: String) -> void:
-	console_lines.append(line)
-	if console_lines.size() > CONSOLE_SCROLLBACK:
-		console_lines.remove_at(0)
-	if _development_session:
-		_development_session.save_console(console_lines, CodexConsole.prompts)
-	if is_instance_valid(codex_console):
-		codex_console.update_display(console_lines, console_busy)
-
-func _resume_development(path: String) -> void:
-	_development_session = DevelopmentSession.new(path)
-	console_lines = _development_session.lines
-	CodexConsole.prompts = _development_session.prompts
-
-func _run_workbench_benchmark(action: String, arguments: Dictionary) -> Dictionary:
-	if not _development or shifting:
-		return {"error": "Wait for the current environment to finish loading."}
-	var result := await _development.benchmark(action, arguments)
-	if action != "benchmark" or result.has("error"):
-		return result
-	var job: Variant = result.get("diagnostic_job")
-	if job is Dictionary:
-		_benchmark_id = job.id
-		_console_notice("Running the villa benchmark. Euclid will return when the measurements finish.")
-		if DisplayServer.get_name() != "headless":
-			_benchmark_display = {"mode": get_window().mode, "fps": Engine.max_fps,
-				"rendering": RenderingServer.render_loop_enabled}
-			get_window().mode = Window.MODE_MINIMIZED
-			RenderingServer.render_loop_enabled = false
-			Engine.max_fps = 15
-	return result
-
-func _benchmark_changed() -> void:
-	if _benchmark_id.is_empty() or not _development.diagnostic_job.is_empty():
-		return
-	var report := _development.diagnostic
-	var notice := _development.diagnostic_notice
-	if report.get("id") == _benchmark_id:
-		notice = WorkbenchDiagnostics.summary(report)
-	_benchmark_id = ""
-	if not _benchmark_display.is_empty():
-		Engine.max_fps = _benchmark_display.fps
-		RenderingServer.render_loop_enabled = _benchmark_display.rendering
-		get_window().mode = _benchmark_display.mode
-		_benchmark_display.clear()
-	if not notice.is_empty():
-		_console_notice(notice)
-
-func _open_native_cli() -> void:
-	if OS.get_name() != "Windows" or not is_instance_valid(world_bridge):
-		_console_notice("Open the Windows Euclid launcher with its gateway to start the native CLI.")
-		return
-	if gateway_url.is_empty() or gateway_token.is_empty():
-		_console_notice("The native CLI needs Euclid’s local gateway.")
-		return
-	if cli_process > 0 and OS.is_process_running(cli_process):
-		_console_notice("The Codex terminal is open. Use Alt+Tab to return to it.")
-		return
-	var script_path := ProjectSettings.globalize_path("res://../scripts/codex-terminal.ps1")
-	cli_process = OS.create_process("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass",
-		"-File", script_path, "-WorldSession", world_bridge.session], true)
-	if cli_process <= 0:
-		_console_notice("The native terminal could not be opened.")
-
-func _set_voice(enabled: bool) -> void:
-	voice_enabled = enabled
-	if not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
-		if enabled: _console_notice("System voices are unavailable on this device.")
-	elif enabled:
-		if DisplayServer.tts_get_voices_for_language("en").is_empty():
-			_console_notice("Install an English system voice to enable speech.")
-	else:
-		DisplayServer.tts_stop()
-
 func _world_context() -> Dictionary:
 	var environments := []
 	for zone in manifest.zones:
@@ -736,16 +466,16 @@ func _setup_world_bridge() -> void:
 	world_bridge.configure(gateway_url, gateway_token, _world_context, _call_world_tool)
 
 func _submit_codex_command(prompt: String) -> void:
-	if console_busy:
+	if _dev.busy:
 		return
-	console_busy = true
+	_dev.busy = true
 	_console_notice("> " + prompt)
 	var context := _world_context()
-	context["shoreline_preview"] = _development != null and _shoreline.available() and not shifting
-	context["grid_development"] = _development != null and _grid_scenery.available() and not shifting
-	context["source_development"] = _development != null
-	var reviewed: Dictionary = _development.draft.duplicate() if _development else {}
-	var benchmark_target: Dictionary = _development.benchmark_target.duplicate() if _development else {}
+	context["shoreline_preview"] = _dev.client != null and _shoreline.available() and not shifting
+	context["grid_development"] = _dev.client != null and _grid_scenery.available() and not shifting
+	context["source_development"] = _dev.client != null
+	var reviewed: Dictionary = _dev.client.draft.duplicate() if _dev.client else {}
+	var benchmark_target: Dictionary = _dev.client.benchmark_target.duplicate() if _dev.client else {}
 	context["source_revision"] = reviewed.get("can_revise", false) and reviewed.get("status") in ["staged", "failed", "passed"]
 	var requested_zone := zone_root.get_instance_id() if is_instance_valid(zone_root) else 0
 	if _scene_ready():
@@ -757,7 +487,7 @@ func _submit_codex_command(prompt: String) -> void:
 	if scene_animations:
 		context["animation"] = scene_animations.context(world_tools if _scene_ready() else null)
 	var response: Dictionary = await grid_agent.plan(prompt, context)
-	console_busy = false
+	_dev.busy = false
 	if response.has("error"):
 		_console_notice(str(response.error))
 		return
@@ -776,22 +506,22 @@ func _submit_codex_command(prompt: String) -> void:
 			if entry.name == plan.target:
 				plan["revision"] = entry.revision
 				break
-	console_busy = true
+	_dev.busy = true
 	if definition.service == "development":
-		if context.get(definition.availability, false) and _development:
+		if context.get(definition.availability, false) and _dev.client:
 			await _development_commands.execute(definition, {"prompt": prompt, "reviewed": reviewed, "benchmark": benchmark_target})
 		else:
 			_console_notice("That Workbench command is unavailable in the current session.")
 	else:
 		await _call_world_tool(plan)
-	console_busy = false
-	if is_instance_valid(codex_console):
-		codex_console.update_display(console_lines, false)
+	_dev.busy = false
+	if is_instance_valid(_dev.console):
+		_dev.console.update_display(_dev.console_lines, false)
 
 func _call_world_tool(plan: Dictionary) -> Dictionary:
 	var result := await _execute_world_tool(plan)
 	_console_notice(str(result.message))
-	if voice_enabled and result.ok and DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
+	if _dev.voice_enabled and result.ok and DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
 		var voices := DisplayServer.tts_get_voices_for_language("en")
 		if not voices.is_empty():
 			DisplayServer.tts_speak(str(result.message).xml_escape(), voices[0], 65, 1.0, 1.0, 0, true)
@@ -937,7 +667,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
 	_shoreline.attach(zone_root)
-	_refresh_development_actions()
+	_dev.refresh_actions()
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
@@ -1029,7 +759,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	_update_agent_labels()
 	_announce_zone()
 	shifting = false
-	_refresh_development_actions()
+	_dev.refresh_actions()
 	_save()
 
 ## Timing of the heavier steps of a shift, printed only by the automated preview capture.
@@ -1157,8 +887,8 @@ func _input(event: InputEvent) -> void:
 	if smoke_mode or not is_instance_valid(overlay) or not event is InputEventKey or not event.pressed or event.echo:
 		return
 	match event.keycode:
-		KEY_F2: _open_codex_console()
-		KEY_F4: _open_workbench()
+		KEY_F2: _dev.open_console()
+		KEY_F4: _dev.open_workbench()
 		_: return
 	get_viewport().set_input_as_handled()
 
@@ -1187,10 +917,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_shift(str(manifest.zones[_zone_key(event)].id))
 	elif event.is_action_pressed("interact") and not overlay.visible and not nearest.is_empty():
 		if nearest.kind == "companion":
-			_open_codex_console()
+			_dev.open_console()
 		elif nearest.kind == "application":
 			if _is_workshop(zone_id) and nearest.app_id == "terminal":
-				_open_codex_console()
+				_dev.open_console()
 			else:
 				_open_app(nearest.app_id)
 		else:
@@ -1258,13 +988,7 @@ func _setup_gateway() -> void:
 	grid_agent = GridAgentClient.new()
 	add_child(grid_agent)
 	grid_agent.configure(gateway_url, gateway_token)
-	if not _workbench_capability.is_empty() and not gateway_url.is_empty() and not gateway_token.is_empty():
-		_development = WorldDevelopment.new()
-		add_child(_development)
-		_development.configure(gateway_url, gateway_token, _workbench_capability)
-		_development.changed.connect(_development_changed)
-		_development.diagnostics_changed.connect(_benchmark_changed)
-		_development.refresh()
+	_dev.connect_gateway(gateway_url, gateway_token)
 	request = HTTPRequest.new()
 	request.timeout = 3
 	add_child(request)

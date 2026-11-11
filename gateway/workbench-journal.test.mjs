@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile, appendFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -50,11 +50,12 @@ test('the journal survives a restart, rolls over, and skips damaged lines', asyn
 
 test('a journal that cannot be written reports the error and never throws', async t => {
   const area = await folder(t);
-  await writeFile(path.join(area, 'blocked'), 'a file where a folder should be');
+  const file = path.join(area, 'journal.jsonl');
+  await mkdir(file);
   const errors = [];
-  const journal = createJournal(path.join(area, 'blocked/journal.jsonl'), { onError: error => errors.push(error) });
+  const journal = createJournal(file, { onError: error => errors.push(error) });
   await journal.record('drafted', { draft: 'a' });
   await journal.record('discarded', { draft: 'a' });
   assert.equal(errors.length, 2);
-  assert.deepEqual(await journal.read().catch(error => error.code), 'ENOTDIR');
+  await assert.rejects(journal.read(), { code: 'EISDIR' });
 });

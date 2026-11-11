@@ -34,10 +34,14 @@ check with its scope, and whether it was committed, discarded or reverted. It
 survives restarts and outlives the draft. Connected agents read it with
 `task_history`, and `POST /v1/workbench/history` returns it.
 
-**Remaining.** Show the journal in F4. Add separate workspaces for concurrent
-agents, and conflict review when the primary branch advances. Bring the
-gateway and docs into the F4 editor, and label gateway activation in the
-Workbench.
+When the main branch moves past a draft, the Workbench `rebase` action replays
+the reviewed patch onto the new tip with a three-way merge. The draft keeps its
+id, loses its earlier versions, and needs fresh checks. A conflict names the
+files and leaves the draft as it was. Agents use `rebase_draft`.
+
+**Remaining.** Show the journal and a rebase control in F4. Add separate
+workspaces for concurrent agents. Bring the gateway and docs into the F4
+editor, and label gateway activation in the Workbench.
 
 ## 2. Session continuity and safe activation
 

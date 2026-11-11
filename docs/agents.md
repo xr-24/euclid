@@ -69,9 +69,10 @@ from F2 connects as `codex`.
 | Tool | Effect |
 | --- | --- |
 | `list_source`, `read_source` | Read draft-eligible source plus `README.md`, `AGENTS.md` and `docs/*.md`. With a draft active, reads return the draft's version |
-| `draft_status` | Owner, version, files, diff, check status, scope and output of the active draft |
+| `draft_status` | Owner, version, files, diff, check status, scope and output of the active draft, its `base` commit, and `behind_main` when the main branch has moved past it |
 | `submit_draft` | Create a draft from complete file contents and deletions, or revise the agent's own draft on top of its current version |
 | `run_checks` | Start the isolated project checks for the agent's own draft |
+| `rebase_draft` | Replay the agent's own draft onto the tip of the main branch. It keeps its id and needs fresh checks. A conflict names the files and changes nothing |
 | `discard_draft` | Discard the agent's own draft |
 | `task_history` | Recent Workbench events, newest first, or one draft's events: drafts, revisions, checks, commits, discards and reverts |
 

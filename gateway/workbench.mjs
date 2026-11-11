@@ -172,7 +172,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
       checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
-      owner: change.owner ?? '',
+      owner: change.owner ?? '', base: change.base,
     } };
   }
 
@@ -336,6 +336,45 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     })();
   }
 
+  // Replay the reviewed patch onto the tip of the main branch after it moved. The result is
+  // a new draft version that needs fresh checks. A conflict leaves the draft as it was.
+  async function rebaseDraft(body) {
+    const change = requireDraft(body.id, body.version);
+    if (body.version !== fingerprint(change.diff)) throw new Error('Review the current draft version before rebasing it.');
+    await verifyReview(change);
+    const { head, branch, clean } = await git.primary();
+    if (branch !== change.branch) throw new Error('Switch the main checkout back to the draft’s branch before rebasing.');
+    if (!clean) throw new Error('The main checkout has local changes. Commit or set them aside before rebasing.');
+    if (head === change.base) throw new Error('The draft is already based on the tip of the main branch.');
+    const worktree = checkoutPath(change.directory, `revision-${randomUUID()}`);
+    const patch = worktree + '.patch';
+    try {
+      await git.add(worktree, head);
+      await writeFile(patch, change.diff, { flag: 'wx' });
+      const conflicts = await git.applyThreeWay(worktree, patch);
+      if (conflicts.length) {
+        throw new Error(`The draft conflicts with the main branch in ${conflicts.join(', ')}. Revise or discard the draft.`);
+      }
+      const names = await git.changedPaths(worktree, head);
+      if (!names.length) throw new Error('The main branch already contains every change in this draft. Discard the draft.');
+      const allowed = change.agentSource ? isAgentSourcePath : isSourcePath;
+      const limit = change.agentSource ? sourceDraftLimit : maxFiles;
+      if (names.length > limit || !names.every(allowed)) throw new Error('The rebased draft reaches files this draft may not change.');
+      await verifyReview(change);
+      await runner.stop();
+      // Earlier versions were reviewed against the old base, so they cannot be restored after this.
+      await registerDraft({ ...change, base: head, worktree, names, previous: undefined, revisionDiff: '', revisionNotice: '' }, '', 'rebased');
+    } catch (error) {
+      await git.remove(worktree).catch(() => {});
+      throw error;
+    } finally {
+      await rm(patch, { force: true }).catch(() => {});
+    }
+    for (const old of [change.worktree, change.previous && checkoutPath(change.directory, change.previous.checkout)]) {
+      if (old && old !== worktree) await git.remove(old).catch(() => {});
+    }
+  }
+
   async function restorePrevious(body) {
     const change = requireVersion(body);
     if (!change.previous) throw new Error('There is no previous draft version to restore.');
@@ -437,7 +476,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     await saveDraft(change, diff);
     const kind = event ?? (draft?.id === change.id ? 'revised' : 'drafted');
     draft = { ...change, diff, plugin, status: 'staged', check: null, log, error: '' };
-    await journal.record(kind, { draft: change.id, version: fingerprint(diff), owner: change.owner, files: names, summary: change.summary });
+    await journal.record(kind, { draft: change.id, version: fingerprint(diff), owner: change.owner, files: names, summary: change.summary,
+      ...(kind === 'rebased' ? { commit: change.base } : {}) });
   }
 
   async function ask(body, signal) {
@@ -529,6 +569,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { text, hash };
     }
     if (action === 'state') return state();
+    if (action === 'head') return { head: await git.head() };
     if (action === 'history') {
       const limit = Number.isInteger(body?.limit) ? body.limit : 50;
       const id = typeof body?.draft === 'string' && body.draft ? body.draft : undefined;
@@ -580,6 +621,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           break;
         }
         case 'previous': await restorePrevious(body); break;
+        case 'rebase': await rebaseDraft(body); break;
         case 'stage': await stage(body); break;
         case 'author': await authorDraft(body, signal); break;
         case 'tool': await authorTool(body, signal); break;

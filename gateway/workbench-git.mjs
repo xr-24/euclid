@@ -56,6 +56,18 @@ export function createWorkbenchGit(root) {
     review,
     add: (worktree, base) => git(root, 'worktree', 'add', '--detach', worktree, base),
     apply: (worktree, file) => git(worktree, 'apply', '--whitespace=nowarn', '--', file),
+    // Replay a reviewed patch onto a newer base. Returns the files left in conflict.
+    async applyThreeWay(worktree, file) {
+      try {
+        await git(worktree, 'apply', '--3way', '--whitespace=nowarn', '--', file);
+        return [];
+      } catch (error) {
+        const unmerged = (await git(worktree, 'diff', '--name-only', '--diff-filter=U', '-z')).split('\0').filter(Boolean);
+        if (!unmerged.length) throw error;
+        return [...new Set(unmerged)].sort();
+      }
+    },
+    head: async () => (await git(root, 'rev-parse', 'HEAD')).trim(),
     async changedPaths(worktree, base) {
       const changed = await git(worktree, 'diff', '--name-only', '--no-renames', '-z', base, '--');
       const added = await git(worktree, 'ls-files', '--others', '--exclude-standard', '-z');

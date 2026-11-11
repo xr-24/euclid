@@ -5,7 +5,7 @@ import path from 'node:path';
 // revision and check, and whether it was committed, discarded or reverted. Entries
 // are JSON lines. When the file passes its size limit it becomes the one older file
 // and a new one starts. Recording never fails the action it records.
-export const journalEvents = Object.freeze(['drafted', 'revised', 'restored_previous', 'checked', 'committed', 'discarded', 'reverted']);
+export const journalEvents = Object.freeze(['drafted', 'revised', 'rebased', 'restored_previous', 'checked', 'committed', 'discarded', 'reverted']);
 const fields = ['draft', 'version', 'owner', 'files', 'summary', 'status', 'scope', 'error', 'commit', 'message', 'reverted'];
 const limits = { summary: 320, error: 400, message: 100 };
 

@@ -80,7 +80,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'task_history', 'submit_draft', 'run_checks', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'task_history', 'submit_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -162,12 +162,26 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   assert.equal(checks, 2);
   assert.equal(passed.check_status, 'passed');
   assert.equal(passed.check_scope, 'full');
+  assert.deepEqual([passed.base, passed.behind_main], [base, false]);
+  assert.match((await tool('rebase_draft', { version: passed.version })).message, /already based on the tip/);
   assert.match(passed.diff, /\+const READY := true/);
 
   // Passing checks do not install anything. The commit stays in the Workbench.
   assert.equal(git('rev-parse', 'HEAD'), base);
   assert.match(await readFile(path.join(root, script), 'utf8'), /READY := false/);
-  const discarded = await tool('discard_draft', { version: passed.version });
+
+  // Someone else commits to main. The agent sees it and replays its draft onto the new tip.
+  await writeFile(path.join(root, 'world/scripts/unrelated.gd'), 'extends Node\n');
+  git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Unrelated');
+  const moved = git('rev-parse', 'HEAD');
+  assert.equal((await tool('draft_status')).draft.behind_main, true);
+  assert.match((await tool('rebase_draft', { version: passed.version }, 'codex')).message, /belongs to claude/);
+  const rebased = await tool('rebase_draft', { version: passed.version });
+  assert.equal(rebased.isError, false, rebased.message);
+  const after = (await tool('draft_status')).draft;
+  assert.deepEqual([after.base, after.behind_main, after.status, after.check_status], [moved, false, 'staged', '']);
+  const discarded = await tool('discard_draft', { version: after.version });
   assert.deepEqual([discarded.isError, discarded.draft], [false, null]);
   assert.equal(git('worktree', 'list').split('\n').length, 1);
 
@@ -175,10 +189,11 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
   const history = await tool('task_history', { draft: passed.id });
   assert.equal(history.isError, false);
   assert.deepEqual(history.entries.map(item => [item.event, item.status ?? '', item.owner]).reverse(), [
-    ['drafted', '', 'claude'], ['checked', 'failed', 'claude'], ['revised', '', 'claude'], ['checked', 'passed', 'claude'], ['discarded', '', 'claude']]);
-  assert.equal(history.entries[1].scope, 'full');
-  assert.match(history.entries[3].error, /READY must be true/);
+    ['drafted', '', 'claude'], ['checked', 'failed', 'claude'], ['revised', '', 'claude'], ['checked', 'passed', 'claude'], ['rebased', '', 'claude'], ['discarded', '', 'claude']]);
+  assert.equal(history.entries[2].scope, 'full');
+  assert.match(history.entries[4].error, /READY must be true/);
   assert.deepEqual(history.entries[0].files, [added, script, obsolete]);
+  assert.equal(history.entries[1].commit, moved);
   assert.equal((await rpc('tools/call', { name: 'task_history', arguments: { draft: 'not-an-id' } })).error.code, -32602);
 });
 

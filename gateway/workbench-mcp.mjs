@@ -13,7 +13,8 @@ export const developmentTools = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
-  { name: 'draft_status', description: 'Report the active source draft: its owner, version, files, diff, check status and check output.',
+  { name: 'draft_status', description: 'Report the active source draft: its owner, version, files, diff, check status and output, ' +
+      'and whether the main branch has moved past the draft’s base.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'task_history', description: 'List recent Workbench events, newest first: drafts, revisions, checks with their scope, ' +
       'commits, discards and reverts. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
@@ -30,6 +31,9 @@ export const developmentTools = [
       version: { ...version, description: 'Required when revising: the current version of your draft.' },
     }, required: ['request'], additionalProperties: false } },
   { name: 'run_checks', description: 'Start the isolated project checks for your draft. They take a few minutes; poll draft_status for the result.',
+    inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
+  { name: 'rebase_draft', description: 'Replay your draft onto the current tip of the main branch after it moved. ' +
+      'The draft keeps its id and needs fresh checks. A conflict names the files and leaves the draft unchanged.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
   { name: 'discard_draft', description: 'Discard your draft and its checks.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false },
@@ -61,7 +65,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
     return { ok: true, busy: state.operation ?? '', draft: {
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
       files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
-      activation: draft.activation ?? '', notice: draft.revision_notice ?? '',
+      activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '',
       ...(withDiff ? { diff: clip(draft.diff, 96000) } : {}),
       output: tail(draft.log, 12000), preview_output: tail(state.preview_log, 4000),
     } };
@@ -108,7 +112,18 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
         const { text: content, draft } = await workbench('file', { name: args.path }, signal);
         return { ok: true, path: args.path, draft, content };
       }
-      case 'draft_status': return report(await workbench('state', {}, signal), agent);
+      case 'draft_status': {
+        const result = report(await workbench('state', {}, signal), agent);
+        if (result.draft) {
+          const { head } = await workbench('head', {}, signal);
+          result.draft.behind_main = Boolean(result.draft.base) && head !== result.draft.base;
+        }
+        return result;
+      }
+      case 'rebase_draft': {
+        const draft = await own(agent, args.version);
+        return report(await workbench('rebase', { id: draft.id, version: draft.version }, signal), agent, false);
+      }
       case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
       case 'submit_draft': return submit(agent, args, signal);
       case 'run_checks': {
@@ -134,7 +149,8 @@ export function createDevelopmentBridge(workbench, { settle = 15000 } = {}) {
           protocolVersion: '2025-03-26', capabilities: { tools: {} },
           serverInfo: { name: 'euclid-workbench', version: '0.1.0' },
           instructions: 'Read Euclid source with list_source and read_source. Propose a change with submit_draft, start its checks with ' +
-            'run_checks, and read the result with draft_status. task_history shows what happened to earlier drafts. ' +
+            'run_checks, and read the result with draft_status. If the main branch moved, rebase_draft replays your draft onto it. ' +
+            'task_history shows what happened to earlier drafts. ' +
             'A person reviews and commits the draft in Euclid’s Workbench.',
         });
       case 'ping': return reply({});

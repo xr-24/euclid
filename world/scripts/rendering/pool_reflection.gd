@@ -1,6 +1,7 @@
 extends Node3D
 ## One pool-only mirror camera. No C# addon or second water simulation.
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+const DEFAULT_MIRROR_SIZE := Vector2i(960, 540)
 
 var material: ShaderMaterial
 var water: MeshInstance3D
@@ -10,7 +11,6 @@ var mirror: Camera3D
 var reflected_camera := Vector4(0,0,0,-10000)
 var reflected_frames := 0
 var environment_ready := false
-var target_width := 640
 var visibility: VisibleOnScreenNotifier3D
 static var active_owner: Node
 
@@ -33,8 +33,7 @@ func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.name = "PoolMirrorViewport"
 	var balanced := Graphics.current == "balanced"
-	target_width = 480 if balanced else 640
-	viewport.size = Vector2i(target_width, roundi(target_width * 0.625))
+	viewport.size = DEFAULT_MIRROR_SIZE
 	viewport.mesh_lod_threshold = 12.0 if balanced else 1.0
 	viewport.world_3d = get_world_3d()
 	viewport.use_hdr_2d = true
@@ -68,7 +67,8 @@ func _process(_delta: float) -> void:
 		environment_ready = true
 	var source_size := get_viewport().get_visible_rect().size
 	if source_size.x > 0:
-		viewport.size = Vector2i(target_width, maxi(64, roundi(target_width * source_size.y / source_size.x)))
+		var width := DEFAULT_MIRROR_SIZE.x
+		viewport.size = Vector2i(width, maxi(64, roundi(width * source_size.y / source_size.x)))
 	mirror.fov = source.fov
 	mirror.keep_aspect = source.keep_aspect
 	mirror.near = source.near

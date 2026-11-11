@@ -6,7 +6,7 @@ The active villa builder in `scripts/zones/villa.gd` uses `Water.build_pool_surf
 
 ## Pool reflections
 
-`scripts/rendering/pool_reflection.gd` provides an HDR planar reflection with temporal antialiasing. Balanced renders the reflection at 480 pixels wide and uses simpler meshes at a distance. Cinematic uses 640 pixels. The mirror camera reflects the active camera across the resting pool level and passes a projective texture to the water shader. The shared transition shader clips geometry below the water plane for the mirror camera, and the mirror excludes the pool's layer to prevent recursive reflections. The main viewport applies exposure and tone mapping once.
+`scripts/rendering/pool_reflection.gd` provides an HDR planar reflection with temporal antialiasing. Both graphics profiles render the reflection at 960×540 in a 16:9 window. At other aspect ratios, the mirror keeps its 960-pixel width and adjusts its height. Balanced uses simpler meshes at a distance. The mirror camera reflects the active camera across the resting pool level and passes a projective texture to the water shader. The shared transition shader clips geometry below the water plane for the mirror camera, and the mirror excludes the pool's layer to prevent recursive reflections. The main viewport applies exposure and tone mapping once.
 
 The reflection stops when the pool is outside the main camera's frustum, farther than 80 m, or the viewer is underwater. It is destroyed with its zone and releases the material's viewport texture. The mirror uses reduced post-processing and does not enable its own SDFGI/SSR/AO. Reflection visibility and cleanup across a villa-to-beach change are checked by the coastal harness. This is independent of the .NET/Crest preview.
 

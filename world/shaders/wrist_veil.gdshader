@@ -7,5 +7,5 @@ uniform float opacity = 0.45;
 void fragment() {
 	vec2 edge = min(UV, 1.0 - UV);
 	float fade = smoothstep(0.0, 0.08, edge.x) * smoothstep(0.0, 0.12, edge.y);
-	COLOR = vec4(0.0, 0.016, 0.035, opacity * fade);
+	COLOR = vec4(0.02, 0.003, 0.005, opacity * fade);
 }

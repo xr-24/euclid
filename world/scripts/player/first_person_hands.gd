@@ -12,6 +12,8 @@ const WATCH_EXTENT := 0.74
 const WATCH_FORWARD := Vector3(1.0, 0.1, 0.05)
 const WATCH_PALM := Vector3(0.0, -1.0, -0.35)
 const WATCH_POLE := Vector3(-0.7, -0.45, -0.25)
+## Where the right wrist goes while the wrist computer is up: down by the hip, out of view.
+const RIGHT_AWAY := Vector3(0.36, -0.95, 0.02)
 ## How far along the forearm, from elbow to wrist, the wrist computer's emitter sits.
 const EMITTER_ALONG := 0.78
 
@@ -179,6 +181,8 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0) -> void
 			finger_pose = Poses.Pose.GRAB
 			finger_weight = watch * 0.85
 			still = watch == 0.0
+		elif watch > 0.0:
+			goal.position = goal.position.lerp(RIGHT_AWAY, watch)
 		_wrist.orientations[index] = _frame(to_rig * hand_forward, to_rig * palm) * chain.hand_frame
 		if not chain.get("still", false) or not still:
 			_pose_fingers(chain.finger_joints, finger_pose, finger_weight, 1.0 if still else amount)

@@ -283,11 +283,11 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 		# holding up the wrist computer, stays steadier.
 		var steady := 1.0 - 0.6 * maxf(weight, watch if index == 0 else 0.0)
 		var motion := (sway + Vector3(step_side, step_dip, side * cos(_stride_phase) * BOB.z * stride)) * steady
-		var settled := _follow(chain, "reach", goal.position, delta, REACH_FOLLOW)
+		var settled := _follow(chain, "spring_reach", goal.position, delta, REACH_FOLLOW)
 		goal.position = shoulder + (settled + motion - shoulder).limit_length(reach * 0.97)
 		var tilt := Basis.from_euler(Vector3(-motion.y * TILT, motion.x * TILT, motion.x * TILT * 0.6))
-		hand_forward = tilt * _follow(chain, "forward", hand_forward.normalized(), delta, TURN_FOLLOW).normalized()
-		palm = tilt * _follow(chain, "palm", palm.normalized(), delta, TURN_FOLLOW).normalized()
+		hand_forward = tilt * _follow(chain, "spring_forward", hand_forward.normalized(), delta, TURN_FOLLOW).normalized()
+		palm = tilt * _follow(chain, "spring_palm", palm.normalized(), delta, TURN_FOLLOW).normalized()
 		_wrist.orientations[index] = _frame(to_rig * hand_forward, to_rig * palm) * chain.hand_frame
 		if not chain.get("still", false) or not still:
 			_pose_fingers(chain.finger_joints, finger_pose, finger_weight, 1.0 if still else amount)
@@ -313,7 +313,7 @@ func _sway(delta: float, velocity: Vector3) -> Vector3:
 	var accel := (_velocity - previous) / maxf(delta, 0.001)
 	accel.y *= 0.7
 	var target := (look - accel * ACCEL_LAG).limit_length(SWAY_LIMIT)
-	return _follow(_motion, "sway", target, delta, SWAY_FOLLOW)
+	return _follow(_motion, "spring_sway", target, delta, SWAY_FOLLOW)
 
 func _follow(springs: Dictionary, key: String, target: Vector3, delta: float, tuning: Vector3) -> Vector3:
 	if not springs.has(key):

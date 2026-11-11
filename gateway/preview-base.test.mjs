@@ -18,7 +18,8 @@ async function project(t) {
     'world/.godot/editor/layout.cfg': 'not part of the base',
     'world/scripts/world.gd': 'not part of the base',
   };
-  const when = new Date('2026-11-01T12:00:00Z');
+  // A fractional timestamp exercises the precision lost when a copy gets a Date.
+  const when = Date.parse('2026-11-01T12:00:00Z') / 1000 + 0.00075;
   for (const [name, text] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, name)), { recursive: true });
     await writeFile(path.join(root, name), text);
@@ -37,7 +38,7 @@ test('the base mirrors only art and import files and links them into a preview',
   for (const name of names) {
     const [live, copy] = await Promise.all([stat(path.join(root, name)), stat(path.join(base, name))]);
     assert.notEqual(copy.ino, live.ino, `${name} is a copy, never a link to the live project`);
-    assert.equal(Math.trunc(copy.mtimeMs), Math.trunc(live.mtimeMs));
+    assert.equal(copy.mtime.getTime(), live.mtime.getTime());
   }
 
   const tree = path.join(area, 'draft/preview');

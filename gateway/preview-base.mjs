@@ -11,7 +11,8 @@ export const baseSources = Object.freeze(['world/assets', 'world/.godot/imported
 const partialSuffix = '.euclid-partial';
 const reserve = 512 * 1024 ** 2;
 const gib = bytes => (bytes / 1024 ** 3).toFixed(2);
-const same = (a, b) => Boolean(b) && a.size === b.size && Math.trunc(a.mtimeMs) === Math.trunc(b.mtimeMs);
+// Copies get their timestamps from Date values, so compare at that same precision.
+const same = (a, b) => Boolean(b) && a.size === b.size && a.mtime.getTime() === b.mtime.getTime();
 
 async function walk(root, name, signal, files) {
   signal?.throwIfAborted();

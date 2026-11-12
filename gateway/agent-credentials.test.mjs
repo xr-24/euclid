@@ -89,9 +89,16 @@ test('each agent connects with its own credential and cannot act on another agen
   assert.equal((await manage('issue', { name: 'grok' }, 'x'.repeat(64))).status, 403);
   assert.equal((await post('/v1/agents/issue', { name: 'grok' })).status, 403);
   assert.equal((await manage('issue', { name: 'Bad Name' })).status, 400);
-  const grok = (await manage('issue', { name: 'grok' })).body.token;
+  const grok = (await manage('issue', { name: 'grok', remote: true })).body.token;
   const claude = (await manage('issue', { name: 'claude' })).body.token;
-  assert.deepEqual((await manage('list')).body.agents.map(item => item.name), ['claude', 'grok']);
+  const directory = (await manage('list')).body;
+  assert.deepEqual(directory.agents.map(item => item.name), ['claude', 'grok']);
+  assert.deepEqual(directory.chat_agents, [
+    { name: 'local-codex', label: 'Codex', kind: 'worker' },
+    { name: 'local-claude', label: 'Claude', kind: 'worker' },
+    { name: 'claude', label: 'claude', kind: 'inbox' },
+    { name: 'grok', label: 'Cloud · grok', kind: 'inbox' },
+  ]);
 
   assert.equal((await call('eua_' + 'f'.repeat(64), 'draft_status')).status, 403);
   assert.equal((await post('/mcp/agent', {}, { Authorization: 'Bearer wrong', 'X-Euclid-Agent': grok })).status, 401);

@@ -74,7 +74,7 @@ static func changes_geometry(before: Dictionary, after: Dictionary) -> bool:
 			return true
 	return false
 
-func apply(id: String, override: Dictionary, previous := {}) -> void:
+func apply(id: String, override: Dictionary, previous := {}, keep_pose := false) -> void:
 	var entry: Dictionary = _entries[id]
 	var value := record(id, override)
 	var node: Node3D = entry.node
@@ -82,7 +82,7 @@ func apply(id: String, override: Dictionary, previous := {}) -> void:
 		node = _make_rigid(id, entry)
 		_apply_rigid(node, entry, value, record(id, previous), true)
 	elif entry.has("rigid"):
-		_apply_rigid(node as RigidBody3D, entry, value, record(id, previous))
+		_apply_rigid(node as RigidBody3D, entry, value, record(id, previous), false, keep_pose)
 	else:
 		node.position = Vector3(value.position[0], value.position[1], value.position[2])
 		var yaw := deg_to_rad(float(value.yaw) - float(entry.record.yaw))
@@ -165,14 +165,16 @@ func reset_motion(id: String) -> void:
 		var value := record(id, {})
 		_apply_rigid(entry.node, entry, value, value, true)
 
-static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary, previous: Dictionary, reset := false) -> void:
+static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary, previous: Dictionary,
+		reset := false, keep_pose := false) -> void:
 	if not reset and not changes_geometry(previous, value) and previous.get("locked") == value.get("locked"):
 		return
 	var rigid: Dictionary = entry.rigid
-	body.freeze = true
-	if reset or value.position != previous.position:
+	if not keep_pose:
+		body.freeze = true
+	if not keep_pose and (reset or value.position != previous.position):
 		body.position = Vector3(value.position[0], value.position[1], value.position[2])
-	if reset or value.yaw != previous.yaw:
+	if not keep_pose and (reset or value.yaw != previous.yaw):
 		body.basis = Basis(Vector3.UP, deg_to_rad(float(value.yaw) - float(entry.record.yaw))) * entry.basis
 	if reset or value.scale != previous.scale or value.get("stretch") != previous.get("stretch"):
 		# The body faces the prop's yaw, so its own axes are the stretch axes.
@@ -184,12 +186,13 @@ static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary
 		for box in rigid.boxes:
 			box.shape.size = rigid.boxes[box] * multiplier
 		body.set_meta("authored_scale", value.scale)
-	body.linear_velocity = Vector3.ZERO
-	body.angular_velocity = Vector3.ZERO
-	body.reset_physics_interpolation()
-	body.freeze = value.hidden or value.get("locked", rigid.freeze)
-	if not body.freeze:
-		body.sleeping = false
+	if not keep_pose:
+		body.linear_velocity = Vector3.ZERO
+		body.angular_velocity = Vector3.ZERO
+		body.reset_physics_interpolation()
+		if body.is_inside_tree():
+			body.force_update_transform()
+		EntityTypes.set_locked(body, value.hidden or value.get("locked", rigid.freeze))
 
 static func valid_override(override: Variant, bounds: AABB) -> bool:
 	if not override is Dictionary:

@@ -1,6 +1,6 @@
 extends Node3D
 ## Temporary physics pose while held. Release and lock commit one scene undo step. Letting go
-## drops a prop that can move freely; M2 while holding places it and locks it there.
+## drops a prop that can move freely; M2 while holding toggles its lock at the new position.
 
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const Pose = preload("res://scripts/player/hand_poses.gd").Pose
@@ -60,7 +60,10 @@ func tick(delta: float, player: CharacterBody3D, camera: Camera3D, tools, hands,
 		return {}
 	if not _down and _events.is_empty() and _hold.is_empty() and _fist == 0.0:
 		return {}
-	var aim := Placement.aim_at(player, camera, camera.get_viewport().get_visible_rect().get_center(), REACH)
+	var crosshair := camera.get_viewport().get_visible_rect().get_center()
+	var aim := Placement.aim_at(player, camera, crosshair, REACH)
+	if not _hold.is_empty() and (not is_instance_valid(_hold.node) or tools.scene_node(_hold.id) != _hold.node):
+		_hold.clear()
 	for event in _events:
 		match event:
 			1:
@@ -68,13 +71,16 @@ func tick(delta: float, player: CharacterBody3D, camera: Camera3D, tools, hands,
 				_begin(tools, aim)
 			-1:
 				_down = false
-				_finish(tools, false)
+				if not _hold.is_empty():
+					_move(player, tools.bounds, aim)
+					_finish(tools, false)
 			MOUSE_BUTTON_RIGHT:
 				if not _hold.is_empty():
+					_move(player, tools.bounds, aim)
 					_finish(tools, true)
 					_down = false
 				else:
-					_unlock(tools, aim)
+					_unlock(tools, Placement.aim_at(player, camera, crosshair, REACH, true))
 			MOUSE_BUTTON_MIDDLE:
 				_mode = (_mode + 1) % MODES.size()
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
@@ -82,11 +88,7 @@ func tick(delta: float, player: CharacterBody3D, camera: Camera3D, tools, hands,
 	_events.clear()
 	var end: Vector3 = aim.point
 	if not _hold.is_empty():
-		var body: Node3D = _hold.node
-		if not is_instance_valid(body) or tools.scene_node(_hold.id) != body:
-			_hold.clear()
-		else:
-			end = _move(player, tools.bounds, aim)
+		end = _move(player, tools.bounds, aim)
 	_beam.visible = _down and _fist == 0.0
 	if _beam.visible:
 		_draw_beam(hands.palm_position(), end)
@@ -97,8 +99,8 @@ func hint() -> String:
 	if not _hold.is_empty():
 		var action := "place"
 		if _hold.lockable:
-			action = "unlock" if _hold.record.get("locked", false) else "lock"
-		return "%s · Wheel · M3 mode · M2 %s" % [MODES[_mode], "place" if _hold.lockable else action]
+			action = "unlock" if _hold.was_locked else "lock"
+		return "%s · Wheel · M3 mode · M2 %s" % [MODES[_mode], action]
 	return _notice if _notice_time > 0 else ""
 
 func cancel() -> void:
@@ -122,8 +124,9 @@ func _begin(tools, aim: Dictionary) -> void:
 		return
 	_hold = {"id": aim.id, "node": node, "transform": node.transform, "world_basis": node.global_basis,
 		"hit_offset": node.global_position - aim.point, "depth": aim.from.distance_to(aim.point),
-		"yaw": 0.0, "scale": float(record.scale), "initial_scale": float(record.scale), "record": record,
-		"lockable": tools.can_toggle_lock(aim.id), "parts": {}, "yaw_from": tools.live_yaw(aim.id)}
+		"yaw": 0.0, "scale": float(record.scale), "initial_scale": float(record.scale),
+		"lockable": tools.can_toggle_lock(aim.id), "was_locked": record.get("locked", false),
+		"parts": {}, "yaw_from": tools.live_yaw(aim.id)}
 	if node is RigidBody3D:
 		_hold["frozen"] = node.freeze
 		_hold["linear"] = node.linear_velocity
@@ -169,41 +172,36 @@ func _move(player: CharacterBody3D, bounds: AABB, aim: Dictionary) -> Vector3:
 	node.global_position = desired
 	return desired - offset
 
-func _finish(tools, toggle_lock: bool) -> void:
-	if _hold.is_empty():
-		return
+func _finish(tools, right_click: bool) -> void:
 	var node: Node3D = _hold.node
-	if is_instance_valid(node):
-		var initial_yaw: float = _hold.yaw_from
-		var changes := {"position": Placement.coordinates(node.position), "yaw": wrapf(initial_yaw + _hold.yaw, -180.0, 180.0), "scale": _hold.scale}
-		if tools.can_toggle_lock(_hold.id):
-			# Holding freezes physics for the drag. Letting go drops the prop; M2 places and
-			# locks it where it is.
-			changes["locked"] = toggle_lock
-		# Keep the live pose on screen. The scene edit applies scale to the real colliders.
-		if node is RigidBody3D and _hold.scale != _hold.initial_scale:
-			_restore_parts()
-		var result: Dictionary = tools.commit_grab(_hold.id, node, changes)
-		if not result.ok:
-			_restore()
-			_say(result.error)
-		elif is_instance_valid(node) and node is RigidBody3D and changes.has("locked") and node.freeze != changes.locked:
-			node.freeze = changes.locked
-			if not node.freeze:
-				node.sleeping = false
-		if result.ok and toggle_lock:
-			var notice := "Placed"
-			if changes.has("locked"):
-				notice = "Locked" if changes.locked else "Unlocked"
-			_say(notice)
-	if toggle_lock:
+	var changes := {"yaw": wrapf(_hold.yaw_from + _hold.yaw, -180.0, 180.0), "scale": _hold.scale}
+	if Placement.contains(tools.bounds, node.position):
+		changes["position"] = Placement.coordinates(node.position)
+	if _hold.lockable:
+		changes["locked"] = right_click and not _hold.was_locked
+	# The scene edit applies scale to the real colliders.
+	if node is RigidBody3D and _hold.scale != _hold.initial_scale:
+		_restore_parts()
+	var result: Dictionary = tools.commit_grab(_hold.id, node, changes)
+	if not result.ok:
+		_restore()
+		_say(result.error)
+	elif right_click:
+		if _hold.lockable:
+			_say("Locked" if changes.locked else "Unlocked")
+		else:
+			_say("Placed")
+	if right_click:
 		_fist = 0.25
 	_hold.clear()
 
 func _unlock(tools, aim: Dictionary) -> void:
 	var body: Node3D = tools.scene_node(aim.id)
 	if body and tools.can_toggle_lock(aim.id) and (not body is RigidBody3D or body.freeze):
-		var result: Dictionary = tools.commit_grab(aim.id, body, {"locked": false, "position": Placement.coordinates(body.position)})
+		var changes := {"locked": false, "yaw": tools.live_yaw(aim.id)}
+		if Placement.contains(tools.bounds, body.position):
+			changes["position"] = Placement.coordinates(body.position)
+		var result: Dictionary = tools.commit_grab(aim.id, body, changes)
 		_say("Unlocked" if result.ok else result.error)
 		_fist = 0.25
 

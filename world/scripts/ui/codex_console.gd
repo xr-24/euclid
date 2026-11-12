@@ -38,7 +38,7 @@ var _draft_text := ""
 var _shown := 0.0
 var peer := ""
 var _tabs := TabBar.new()
-var _selector := OptionButton.new()
+var _new_chat: MenuButton
 var _cli: Button
 var _entries := {}
 var _peer_prompts := PackedStringArray()
@@ -60,10 +60,6 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	title.add_theme_color_override("font_color", ACCENT)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(title)
-	_selector.tooltip_text = "Select an agent"
-	_selector.hide()
-	bar.add_child(_selector)
-	_selector.item_selected.connect(func(index: int) -> void: peer_selected.emit(_selector.get_item_metadata(index)))
 	_cli = _icon(bar, "↗", "Open native Codex CLI")
 	_cli.pressed.connect(func() -> void: cli_requested.emit())
 	var voice := _icon(bar, "♪", "Read replies aloud")
@@ -74,9 +70,18 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	_resize.pressed.connect(_toggle_size)
 	_icon(bar, "−", "Minimize terminal (F2)").pressed.connect(func() -> void: minimize_requested.emit())
 	_rule(_body)
+	var conversations := HBoxContainer.new()
+	_inset(_body, conversations, 12, 0)
 	_tabs.hide()
-	_body.add_child(_tabs)
+	conversations.add_child(_tabs)
+	_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tabs.tab_selected.connect(func(index: int) -> void: peer_selected.emit(_tabs.get_tab_metadata(index)))
+	_new_chat = MenuButton.new()
+	_new_chat.text = "+"
+	_new_chat.tooltip_text = "New conversation"
+	conversations.add_child(_new_chat)
+	var recipients := _new_chat.get_popup()
+	recipients.index_pressed.connect(func(index: int) -> void: peer_selected.emit(recipients.get_item_metadata(index)))
 
 	_history = RichTextLabel.new()
 	_history.custom_minimum_size.y = 120
@@ -124,38 +129,40 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 func focus_entry() -> void:
 	_entry.grab_focus()
 
-func set_conversations(agents: Dictionary, tabs: Array[String], selected: String) -> void:
+func set_conversations(labels: Dictionary, recipients: Array[String], tabs: Array[String], selected: String) -> void:
 	if peer != selected:
 		_entries[peer] = _entry.text
 		peer = selected
 		_entry.text = _entries.get(peer, "")
 		_recall = -1
 		_history.clear()
-	_selector.clear()
-	for id in agents:
-		_selector.add_item(agents[id])
-		var index := _selector.item_count - 1
-		_selector.set_item_metadata(index, id)
-		if id == selected:
-			_selector.select(index)
-	if not agents.values().any(func(label: String) -> bool: return label.begins_with("Cloud · ")):
-		_selector.add_item("Cloud · no agent configured")
-		_selector.set_item_disabled(_selector.item_count - 1, true)
-	_selector.show()
+	var menu := _new_chat.get_popup()
+	menu.clear()
+	for id in recipients:
+		if id not in tabs:
+			menu.add_item(labels[id])
+			menu.set_item_metadata(menu.item_count - 1, id)
+	_new_chat.visible = menu.item_count > 0
 	_tabs.set_block_signals(true)
 	_tabs.clear_tabs()
 	for id in tabs:
-		_tabs.add_tab(agents.get(id, id))
+		_tabs.add_tab(labels.get(id, id))
 		_tabs.set_tab_metadata(_tabs.tab_count - 1, id)
-	_tabs.current_tab = tabs.find(selected)
+	if selected in tabs:
+		_tabs.current_tab = tabs.find(selected)
 	_tabs.set_block_signals(false)
-	_tabs.show()
+	_tabs.visible = not tabs.is_empty()
 	_cli.visible = selected == "local-codex"
 
 func display_conversation(lines: PackedStringArray, recent: PackedStringArray, busy: bool, available: bool) -> void:
 	_peer_prompts = recent
 	_entry.editable = available
-	_entry.placeholder_text = "" if available else "Agent unavailable"
+	if available:
+		_entry.placeholder_text = ""
+	elif not peer.is_empty():
+		_entry.placeholder_text = "Agent unavailable"
+	else:
+		_entry.placeholder_text = "Choose + to start a conversation" if _new_chat.visible else "Agent directory unavailable"
 	update_display(lines, busy)
 
 func update_development(draft: Dictionary, can_preview: bool, live: bool) -> void:

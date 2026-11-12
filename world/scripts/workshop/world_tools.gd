@@ -368,7 +368,7 @@ func _edit(id: String, previous: Dictionary, proposed: Dictionary, from_grab := 
 	if proposed == previous:
 		return {"ok": true, "id": id, "entity": previous.duplicate(true)}
 	var next := proposed.duplicate(true)
-	if not _commit({id: next}, {}, _with_undo({"id": id, "previous": {id: previous}})):
+	if not _commit({id: next}, {}, _with_undo({"id": id, "previous": {id: previous}}), from_grab):
 		return _error("The scene prop save could not be written.")
 	return {"ok": true, "id": id, "entity": next.duplicate(true)}
 
@@ -413,26 +413,26 @@ func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionar
 	_overrides = overrides
 	_history = history
 	for id in records:
-		_sync_record(id, previous.get(id, {}), records[id])
+		_sync_record(id, previous.get(id, {}), records[id], from_grab)
 	var geometry_changed := false
 	for id in dressing:
 		if _dressing.has(id):
 			var override: Dictionary = overrides.get(id, {})
 			var old_override: Dictionary = previous_overrides.get(id, {})
-			_dressing.apply(id, override, old_override)
+			_dressing.apply(id, override, old_override, from_grab)
 			geometry_changed = geometry_changed or DressingLayer.changes_geometry(old_override, override)
 	# A grab is already visible while moving. Resetting SDFGI here blanks the whole view.
 	if geometry_changed and not from_grab:
 		authored_geometry_changed.emit()
 	return true
 
-func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
+func _sync_record(id: String, previous: Dictionary, record: Dictionary, keep_pose: bool) -> void:
 	if record.is_empty() and _preview.get("entity") == id:
 		_preview = {}
 	if _nodes.has(id):
 		var body := _nodes[id] as RigidBody3D
 		if body and _can_sync_rigid(previous, record):
-			EntityTypes.update_placement(body, previous, record)
+			EntityTypes.update_placement(body, previous, record, keep_pose)
 			return
 		if not record.is_empty() and _same_placement(previous, record):
 			var player := animation_player(id)
@@ -539,6 +539,7 @@ func can_toggle_lock(id: String) -> bool:
 	var record := _record(id)
 	return not record.is_empty() and EntityTypes.movable(record)
 
+## Saves a placement already previewed on the node and hands its live pose back to physics.
 func commit_grab(id: String, node: Node3D, changes: Dictionary) -> Dictionary:
 	if not is_instance_valid(_root) or not _root.get_parent().get_meta("scene_edit", true) or not _load_error.is_empty():
 		return _error("Scene edits are unavailable.")
@@ -546,7 +547,16 @@ func commit_grab(id: String, node: Node3D, changes: Dictionary) -> Dictionary:
 		return _error("The prop changed during the grab.")
 	var record := _record(id)
 	var next := record.merged(changes, true)
-	return _edit(id, record, next, true)
+	var result := _edit(id, record, next, true)
+	if result.ok:
+		# A grab may have temporarily frozen the body even if the saved lock value is unchanged.
+		var body := scene_node(id) as RigidBody3D
+		if body:
+			if body.is_inside_tree():
+				body.force_update_transform()
+			if changes.has("locked"):
+				EntityTypes.set_locked(body, changes.locked)
+	return result
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "error": message}

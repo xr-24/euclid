@@ -112,17 +112,20 @@ static func stretch_of(record: Dictionary) -> Vector3:
 static func movable(record: Dictionary) -> bool:
 	return TYPES.get(record.get("type"), {}).get("factory") != "door" and not record.has("animation") and not record.has("behavior")
 
-static func update_placement(body: RigidBody3D, previous: Dictionary, record: Dictionary) -> void:
-	if previous.position != record.position:
+static func update_placement(body: RigidBody3D, previous: Dictionary, record: Dictionary, keep_pose: bool) -> void:
+	if not keep_pose and previous.position != record.position:
 		body.position = Vector3(record.position[0], record.position[1], record.position[2])
-	if previous.yaw != record.yaw:
+	if not keep_pose and previous.yaw != record.yaw:
 		body.rotation.y = deg_to_rad(record.yaw)
 	var before := float(previous.scale) * stretch_of(previous)
 	var after := float(record.scale) * stretch_of(record)
 	if before != after:
 		_resize_parts(body, after / before)
 		body.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
-	var locked: bool = record.get("locked", false)
+	if not keep_pose:
+		set_locked(body, record.get("locked", false))
+
+static func set_locked(body: RigidBody3D, locked: bool) -> void:
 	if body.freeze != locked:
 		body.freeze = locked
 		body.linear_velocity = Vector3.ZERO

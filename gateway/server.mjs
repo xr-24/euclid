@@ -11,7 +11,7 @@ import { createWorldBridge, validContext, validWorldPlan } from './world-tools.m
 import { createWorkbench } from './workbench.mjs';
 import { createDevelopmentBridge } from './workbench-mcp.mjs';
 import { createTaskBoard, taskTools } from './agent-tasks.mjs';
-import { createTaskWorkers, isLocalWorker } from './task-workers.mjs';
+import { createTaskWorkers, isLocalWorker, listLocalWorkers } from './task-workers.mjs';
 import { createAgentViews, viewTools } from './agent-views.mjs';
 import { createAgentCredentials } from './agent-credentials.mjs';
 import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
@@ -101,7 +101,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 27 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 28 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
@@ -216,7 +216,11 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
             if (agentsRoute[1] === 'activity') {
               return reply(res, 200, { entries: await remote.recent(Number.isInteger(body.limit) ? body.limit : 30) });
             }
-            return reply(res, 200, { agents: agentCredentials.list().map(agent => ({ ...agent, last_seen: remote.lastSeen(agent.name) })),
+            const agents = agentCredentials.list();
+            return reply(res, 200, { agents: agents.map(agent => ({ ...agent, last_seen: remote.lastSeen(agent.name) })),
+              chat_agents: [...listLocalWorkers(), ...agents.map(({ name, remote }) => ({
+                name, label: remote ? `Cloud · ${name}` : name, kind: 'inbox',
+              }))],
               relay: relay.status() });
           } catch (error) { return reply(res, 400, { error: error.message }); }
         }

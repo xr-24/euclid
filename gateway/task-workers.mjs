@@ -2,8 +2,13 @@ import { randomBytes } from 'node:crypto';
 import { createCodexAgent } from './agents/codex.mjs';
 import { createClaudeAgent } from './agents/claude.mjs';
 
-const workers = { 'local-codex': createCodexAgent, 'local-claude': createClaudeAgent };
+const workers = {
+  'local-codex': { label: 'Codex', create: createCodexAgent },
+  'local-claude': { label: 'Claude', create: createClaudeAgent },
+};
 export const isLocalWorker = name => Object.hasOwn(workers, name);
+export const listLocalWorkers = () => Object.entries(workers)
+  .map(([name, { label }]) => ({ name, label, kind: 'worker' }));
 
 export function createTaskWorkers(board, address) {
   const active = new Map();
@@ -45,10 +50,10 @@ export function createTaskWorkers(board, address) {
   return {
     start() {
       timer = setInterval(() => {
-        for (const [actor, factory] of Object.entries(workers)) {
+        for (const [actor, worker] of Object.entries(workers)) {
           const job = active.get(actor);
           if (job?.task && !board.running(actor, job.task.id)) job.controller.abort(new Error('Task ended.'));
-          void tick(actor, factory).catch(error => console.error('Euclid task worker:', error.message));
+          void tick(actor, worker.create).catch(error => console.error('Euclid task worker:', error.message));
         }
       }, 1500).unref();
     },

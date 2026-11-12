@@ -30,9 +30,9 @@ var _benchmark_id := ""
 var _benchmark_display := {}
 var _action_busy := false
 var _announced := ""
-var chat_peer := Presence.CODEX
-var _chat_tabs: Array[String] = [Presence.CODEX, Presence.CLAUDE]
-var _chat_agents := {Presence.CODEX: "Codex", Presence.CLAUDE: "Claude"}
+var chat_peer := ""
+var _chat_tabs: Array[String] = []
+var _chat_agents := {}
 var _conversations := {}
 var _chat_requests := {}
 var _chat_errors := {}
@@ -61,12 +61,14 @@ func connect_gateway(url: String, token: String) -> void:
 	_tasks.addressed.connect(func(peer: String) -> void:
 		if _chat_agents.has(peer):
 			_world._activate_agent(peer)
-			if peer not in _chat_tabs:
+			if chat_peer.is_empty():
+				select_chat(peer)
+			elif peer not in _chat_tabs:
 				_chat_tabs.append(peer)
 				if _session:
 					_session.save_chat_tabs(_chat_tabs, chat_peer)
 				if is_instance_valid(console):
-					console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+					_show_chat_tabs()
 		_poll_chat())
 	var task_poll := Timer.new()
 	task_poll.wait_time = 3
@@ -234,7 +236,7 @@ func open_console(peer := "") -> void:
 	console.development_requested.connect(_console_action)
 	_layout_console(false)
 	console.setup(console_lines, busy, voice_enabled)
-	console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+	_show_chat_tabs()
 	refresh_chat()
 	_poll_chat()
 	refresh_actions()
@@ -250,16 +252,21 @@ func select_chat(peer: String) -> void:
 	if _session:
 		_session.save_chat_tabs(_chat_tabs, peer)
 	if is_instance_valid(console):
-		console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+		_show_chat_tabs()
+		console.focus_entry()
 	refresh_chat()
 	_poll_chat()
 
-func cycle_agent() -> void:
-	var choices := _chat_agents.keys()
-	select_chat(choices[(choices.find(chat_peer) + 1) % choices.size()])
-
-func chat_label() -> String:
-	return _chat_agents.get(chat_peer, Presence.label(chat_peer))
+func _show_chat_tabs() -> void:
+	var labels := {}
+	var recipients: Array[String] = []
+	for peer in _chat_agents:
+		labels[peer] = _chat_agents[peer].label
+		recipients.append(peer)
+	for peer in _chat_tabs:
+		if not labels.has(peer):
+			labels[peer] = Presence.label(peer)
+	console.set_conversations(labels, recipients, _chat_tabs, chat_peer)
 
 func can_message() -> bool:
 	return _tasks != null and _chat_agents.has(chat_peer)
@@ -284,14 +291,11 @@ func refresh_chat() -> void:
 	refresh_actions()
 
 func quick_command(prompt: String) -> void:
-	if chat_peer == Presence.CODEX:
-		if CodexConsole.prompts.is_empty() or CodexConsole.prompts[-1] != prompt:
-			CodexConsole.prompts.append(prompt)
-			if CodexConsole.prompts.size() > CodexConsole.HISTORY_LIMIT:
-				CodexConsole.prompts.remove_at(0)
-		_world._submit_codex_command(prompt)
-	else:
-		send_chat(prompt)
+	if CodexConsole.prompts.is_empty() or CodexConsole.prompts[-1] != prompt:
+		CodexConsole.prompts.append(prompt)
+		if CodexConsole.prompts.size() > CodexConsole.HISTORY_LIMIT:
+			CodexConsole.prompts.remove_at(0)
+	_world._submit_codex_command(prompt)
 
 func send_chat(prompt: String) -> void:
 	var peer := chat_peer
@@ -308,7 +312,7 @@ func send_chat(prompt: String) -> void:
 	_chat_requests[peer] = true
 	refresh_chat()
 	var session: String = _world.world_bridge.session if is_instance_valid(_world.world_bridge) else ""
-	var local := peer in [Presence.CODEX, Presence.CLAUDE]
+	var local: bool = _chat_agents[peer].kind == "worker"
 	var result := await _tasks.send_chat(peer, prompt, session, local)
 	_chat_requests.erase(peer)
 	if result.has("error"):
@@ -330,15 +334,17 @@ func _poll_chat() -> void:
 		_directory_due = Time.get_ticks_msec() + 12000
 		var directory := await _tasks.directory()
 		if not directory.has("error"):
-			var agents := {Presence.CODEX: "Codex", Presence.CLAUDE: "Claude"}
-			for agent: Dictionary in directory.get("agents", []):
-				if agent.remote:
-					agents[agent.name] = "Cloud · " + agent.name
+			var agents := {}
+			for agent: Dictionary in directory.get("chat_agents", []):
+				agents[agent.name] = agent
 			if agents != _chat_agents:
 				_chat_agents = agents
 				changed = true
 				if is_instance_valid(console):
-					console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+					_show_chat_tabs()
+	if _session and not _session.legacy_chat_tabs.is_empty():
+		if await _restore_legacy_chats():
+			changed = true
 	var peers: Array[String] = _chat_tabs.duplicate()
 	for start in range(0, peers.size(), 12):
 		var result := await _tasks.conversations(peers.slice(start, start + 12))
@@ -357,9 +363,30 @@ func _poll_chat() -> void:
 		_chat_dirty = false
 		_poll_chat.call_deferred()
 
+func _restore_legacy_chats() -> bool:
+	var legacy := _session.legacy_chat_tabs
+	var used: Array[String] = []
+	for start in range(0, legacy.size(), 12):
+		var result := await _tasks.conversations(legacy.slice(start, start + 12))
+		if not result.has("conversations"):
+			return false
+		for peer in result.conversations:
+			var history := ChatHistory.read(result.conversations[peer])
+			if not history.lines.is_empty():
+				used.append(peer)
+	for peer in used:
+		if peer not in _chat_tabs:
+			_chat_tabs.append(peer)
+	if chat_peer.is_empty() and not _chat_tabs.is_empty():
+		chat_peer = _session.legacy_chat_peer if _session.legacy_chat_peer in _chat_tabs else _chat_tabs[0]
+	_session.save_chat_tabs(_chat_tabs, chat_peer, true)
+	if is_instance_valid(console):
+		_show_chat_tabs()
+	return true
+
 func refresh_actions() -> void:
 	if is_instance_valid(console) and client:
-		if chat_peer != Presence.CODEX:
+		if not chat_peer.is_empty() and chat_peer != Presence.CODEX:
 			console.update_development({}, false, false)
 			return
 		var draft := client.draft
@@ -459,11 +486,8 @@ func resume(path: String) -> void:
 	_session = DevelopmentSession.new(path)
 	console_lines = _session.lines
 	CodexConsole.prompts = _session.prompts
-	for peer in _session.chat_tabs:
-		if peer not in _chat_tabs:
-			_chat_tabs.append(peer)
-	if not _session.chat_peer.is_empty():
-		chat_peer = _session.chat_peer
+	_chat_tabs = _session.chat_tabs.duplicate()
+	chat_peer = _session.chat_peer
 
 func run_benchmark(action: String, arguments: Dictionary) -> Dictionary:
 	if not client or _world.shifting:

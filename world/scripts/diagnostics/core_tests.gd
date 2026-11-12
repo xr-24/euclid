@@ -25,6 +25,7 @@ const CodexConsole = preload("res://scripts/ui/codex_console.gd")
 const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
+const PropGrabber = preload("res://scripts/player/prop_grabber.gd")
 var _failures := 0
 var _checks := 0
 
@@ -42,6 +43,10 @@ class WristFixture extends RefCounted:
 				"run": func(line: String) -> void: ran.append(line)},
 				{"label": "QUIT", "confirm": "Again to quit.", "close": true, "run": func() -> void: ran.append("quit")}]},
 		]
+
+class PalmFixture extends RefCounted:
+	func palm_position() -> Vector3:
+		return Vector3(0.3, 1.9, -0.5)
 
 class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 	signal finish_poll
@@ -214,6 +219,7 @@ func _run() -> void:
 	_check_scene_edits(path)
 	_check_authored_dressing(path + ".dressing")
 	_check_registered_props()
+	await _check_grab_release()
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
 	_check_data_entity_type()
@@ -668,6 +674,83 @@ func _check_registered_props() -> void:
 		and shape.shape.size == Vector3.ONE, "restore the floater's original release pose and collision")
 	zone.free()
 
+func _check_grab_release() -> void:
+	var zone := Node3D.new()
+	root.add_child(zone)
+	var player := CharacterBody3D.new()
+	zone.add_child(player)
+	var camera := Camera3D.new()
+	player.add_child(camera)
+	camera.position.y = 2.25
+	var grabber := PropGrabber.new()
+	zone.add_child(grabber)
+	var hands := PalmFixture.new()
+	var tools := WorldTools.new()
+	tools.attach(zone)
+	var result := tools.execute("spawn", {"type": "traffic_cone", "position": [0.0, 2.0, -4.0]})
+	var body := tools.scene_node(result.id) as RigidBody3D
+	body.gravity_scale = 0.0
+	body.basis = Basis(Vector3.RIGHT, 0.16)
+	await physics_frame
+	await physics_frame
+	_grab_button(grabber, MOUSE_BUTTON_LEFT)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	_check(body.freeze and not grabber._hold.is_empty(), "aimed prop freezes temporarily while grabbed")
+	_grab_button(grabber, MOUSE_BUTTON_WHEEL_UP)
+	_grab_button(grabber, MOUSE_BUTTON_LEFT, false)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	var expected := Basis(Vector3.UP, deg_to_rad(15.0)) * Basis(Vector3.RIGHT, 0.16)
+	await physics_frame
+	await physics_frame
+	var record: Dictionary = tools.execute("inspect", {"id": result.id}).entity
+	_check(not body.freeze and body.basis.is_equal_approx(expected) and is_equal_approx(record.yaw, 15.0)
+		and not record.get("locked", true), "wheel and release in the same tick preserve live rotation and resume physics")
+	_grab_button(grabber, MOUSE_BUTTON_LEFT)
+	_grab_button(grabber, MOUSE_BUTTON_RIGHT)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	await physics_frame
+	_check(body.freeze and tools.execute("inspect", {"id": result.id}).entity.locked,
+		"right click while holding commits the lock")
+	_grab_button(grabber, MOUSE_BUTTON_LEFT, false)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	_check(body.freeze, "the left release after locking leaves the lock in place")
+	_grab_button(grabber, MOUSE_BUTTON_RIGHT)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	await physics_frame
+	await physics_frame
+	_check(not body.freeze and body.basis.is_equal_approx(expected)
+		and not tools.execute("inspect", {"id": result.id}).entity.locked,
+		"right click on the locked collider releases it without resetting the pose")
+	_grab_button(grabber, MOUSE_BUTTON_LEFT)
+	_grab_button(grabber, MOUSE_BUTTON_LEFT, false)
+	grabber.tick(0.0, player, camera, tools, hands, true)
+	_check(not body.freeze, "a grab with no scene edit still releases its temporary freeze")
+	var release_height := body.position.y
+	body.gravity_scale = 1.0
+	for frame in 6:
+		await physics_frame
+	_check(body.position.y < release_height, "the released prop falls under gravity")
+	var authored := MeshInstance3D.new()
+	authored.mesh = BoxMesh.new()
+	authored.position = camera.global_position
+	zone.add_child(authored)
+	var authored_id := AuthoredProps.stable_id("fixture", "close prop")
+	AuthoredProps.register(zone, authored_id, authored, "box", 0.0)
+	var authored_tools := WorldTools.new()
+	authored_tools.attach(zone)
+	await physics_frame
+	_grab_button(grabber, MOUSE_BUTTON_RIGHT)
+	grabber.tick(0.0, player, camera, authored_tools, hands, true)
+	var freed := authored_tools.scene_node(authored_id) as RigidBody3D
+	_check(freed != null and not freed.freeze, "right click can unlock an authored prop from inside its pick volume")
+	zone.free()
+
+func _grab_button(grabber: PropGrabber, button: MouseButton, pressed := true) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = button
+	event.pressed = pressed
+	grabber.handle(event)
+
 func _check_zone_packages(path: String, manifest: Dictionary) -> void:
 	for id in Packages.ids():
 		_check(Packages.valid(Packages.definition(id)), "validate the installed " + id + " package")
@@ -794,13 +877,22 @@ func _check_text_tools() -> void:
 	console.update_display(PackedStringArray(["> hello", "world", "more output"]), false)
 	_check(console._history.visible_characters >= 0, "new console output types in")
 	var agents := {"local-codex": "Codex", "local-claude": "Claude", "muse": "Cloud · muse"}
-	var tabs: Array[String] = ["local-codex", "local-claude", "muse"]
-	console.set_conversations(agents, tabs, "local-codex")
+	var recipients: Array[String] = ["local-codex", "local-claude", "muse"]
+	var tabs: Array[String] = []
+	console.set_conversations(agents, recipients, tabs, "")
+	var menu := console._new_chat.get_popup()
+	_check(console._tabs.tab_count == 0 and menu.item_count == 3 and menu.get_item_metadata(2) == "muse",
+		"the directory is available for new conversations without pre-opening tabs")
+	tabs.append("local-codex")
+	console.set_conversations(agents, recipients, tabs, "local-codex")
+	_check(console._tabs.tab_count == 1 and menu.item_count == 2 and menu.get_item_metadata(0) == "local-claude",
+		"the new chat menu excludes open conversations")
 	console._entry.text = "Unsent Codex request"
-	console.set_conversations(agents, tabs, "local-claude")
+	tabs.append("local-claude")
+	console.set_conversations(agents, recipients, tabs, "local-claude")
 	_check(console._entry.text.is_empty() and console._tabs.current_tab == 1 and not console._cli.visible,
 		"switch to Claude without carrying the Codex composer or CLI shortcut")
-	console.set_conversations(agents, tabs, "local-codex")
+	console.set_conversations(agents, recipients, tabs, "local-codex")
 	_check(console._entry.text == "Unsent Codex request", "restore the selected conversation's unsent text")
 	console.free()
 
@@ -817,7 +909,15 @@ func _check_development_session() -> void:
 	_check(reopened.file == "world/scripts/world.gd" and reopened.tab == "Checks", "reopen selected Workbench file and tab")
 	_check(reopened.chat_tabs == ["local-codex", "local-claude", "muse"] and reopened.chat_peer == "muse",
 		"reopen the same Agent Chat conversations and selection")
-	Store.write_json(path, {"schema_version": 2, "lines": Array(lines)})
+	Store.write_json(path, {"schema_version": 1, "chat_tabs": ["local-codex", "local-claude"], "chat_peer": "local-claude"})
+	var legacy := DevelopmentSession.new(path)
+	_check(legacy.chat_tabs.is_empty() and legacy.legacy_chat_tabs.size() == 2 and legacy.legacy_chat_peer == "local-claude",
+		"legacy tabs wait for inbox history before appearing")
+	legacy.save_chat_tabs(["muse"], "muse")
+	_check(DevelopmentSession.new(path).legacy_chat_tabs == legacy.legacy_chat_tabs, "keep migration candidates while offline")
+	legacy.save_chat_tabs(["muse"], "muse", true)
+	_check(DevelopmentSession.new(path).legacy_chat_tabs.is_empty(), "remove legacy candidates after migration")
+	Store.write_json(path, {"schema_version": 3, "lines": Array(lines)})
 	_check(DevelopmentSession.new(path).lines.is_empty(), "ignore unsupported development session saves")
 	DirAccess.remove_absolute(path)
 

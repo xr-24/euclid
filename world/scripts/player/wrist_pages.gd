@@ -6,6 +6,7 @@ extends RefCounted
 ## after sending). Keep it terse: labels and states only, no descriptions.
 
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+const Presence = preload("res://scripts/agents/agent_presence.gd")
 
 var _world # world.gd
 
@@ -49,9 +50,8 @@ func _build() -> Dictionary:
 
 func _agents() -> Dictionary:
 	var dev = _world._dev
-	var status: String = _codex_state() if dev.chat_peer == "local-codex" else ("" if dev.can_message() else "OFFLINE")
-	return {"id": "agents", "title": "AGENTS", "log": dev.chat_log(dev.chat_peer, 12), "rows": [
-		{"label": "AGENT", "value": dev.chat_label(), "run": Callable(dev, "cycle_agent")},
+	var status := _codex_state()
+	return {"id": "agents", "title": "AGENTS", "log": dev.chat_log(Presence.CODEX, 12), "rows": [
 		{"label": "QUICK COMMAND", "input": true, "value": status, "tone": "warn" if not status.is_empty() else "",
 			"enabled": status.is_empty(), "why": status, "run": Callable(dev, "quick_command")},
 		{"label": "MESSAGE", "value": "F2", "run": Callable(dev, "open_console"), "close": true},

@@ -15,6 +15,8 @@ var file := ""
 var tab := ""
 var chat_tabs: Array[String] = []
 var chat_peer := ""
+var legacy_chat_tabs: Array[String] = []
+var legacy_chat_peer := ""
 var _path: String
 
 func _init(path: String) -> void:
@@ -23,18 +25,21 @@ func _init(path: String) -> void:
 	if stream == null or stream.get_length() > MAX_BYTES:
 		return
 	var state: Variant = JSON.parse_string(stream.get_as_text())
-	if not state is Dictionary or state.get("schema_version") != 1:
+	if not state is Dictionary:
+		return
+	var version: Variant = state.get("schema_version")
+	if version != 1 and version != 2:
 		return
 	lines = _strings(state.get("lines"), MAX_LINES, MAX_LINE_LENGTH)
 	prompts = _strings(state.get("prompts"), MAX_PROMPTS, MAX_PROMPT_LENGTH)
-	var chats: Variant = state.get("chat_tabs")
-	if chats is Array:
-		var valid := RegEx.create_from_string("^[a-z0-9_-]{1,32}$")
-		for peer in chats.slice(0, 100):
-			if peer is String and valid.search(peer) and peer not in chat_tabs:
-				chat_tabs.append(peer)
+	if version == 2:
+		chat_tabs = _peers(state.get("chat_tabs"))
 		if state.get("chat_peer") in chat_tabs:
 			chat_peer = state.chat_peer
+	legacy_chat_tabs = _peers(state.get("chat_tabs" if version == 1 else "legacy_chat_tabs"))
+	var legacy_selected: Variant = state.get("chat_peer" if version == 1 else "legacy_chat_peer")
+	if legacy_selected in legacy_chat_tabs:
+		legacy_chat_peer = legacy_selected
 	var view: Variant = state.get("view")
 	if view is Dictionary:
 		if view.get("file") is String:
@@ -54,16 +59,29 @@ func save_view(selected_file: String, selected_tab: String) -> void:
 	tab = selected_tab
 	_save()
 
-func save_chat_tabs(tabs: Array[String], selected: String) -> void:
-	if tabs == chat_tabs and selected == chat_peer:
+func save_chat_tabs(tabs: Array[String], selected: String, migrated := false) -> void:
+	if not migrated and tabs == chat_tabs and selected == chat_peer:
 		return
 	chat_tabs = tabs.duplicate()
 	chat_peer = selected
+	if migrated:
+		legacy_chat_tabs.clear()
+		legacy_chat_peer = ""
 	_save()
 
 func _save() -> void:
-	Store.write_json(_path, {"schema_version": 1, "lines": Array(lines), "prompts": Array(prompts),
-		"view": {"file": file, "tab": tab}, "chat_tabs": chat_tabs, "chat_peer": chat_peer})
+	Store.write_json(_path, {"schema_version": 2, "lines": Array(lines), "prompts": Array(prompts),
+		"view": {"file": file, "tab": tab}, "chat_tabs": chat_tabs, "chat_peer": chat_peer,
+		"legacy_chat_tabs": legacy_chat_tabs, "legacy_chat_peer": legacy_chat_peer})
+
+static func _peers(values: Variant) -> Array[String]:
+	var peers: Array[String] = []
+	if values is Array:
+		var valid := RegEx.create_from_string("^[a-z0-9_-]{1,32}$")
+		for peer in values.slice(0, 100):
+			if peer is String and valid.search(peer) and peer not in peers:
+				peers.append(peer)
+	return peers
 
 static func _strings(values: Variant, count: int, length: int) -> PackedStringArray:
 	var result := PackedStringArray()

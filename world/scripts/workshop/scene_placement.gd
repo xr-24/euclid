@@ -33,14 +33,16 @@ static func pick(player: CharacterBody3D, camera: Camera3D, bounds: AABB, grid: 
 		hit = _ray(state, player, ahead + Vector3.UP * 2.0, ahead + Vector3.DOWN * 8.0)
 	return {"selected": selected, "point": hit.position if _floor(hit, bounds) else Vector3.INF}
 
-static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, reach: float) -> Dictionary:
+static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, reach: float, from_inside := false) -> Dictionary:
 	var from := camera.project_ray_origin(pixel)
 	var direction := camera.project_ray_normal(pixel)
 	var to := from + direction * reach
 	var state := camera.get_world_3d().direct_space_state
-	var hit := _ray(state, player, from, to)
+	var hit := _ray(state, player, from, to, false, from_inside)
+	if from_inside and not hit.is_empty() and hit.normal == Vector3.ZERO and _entity(hit).is_empty():
+		hit = _ray(state, player, from, to)
 	var point: Vector3 = hit.get("position", to)
-	var picker := _ray(state, player, from, point, true)
+	var picker := _ray(state, player, from, point, true, from_inside) if point != from else {}
 	if not picker.is_empty() and not _entity(picker).is_empty():
 		hit = picker
 		point = picker.position
@@ -58,11 +60,13 @@ static func valid_coordinates(bounds: AABB, point: Variant) -> bool:
 			return false
 	return true
 
-static func _ray(state: PhysicsDirectSpaceState3D, player: CharacterBody3D, from: Vector3, to: Vector3, areas := false) -> Dictionary:
+static func _ray(state: PhysicsDirectSpaceState3D, player: CharacterBody3D, from: Vector3, to: Vector3,
+		areas := false, from_inside := false) -> Dictionary:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [player.get_rid()]
 	query.collide_with_areas = areas
 	query.collide_with_bodies = not areas
+	query.hit_from_inside = from_inside
 	if areas:
 		query.collision_mask = Props.PICK_LAYER
 	return state.intersect_ray(query)

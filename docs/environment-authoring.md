@@ -1,9 +1,47 @@
 # Environment authoring
 
-The goal: an agent, or the player, can make and change a whole environment without leaving
-Euclid — find and import models, textures and skies, shape the ground, place and build things,
-and set the light and weather — with the same tools in the build menu and in the agent command
-registry, every change previewable, saved per environment and undoable.
+**Euclid's rule: agents and the player get as much control over the engine and the world as
+possible, from inside the game.** Anything a shipped environment can do, an agent or the player
+can do too, with the same tools, in the build menu and through the agent command registry,
+previewed, saved and undoable.
+
+## Why features kept getting hardcoded
+
+Each shipped environment is a GDScript builder (`zones/villa.gd` is 400 lines) that makes its
+own pool, hedges and lights. When a scene needs something new, the cheapest change is another
+builder function, and agents can never reach it because agents only have registered commands.
+The fix is structural: the shipped environments must be made from the same parts agents use.
+
+## The model
+
+- **Environments are documents.** An environment package (`world/data/zones/<id>/zone.json`)
+  lists its sky and atmosphere, spawn and views, and a tree of **pieces**. Building it means
+  loading that document; saving what an agent or the player made writes the same format. A
+  code `builder` is legacy and is being retired package by package.
+- **Pieces are small, general and combinable.** A piece is a record with an id, a type, a
+  transform and its type's fields. Types are registered in `world/data/pieces/types.json`, each
+  with a field schema and a trusted factory in `world/scripts/pieces/`. Nothing in the engine
+  knows what a "pool" or a "house" is: a pool is a carved shape plus a water volume, a waterfall
+  is rocks plus a flowing surface plus spray, a door is a shape plus a hinge behavior.
+- **Commands are generic.** Agents and the build menu add, edit and remove any piece, with the
+  fields its type declares. A new piece type appears in the planner schema, the editor and
+  validation with no new command.
+- **New abilities are plug-ins.** When the toolkit lacks something, the answer is a new piece
+  type, behavior or material registered through the extension system, never a branch inside one
+  environment's code.
+- **Props become pieces.** Today's props (`workshop/entity_types.gd`) are pieces with a physics
+  body. Their factories move into the piece registry so there is one record system, not two.
+
+## Rules (checked by `scripts/open-engine.test.mjs`, part of `npm test`)
+
+1. Shared code (everything in `world/scripts` outside `zones/` and `diagnostics/`) does not
+   name a specific environment package. Behaviour an environment needs is data in its package.
+2. New environment packages are documents: no code `builder`. The packages that still have one
+   are listed in `scripts/open-engine-debt.json` and the list may only shrink.
+3. Every piece in a package uses a registered piece type.
+
+The debt file records today's exceptions with a reason each. The check fails when an exception
+grows *or* shrinks without the file being updated, so fixes are locked in.
 
 ## Done
 
@@ -17,24 +55,29 @@ registry, every change previewable, saved per environment and undoable.
   shadow reach; fog density, colour and glow toward the sun; distance haze and its colour.
   `rendering/atmosphere.gd`, `ui/atmosphere_panel.gd` (Tab → Build → Atmosphere) and the
   `inspect_atmosphere`, `preview_atmosphere`, `save_atmosphere` and `discard_atmosphere` tools.
+- **Environment documents, first cut**: the piece registry (`group`, `shape`, `light`,
+  `model`), the document builder (`zones/piece_builder.gd`) and the first package built only
+  from pieces, Open Ground (`world/data/zones/open`).
 
 ## Next, in order
 
-1. **Skies and textures from the web.** Extend the asset service from models to Poly Haven HDRIs
-   (installed into the sky list, with their sun position measured into `sun.json`) and PBR
-   texture sets. Same licence checks and cache as models.
-2. **Materials on things.** Assign an installed PBR material, tint and tiling to a prop or
-   surface; a material picker in the palette and a `set_material` tool.
-3. **Blank environments and ground.** A plain template (open ground, sky, nothing else); a
-   height-field terrain that can be raised, lowered, flattened and smoothed with a brush, and
-   painted with materials; water bodies placed and sized (building on water edits).
-4. **Building.** Walls, floors, stairs and roofs as stretchable, snappable primitives with
-   materials, so structures can be made in place.
-5. **Lights and planting.** Point and spot lights as props; scatter rules (what grows where,
-   how dense) editable per environment.
-6. **Time and weather.** Time of day driving the sun along a path, cloud cover, rain.
-7. **Environments as packages.** Turn an edited environment into a package draft that passes
-   the checks (including `check.ps1 -Performance`) and can be shared.
-
-Each step adds data that is validated in one place (the shared command schema), applied by one
-service, and offered both as a panel and as registered tools, like the atmosphere.
+1. **Pieces in the editors.** `list_piece_types`, `add_piece`, `edit_piece`, `remove_piece`
+   for agents, and the same in the build palette and handles; edits saved per environment and
+   undoable. Saving a created environment writes its document.
+2. **Grid as a document.** Move the Grid floor and walls into piece types and drop
+   `grid_builder.gd`.
+3. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
+   brush and painted with materials; Poly Haven PBR textures and HDRI skies through the asset
+   service (skies land in the atmosphere sky list); scatter pieces (what grows where, how dense).
+4. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
+   a flowing surface for streams and waterfalls; spray emitters.
+5. **One record system.** Move the prop factories (cone, box, door, model) into the piece
+   registry; props become pieces with a body.
+6. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
+   from its document is the test that the toolkit is general enough.
+7. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
+   doors and windows (hinge and slide behaviors).
+8. **Screens.** A video surface piece (local video first; web video needs a browser engine).
+9. **Time and weather.** Time of day driving the sun, cloud cover, rain.
+10. **Sharing.** Turn an edited environment into a package that passes the checks (including
+    `check.ps1 -Performance`).

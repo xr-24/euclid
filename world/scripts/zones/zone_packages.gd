@@ -2,6 +2,7 @@ extends RefCounted
 ## Project-owned environment packages. Runtime saves refer to package IDs.
 
 const DIRECTORY := "res://data/zones"
+const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
 static var _packages := _load_packages()
 static var _aliases := {}
 
@@ -49,17 +50,24 @@ static func vector(value: Array) -> Vector3:
 
 static func valid(value: Variant) -> bool:
 	if not value is Dictionary or value.get("schema_version") != 1 or not value.get("id") is String \
-			or not value.get("builder") is String or not value.get("capabilities") is Dictionary \
+			or not value.get("capabilities") is Dictionary \
 			or not value.get("spawn") is Dictionary or not value.get("environment") is Dictionary \
 			or not value.get("views") is Dictionary or not value.get("bounds") is Array or value.bounds.size() != 2:
 		return false
 	if RegEx.create_from_string("^[a-z][a-z0-9_-]{0,63}$").search(value.id) == null \
-			or not value.builder.begins_with("res://scripts/zones/") or ".." in value.builder or value.builder.get_extension() != "gd" \
 			or not value.capabilities.get("workshop") is bool or not value.capabilities.get("scene_edit") is bool \
 			or not value.get("water") is Array or not value.water.all(func(item: Variant) -> bool: return item is String) \
 			or not value.get("layers") is Dictionary or not value.get("graphics") is Dictionary \
 			or value.get("workstation") not in ["grid", "villa", "beach"] or not _number(value.get("capture_warmup")) \
 			or value.capture_warmup < 0 or value.capture_warmup > 120:
+		return false
+	# An environment is a document of pieces; a code builder is legacy (see docs/environment-authoring.md).
+	if not value.has("builder") and not value.has("pieces"):
+		return false
+	if value.has("builder") and (not value.builder is String or not value.builder.begins_with("res://scripts/zones/") \
+			or ".." in value.builder or value.builder.get_extension() != "gd"):
+		return false
+	if value.has("pieces") and not PieceTypes.valid_tree(value.pieces):
 		return false
 	for spec in [["name", 96], ["description", 180]]:
 		if value.has(spec[0]) and (not value[spec[0]] is String or value[spec[0]].length() > spec[1]):

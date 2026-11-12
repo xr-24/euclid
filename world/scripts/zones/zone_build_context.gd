@@ -3,6 +3,7 @@ extends RefCounted
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
+const Pieces = preload("res://scripts/pieces/piece_builder.gd")
 var manifest: Dictionary
 var build_root: Node3D
 var build_interactables: Array[Dictionary] = []
@@ -25,11 +26,15 @@ func begin(destination: String) -> void:
 func build_art(destination: String, grid_appearance := {}) -> bool:
 	package = Packages.definition(destination).duplicate(true)
 	appearance = grid_appearance if not grid_appearance.is_empty() else {"floor_spacing": 2.0, "wall_height": 1.0}
-	var builder := load(package.builder) as GDScript
-	if builder == null or not builder.has_script_method("build") or builder.get_instance_base_type() != &"RefCounted":
-		return false
-	var built: Variant = builder.call("build", self)
-	return built is bool and built
+	if package.has("builder"):
+		var builder := load(package.builder) as GDScript
+		if builder == null or not builder.has_script_method("build") or builder.get_instance_base_type() != &"RefCounted":
+			return false
+		var built: Variant = builder.call("build", self)
+		if not (built is bool and built):
+			return false
+	# Pieces build after a legacy builder, so a package can move to pieces a part at a time.
+	return Pieces.build(build_root, package.pieces) if package.has("pieces") else package.has("builder")
 
 func build(destination: String) -> Dictionary:
 	begin(destination)

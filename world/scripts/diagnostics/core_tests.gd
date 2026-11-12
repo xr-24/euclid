@@ -63,6 +63,8 @@ const SpringFollow = preload("res://scripts/player/spring_follow.gd")
 const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
+const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
+const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -213,6 +215,7 @@ func _run() -> void:
 	_check_authored_dressing(path + ".dressing")
 	_check_registered_props()
 	_check_zone_packages(path + ".packages", manifest)
+	_check_pieces(manifest)
 	_check_data_entity_type()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
@@ -688,6 +691,35 @@ func _check_zone_packages(path: String, manifest: Dictionary) -> void:
 	_check(not library.create("Missing template", manifest.zones, "missing").ok,
 		"reject a template outside the installed environment catalog")
 	DirAccess.remove_absolute(path)
+
+func _check_pieces(manifest: Dictionary) -> void:
+	var ground := {"id": "ground", "type": "shape", "shape": "plane", "size": [40.0, 0.1, 40.0],
+		"material": {"texture": "dry_ground_01", "texture_size": 3.0}}
+	var lamp := {"id": "lamp", "type": "light", "kind": "spot", "position": [0.0, 4.0, 0.0], "rotation": [-90.0, 0.0, 0.0]}
+	var crate := {"id": "crate", "type": "shape", "shape": "box", "size": [1.0, 1.0, 1.0], "material": {"color": "8a6a4a"}}
+	var stack := {"id": "stack", "type": "group", "position": [3.0, 0.0, 0.0], "rotation": [0.0, 90.0, 0.0], "children": [crate]}
+	var pieces := [ground, lamp, stack]
+	_check(PieceTypes.valid_tree(pieces), "accept a document of registered pieces")
+	var broken := [{"id": "x", "type": "shape", "shape": "box"}, {"id": "x", "type": "unknown"},
+		{"id": "x", "type": "light", "kind": "spot", "energy": 1000.0}, {"id": "x", "type": "group", "script": "res://evil.gd"},
+		{"id": "Bad Id", "type": "group"}, {"id": "x", "type": "shape", "shape": "box", "size": [1, 1, 1], "material": {"shine": 1}}]
+	for record: Dictionary in broken:
+		_check(not PieceTypes.valid_tree([record]), "reject an invalid piece " + JSON.stringify(record))
+	_check(not PieceTypes.valid_tree([crate, crate.duplicate()]), "reject duplicate piece ids")
+	var root := Node3D.new()
+	_check(PieceBuilder.build(root, pieces), "build a document of pieces")
+	var group: Node3D = root.get_node_or_null("Piece_stack")
+	var box: Node = group.get_node_or_null("Piece_crate") if group != null else null
+	_check(box is StaticBody3D and (box as Node3D).position == Vector3.ZERO and group.position == Vector3(3, 0, 0),
+		"nest child pieces under their group")
+	_check(root.get_node_or_null("Piece_lamp") is SpotLight3D, "make lights from light pieces")
+	_check(root.get_node("Piece_ground").get_meta("piece_type") == "shape", "tag built nodes with their piece type")
+	root.free()
+	var context := Context.new(manifest)
+	var built := context.build("open_ground")
+	_check((built.root as Node3D).get_node_or_null("Piece_ground") is StaticBody3D,
+		"build the Open Ground package from pieces alone")
+	(built.root as Node3D).free()
 
 func _check_data_entity_type() -> void:
 	var commands = preload("res://scripts/workshop/command_registry.gd")

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "id": "open_ground",
+  "name": "Open Ground",
+  "description": "Bare ground under an open sky: a blank environment to build on.",
+  "color": "b39d7c",
+  "spawn": { "position": [0, 0.05, 4], "yaw": 0 },
+  "bounds": [[-300, -20, -300], [600, 140, 600]],
+  "environment": {
+    "hdri": "kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+    "sun_azimuth": 128.0,
+    "sun_color": "fff1df",
+    "sun_energy": 2.4,
+    "sky_energy": 1.0,
+    "exposure": 0.95,
+    "fog_density": 0.0012,
+    "fog_albedo": "f3ead9",
+    "fog_anisotropy": 0.55,
+    "shadow_distance": 90.0,
+    "sdfgi_cell": 0.2
+  },
+  "capabilities": { "workshop": false, "scene_edit": true },
+  "fallback": { "style": "plain", "floor_y": -0.2, "walls": false, "color": "b39d7c" },
+  "workstation": "grid",
+  "water": [],
+  "layers": {},
+  "pieces": [
+    {
+      "id": "ground",
+      "type": "shape",
+      "name": "Ground",
+      "shape": "plane",
+      "size": [600, 0.1, 600],
+      "material": { "texture": "dry_ground_01", "texture_size": 3.0 },
+      "cast_shadow": false
+    }
+  ],
+  "views": {
+    "arrival": { "position": [0, 0.05, 4], "target": [0, 1, -25] }
+  },
+  "benchmark_views": ["arrival"],
+  "capture_views": [],
+  "capture_warmup": 0,
+  "graphics": { "balanced_reconstruction": false }
+}

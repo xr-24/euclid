@@ -70,7 +70,7 @@ test('a full check links the base into a preview of the reviewed worktree', asyn
   const { area, root, base, runner, calls, draft } = setup;
   assert.throws(() => createPreviewRunner(root, { base: path.join(root, 'world/base') }), /outside the project world/);
   const { result, log } = await check(runner, draft(['world/scripts/world.gd']));
-  assert.deepEqual(result, { scope: 'full' });
+  assert.deepEqual(result, { scope: 'full', captures: [] });
   assert.match(log, /Linked 2 art and import files\./);
   assert.match(log, /Running Euclid project checks/);
   const [importCall, checkCall] = await calls();
@@ -90,7 +90,7 @@ test('a gateway draft skips the Godot core and smoke tests', async t => {
   const setup = await fixture(t);
   if (!setup) return;
   const { result, log } = await check(setup.runner, setup.draft(['gateway/server.mjs', 'docs/agents.md']));
-  assert.deepEqual(result, { scope: 'gateway' });
+  assert.deepEqual(result, { scope: 'gateway', captures: [] });
   assert.match(log, /without the Godot core and smoke tests/);
   const [importCall, checkCall] = await setup.calls();
   assert.match(importCall, /--import$/, 'the command contract still needs an imported project');

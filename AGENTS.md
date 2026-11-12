@@ -8,6 +8,19 @@ For rendering changes, use scripts/benchmark.ps1 at the same window size and pro
 
 Run the gateway tests and Godot smoke test after changes to those respective components. Preserve the user's saved world state. Keep credentials and machine-local tools out of Git. Use a disposable background Blender for automated builds; do not clear the user's live scene.
 
+## The open-engine rule
+
+Agents and the player get as much control over the engine and the world as possible, from
+inside the game. Build capabilities as general, data-driven parts that agents and the build
+menu can use, never as a special case for one environment, one request or one demo.
+
+- If a shipped environment needs something, it is a piece type, behavior or material that
+  agents can use too (see docs/environment-authoring.md).
+- Shared code does not name a specific environment, and new environment packages are
+  documents with no code builder. `npm test` enforces this through
+  `scripts/open-engine.test.mjs`; do not add to `scripts/open-engine-debt.json` to get past it.
+- Prefer a registered type with a declared field schema over a new bespoke command.
+
 ## Working alongside other agents
 
 Several agents (Codex, Claude and others) work on Euclid, often at the same time. To keep

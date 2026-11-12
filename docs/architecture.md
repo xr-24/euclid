@@ -13,7 +13,8 @@ All paths below are relative to `world/scripts/`.
 | `world.gd` | Startup, active zone, input routing, the F2 command planner and main-thread commits | Coordinates services; no asset authoring, HTTP parsing or development UI |
 | `zones/zone_catalog.gd` | Version 1 content validation | Zone and anchor identities remain data |
 | `zones/zone_build_context.gd` | One detached root and its interaction registry | Reviewed package builder; no live scene tree, player, UI or network access |
-| `zones/zone_packages.gd` | Validated environment packages | Project-owned builder paths, spawn, bounds, views, capabilities and appearance |
+| `zones/zone_packages.gd` | Validated environment packages | Spawn, bounds, views, capabilities, appearance and a piece tree (or a legacy builder path) |
+| `pieces/piece_types.gd`, `pieces/piece_builder.gd` | Registered piece types and the document builder | Field rules from `data/pieces/types.json`; trusted factories in `scripts/pieces/` |
 | `zones/villa.gd`, `zones/shore_zone.gd` | Zone-specific content | Each implements `build(context) -> bool`; false requests the fallback blockout |
 | `zones/authored_props.gd` | Stable IDs for builder-created props | Registers detached assemblies and their collision or editor pick volume |
 | `zones/workstations.gd` | Furniture for logical app anchors | Does not launch processes |
@@ -393,12 +394,24 @@ Gateway HTTP transport uses its own worker so synchronous asset construction can
 
 ## Adding content
 
-1. Add a unique zone record to `world/data/world.json`. Zone IDs and anchor IDs are stable; names and art may change. Colors are hexadecimal strings. Anchors must name an existing zone and use finite 3D positions.
-2. Implement a trusted `RefCounted` builder with `static func build(context: RefCounted) -> bool`. Add geometry beneath `context.build_root`; use the asset library for shared resources. Return false when required optional art is unavailable.
-3. Register that code in `ZoneBuildContext.BUILDERS`. Unregistered zones receive the neutral blockout. The manifest cannot select or execute arbitrary script paths.
-4. Set `context.build_root` metadata `spawn` to `{position: Vector3, yaw: float}` when the default origin is unsuitable. Keep application and agent identity in manifest anchors, separate from furniture and mesh names.
-5. Add the zone's sky and sun defaults to `ZoneEnvironment.ZONES`. Graphics cost budgets belong in `GraphicsSettings`, not in the builder. Water metadata follows the existing WaterSystem contract.
-6. Run `scripts/check.ps1`, inspect rendered views, and run `scripts/benchmark.ps1` before accepting new art or rendering features.
+Environments are documents of pieces; see `docs/environment-authoring.md` for the open-engine
+rule and the roadmap. To add one:
+
+1. Add `world/data/zones/<id>/zone.json` with spawn, bounds, views, sky and sun defaults
+   (`environment`), capabilities and a `pieces` tree. It joins the catalog on its own; add a
+   record to `world/data/world.json` only to give it anchors. `world/data/zones/open_ground` is the
+   smallest example.
+2. Use registered piece types (`world/data/pieces/types.json`). If none fits, add a type: its
+   field rules in `types.json` (the command schema's rule format) and a trusted `RefCounted`
+   factory in `world/scripts/pieces/` with `static func build(record: Dictionary) -> Node3D`.
+   The factory makes the node; `pieces/piece_builder.gd` owns its transform, visibility,
+   children and `piece_id` metadata. Nothing may name a specific environment.
+3. Do not add a code builder. The three packages that still have one (`construct`, `villa`,
+   `beach`) are recorded in `scripts/open-engine-debt.json`, and `npm test` fails if the list grows.
+4. Graphics cost budgets belong in `GraphicsSettings`. Water metadata follows the existing
+   WaterSystem contract until water becomes a piece type.
+5. Run `scripts/check.ps1`, inspect rendered views, and run `scripts/benchmark.ps1` before
+   accepting new art or rendering features.
 
 UI, agent adapters, the future desktop bridge and content builders must not call one another directly. Route user intent and snapshots through the coordinator. A future real-window bridge should implement the application-mode boundary without becoming part of a theme script.
 

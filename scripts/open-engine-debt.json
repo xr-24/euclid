@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "about": "Known exceptions to the open-engine rule (see docs/environment-authoring.md). This list may only shrink; scripts/open-engine.test.mjs fails if code adds an exception or fixes one without updating this file.",
+  "environment_names": {
+    "world/scripts/world.gd": { "count": 4, "reason": "The Grid is the start zone and shares the workshop's WorldTools." },
+    "world/scripts/world_art.gd": { "count": 2, "reason": "Gradient sky falls back to the Grid's colours; one match is the construct effect shader, not the package." },
+    "world/scripts/rendering/zone_effects.gd": { "count": 1, "reason": "Matches the construct effect shader by its code, not the Grid package." },
+    "world/scripts/workshop/scene_placement.gd": { "count": 3, "reason": "Named bounds for the three original packages, used by tool validation and tests." },
+    "gateway/workbench-diagnostics.mjs": { "count": 1, "reason": "The benchmark_villa tool reads villa samples." },
+    "gateway/workbench-runner.mjs": { "count": 1, "reason": "The benchmark_villa tool runs the villa benchmark." }
+  },
+  "code_builders": {
+    "construct": "Grid floor and walls become piece types (roadmap step 2).",
+    "villa": "Villa becomes a document once water, planting and materials are pieces (roadmap step 6).",
+    "beach": "Shore becomes a document once terrain and water are pieces (roadmap step 6)."
+  }
+}

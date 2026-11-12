@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "about": "Registered piece types. Environment documents, agents and the build menu use these; see docs/environment-authoring.md. Field rules use the same format as data/commands/schema.json and may $ref its $defs.",
+  "common": {
+    "id": { "type": "string", "description": "Unique within the environment", "pattern": "^[a-z0-9][a-z0-9_-]{0,47}$" },
+    "type": { "type": "string", "maxLength": 32 },
+    "name": { "type": "string", "maxLength": 64 },
+    "position": { "$ref": "#/$defs/position" },
+    "rotation": { "type": "array", "description": "Degrees about X, Y and Z", "items": { "type": "number", "minimum": -360, "maximum": 360 }, "minItems": 3, "maxItems": 3 },
+    "scale": { "type": "array", "description": "Scale along X, Y and Z", "items": { "type": "number", "minimum": 0.01, "maximum": 100 }, "minItems": 3, "maxItems": 3 },
+    "hidden": { "type": "boolean" }
+  },
+  "types": {
+    "group": {
+      "label": "Group",
+      "description": "Holds child pieces so they move, turn and hide together.",
+      "script": "res://scripts/pieces/group_piece.gd",
+      "required": [],
+      "fields": {}
+    },
+    "shape": {
+      "label": "Shape",
+      "description": "A solid box, sphere, cylinder, capsule or flat plane with a material. Round shapes use size X as the diameter and size Y as the height.",
+      "script": "res://scripts/pieces/shape_piece.gd",
+      "required": ["shape", "size"],
+      "fields": {
+        "shape": { "type": "string", "enum": ["box", "sphere", "cylinder", "capsule", "plane"] },
+        "size": { "type": "array", "description": "Metres along X, Y and Z", "items": { "type": "number", "minimum": 0.01, "maximum": 2000 }, "minItems": 3, "maxItems": 3 },
+        "material": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "color": { "$ref": "#/$defs/color" },
+            "texture": { "type": "string", "description": "An installed PBR texture set", "pattern": "^[a-z0-9_]{1,64}$" },
+            "texture_size": { "type": "number", "description": "Metres one texture tile covers", "minimum": 0.05, "maximum": 100 },
+            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+            "metallic": { "type": "number", "minimum": 0, "maximum": 1 },
+            "emission": { "$ref": "#/$defs/color" },
+            "emission_energy": { "type": "number", "minimum": 0, "maximum": 16 }
+          }
+        },
+        "collision": { "type": "boolean" },
+        "cast_shadow": { "type": "boolean" }
+      }
+    },
+    "light": {
+      "label": "Light",
+      "description": "A point (omni) or spot light. Spots shine along the piece's -Z.",
+      "script": "res://scripts/pieces/light_piece.gd",
+      "required": ["kind"],
+      "fields": {
+        "kind": { "type": "string", "enum": ["omni", "spot"] },
+        "color": { "$ref": "#/$defs/color" },
+        "energy": { "type": "number", "minimum": 0, "maximum": 100 },
+        "range": { "type": "number", "minimum": 0.1, "maximum": 500 },
+        "angle": { "type": "number", "minimum": 1, "maximum": 89 },
+        "shadows": { "type": "boolean" }
+      }
+    },
+    "model": {
+      "label": "Model",
+      "description": "A model from the installed library or an imported asset.",
+      "script": "res://scripts/pieces/model_piece.gd",
+      "required": ["source", "asset_id"],
+      "fields": {
+        "source": { "type": "string", "enum": ["library", "runtime"] },
+        "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,96}$" },
+        "collision": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -44,6 +44,10 @@ static func prop_fields(authored: bool) -> Array:
 static func valid_field(name: String, value: Variant) -> bool:
 	return _valid(value, field(name))
 
+## Check a value against a rule written in this schema's format (used by piece types).
+static func valid_value(value: Variant, rule: Dictionary) -> bool:
+	return _valid(value, rule)
+
 static func valid_plan(definition: Dictionary, plan: Dictionary) -> bool:
 	var fields: Dictionary = definition.fields
 	var required: Array = definition.required

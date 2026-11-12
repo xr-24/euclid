@@ -81,7 +81,7 @@ test('every piece uses a registered piece type and its declared fields', () => {
       if (ids.has(piece.id)) problems.push(`${owner}: duplicate piece id ${piece.id}`);
       ids.add(piece.id);
       for (const key of Object.keys(piece)) {
-        if (key !== 'children' && !common.includes(key) && !(key in type.fields)) {
+        if (key !== 'children' && !common.includes(key) && !(key in type.fields) && !Object.hasOwn(type.storage ?? {}, key)) {
           problems.push(`${owner}: piece ${piece.id} has field ${key}, which ${piece.type} does not declare`);
         }
       }

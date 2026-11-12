@@ -72,6 +72,8 @@ const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
 const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
+const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
+const TerrainData = preload("res://scripts/pieces/terrain_data.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -226,6 +228,7 @@ func _run() -> void:
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
 	_check_piece_upgrade()
+	await _check_terrain()
 	_check_data_entity_type()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
@@ -884,6 +887,61 @@ func _check_piece_upgrade() -> void:
 	var reopened := PieceDocument.new(path, defaults, revision)
 	_check(reopened.pieces == edited and not reopened.pieces.any(func(record: Dictionary) -> bool: return record.id == "backdrop"),
 		"respect a deliberate removal on later loads")
+	DirAccess.remove_absolute(path)
+
+func _check_terrain() -> void:
+	var package := Packages.definition("open_ground")
+	var path := "user://terrain-test-%d.json" % Time.get_ticks_usec()
+	var old: Dictionary = package.piece_replacements[0]
+	_check(Store.write_json(path, {"schema_version": 1, "pieces": [old], "undo": [{"pieces": [old]}]}) == OK,
+		"seed an existing flat-ground save")
+	var doc := PieceDocument.new(path, package.pieces, 1, package.piece_replacements)
+	_check(doc.pieces[0].type == "terrain" and doc.history[0].pieces[0].type == "terrain",
+		"upgrade untouched starter ground and its history to terrain")
+	var layer := Node3D.new()
+	root.add_child(layer)
+	_check(PieceBuilder.build(layer, doc.pieces), "build a terrain piece in the scene")
+	var editor := PieceEditor.new()
+	editor.attach(layer, doc, true, Packages.piece_bounds("open_ground"))
+	var raised := TerrainTools.execute(editor, {"tool": "terrain_brush", "target": "ground",
+		"brush": "raise", "radius": 10.0, "strength": 2.0, "points": [[0, 0, 0]]})
+	var sample := {"tool": "inspect_terrain", "target": "ground", "points": [[0, 0, 0]]}
+	_check(raised.ok and TerrainTools.execute(editor, sample).heights == [2.0], "raise a terrain sample through the shared command")
+	await physics_frame
+	await physics_frame
+	var ray := PhysicsRayQueryParameters3D.create(Vector3(0.05, 6, 0.05), Vector3(0.05, -3, 0.05))
+	var hit := layer.get_world_3d().direct_space_state.intersect_ray(ray)
+	_check(not hit.is_empty() and hit.collider == editor.node_for("ground") and hit.position.y > 1.9,
+		"collision follows the sculpted height")
+	var painted := TerrainTools.execute(editor, {"tool": "terrain_brush", "target": "ground",
+		"brush": "paint", "paint": "rock", "radius": 10.0, "strength": 1.0, "points": [[0, 0, 0]]})
+	var saved := PieceDocument.new(path, package.pieces, 1)
+	var samples := TerrainData.new()
+	_check(painted.ok and samples.decode(saved.pieces[0].terrain_surface)
+		and samples.weights(TerrainData.COUNT / 2).b == 1.0 and TerrainTools.execute(editor, sample).heights == [2.0],
+		"paint and height survive saving independently")
+	editor.attach(layer, saved, true, Packages.piece_bounds("open_ground"))
+	_check(editor.execute({"tool": "undo_piece"}).ok and editor.execute({"tool": "undo_piece"}).ok
+		and TerrainTools.execute(editor, sample).heights == [0.0],
+		"undo paint and sculpt as separate strokes after reload")
+	_check(not TerrainTools.execute(editor, {"tool": "terrain_brush", "target": "ground",
+		"brush": "raise", "points": [[350, 0, 0]]}).ok, "reject strokes beyond the terrain footprint")
+	var lowered := TerrainTools.execute(editor, {"tool": "terrain_brush", "target": "ground",
+		"brush": "lower", "strength": 2.0, "points": [[0, 0, 0]]})
+	var player := CharacterBody3D.new()
+	layer.add_child(player)
+	player.position = Vector3(0.0, -1.95, 0.0)
+	_check(lowered.ok and TerrainTools.undo(editor, player).ok and player.position.y >= 0.0,
+		"undoing a depression keeps a player standing inside it above the restored ground")
+	var brush := TerrainData.new()
+	var area := Vector2(600, 600)
+	brush.dab(Vector2.ZERO, area, "raise", 8.0, 4.0, 0, 0.0)
+	brush.dab(Vector2.ZERO, area, "smooth", 8.0, 1.0, 0, 0.0)
+	_check(brush.surface_at(Vector2.ZERO, area) < 4.0 and brush.surface_at(Vector2.ZERO, area) > 0.0,
+		"smooth lowers a local peak towards its neighbours")
+	brush.dab(Vector2.ZERO, area, "flatten", 8.0, 1.0, 0, 1.5)
+	_check(is_equal_approx(brush.surface_at(Vector2.ZERO, area), 1.5), "flatten matches the stroke's sampled level")
+	layer.free()
 	DirAccess.remove_absolute(path)
 
 func _check_data_entity_type() -> void:

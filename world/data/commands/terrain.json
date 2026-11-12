@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "inspect_terrain",
+      "description": "List editable terrain pieces with their IDs, dimensions and paint materials. Set target to inspect one terrain. Optional points sample the surface elevation at world X/Z coordinates.",
+      "service": "world", "handler": "_terrain_command", "effect": "read", "surfaces": ["f2", "mcp"],
+      "fields": {"target": "piece_id", "points": "terrain_points"}, "required": [],
+      "scope": "scene", "undo": "none", "mutates_world": false
+    },
+    {
+      "name": "terrain_brush",
+      "description": "Apply one undoable brush stroke. Inspect terrain first for the target ID. Choose raise, lower, smooth, flatten or paint. Points are world [x,y,z] coordinates forming a path on the surface. Radius is in metres. Strength is metres per dab for raise/lower, and 0 to 1 for smoothing, flattening or paint. Flatten samples its first point. Paint material is earth, sand or rock.",
+      "service": "world", "handler": "_terrain_command", "effect": "write", "surfaces": ["f2", "mcp"],
+      "fields": {"target": "piece_id", "brush": "terrain_brush", "points": "terrain_points", "radius": "terrain_radius", "strength": "terrain_strength", "paint": "terrain_paint"},
+      "required": ["target", "brush", "points"],
+      "scope": "scene", "undo": "piece", "mutates_world": true, "availability": "terrain_edit"
+    }
+  ]
+}

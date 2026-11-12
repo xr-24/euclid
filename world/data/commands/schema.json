@@ -1,6 +1,11 @@
 {
   "version": 1,
   "$defs": {
+    "terrain_points": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/position" } },
+    "terrain_brush": { "type": "string", "enum": ["raise", "lower", "smooth", "flatten", "paint"] },
+    "terrain_radius": { "type": "number", "minimum": 4, "maximum": 60 },
+    "terrain_strength": { "type": "number", "minimum": 0.01, "maximum": 4 },
+    "terrain_paint": { "type": "string", "enum": ["earth", "sand", "rock"] },
     "piece_material": {
       "type": "object",
       "required": [],

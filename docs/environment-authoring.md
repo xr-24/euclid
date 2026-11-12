@@ -77,12 +77,19 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 - **Saves** live in `user://environment-pieces-<id>.json` with the piece tree and its undo
   history. Creating an environment from a template copies its current piece tree into a new
   document. Existing prop saves and package files use their own storage.
+- **Terrain** is a registered piece. Open Ground starts with one, and any editable environment
+  can add one through **Pieces**. Open **Build → Terrain** for five brushes and a three-material
+  palette. Left-drag to brush and hold middle mouse to look and move. Flatten uses the height
+  at the start of the stroke. Release saves the stroke and updates collision. Esc cancels a
+  stroke in progress. **Undo** uses the same saved history as the piece editor.
+- **Agent terrain tools** share that data and history. Use `inspect_terrain` to find the piece,
+  see its paint materials, or sample elevations. `terrain_brush` takes the piece ID, a brush,
+  and an array of world-space `[x,y,z]` points. Each call saves one stroke.
 
 ## Next, in order
 
-1. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
-   brush and painted with materials; Poly Haven PBR textures and HDRI skies through the asset
-   service (skies land in the atmosphere sky list); scatter pieces (what grows where, how dense).
+1. **Ground material imports and planting.** Bring additional Poly Haven PBR textures and HDRI
+   skies through the asset service. Add scatter pieces that control what grows where and how densely.
 2. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
    a flowing surface for streams and waterfalls; spray emitters.
 3. **One record system.** Move the prop factories (cone, box, door, model) into the piece

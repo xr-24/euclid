@@ -77,6 +77,8 @@ static func valid(value: Variant) -> bool:
 		return false
 	if not PieceDocument.valid_revision(value.get("piece_revision", 0)):
 		return false
+	if value.has("piece_replacements") and not PieceTypes.valid_tree(value.piece_replacements):
+		return false
 	if value.has("piece_bounds") and not _valid_bounds(value.piece_bounds):
 		return false
 	var bindings: Variant = value.get("piece_appearance", {})

@@ -5,7 +5,7 @@
   "description": "Bare ground under an open sky: a blank environment to build on.",
   "color": "b39d7c",
   "spawn": { "position": [0, 0.05, 4], "yaw": 0 },
-  "bounds": [[-300, -20, -300], [600, 140, 600]],
+  "bounds": [[-300, -26, -300], [600, 146, 600]],
   "environment": {
     "hdri": "kloofendal_48d_partly_cloudy_puresky_4k.hdr",
     "sun_azimuth": 128.0,
@@ -24,14 +24,14 @@
   "workstation": "grid",
   "water": [],
   "layers": {},
+  "piece_revision": 1,
+  "piece_replacements": [{"id":"ground","type":"shape","name":"Ground","shape":"plane","size":[600,0.1,600],"material":{"texture":"dry_ground_01","texture_size":3.0},"cast_shadow":false}],
   "pieces": [
     {
       "id": "ground",
-      "type": "shape",
+      "type": "terrain",
       "name": "Ground",
-      "shape": "plane",
-      "size": [600, 0.1, 600],
-      "material": { "texture": "dry_ground_01", "texture_size": 3.0 },
+      "terrain_size": [600, 600],
       "cast_shadow": false
     }
   ],

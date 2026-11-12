@@ -38,7 +38,8 @@ func build_art() -> bool:
 	return package.has("pieces") or package.has("builder")
 
 func build_pieces(path := "", appearance := {}) -> void:
-	piece_document = PieceDocument.new(path, package.get("pieces", []), int(package.get("piece_revision", 0)))
+	piece_document = PieceDocument.new(path, package.get("pieces", []), int(package.get("piece_revision", 0)),
+		package.get("piece_replacements", []))
 	displayed_pieces = Scenery.project(piece_document.pieces, package.get("piece_appearance", {}), appearance)
 	piece_layer = Node3D.new()
 	piece_layer.name = Pieces.LAYER

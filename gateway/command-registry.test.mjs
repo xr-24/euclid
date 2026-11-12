@@ -24,8 +24,10 @@ const cases = [
   { tool: 'add_piece', target: 'shape', piece_values: { size: [1, 2, 3], material: { color: 'ff7700' } } },
   { tool: 'add_piece', target: 'made_up', piece_values: {} },
   { tool: 'edit_piece', target: 'ground', piece_values: { script: 'res://untrusted.gd' } },
+  { tool: 'terrain_brush', target: 'ground', brush: 'paint', points: [[0, 0, 0]], paint: 'sand', strength: 0.75 },
+  { tool: 'terrain_brush', target: 'ground', brush: 'raise', points: [[0, 0]] },
 ];
-const expected = [true, false, true, false, false, false, true, false, true, false, true, true, false, false];
+const expected = [true, false, true, false, false, false, true, false, true, false, true, true, false, false, true, false];
 
 test('a preview session owns its command catalog and argument schemas', () => {
   const snapshot = structuredClone(installedSnapshot);

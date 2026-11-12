@@ -35,6 +35,9 @@ const AtmospherePanel = preload("res://scripts/ui/atmosphere_panel.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 const PiecePanel = preload("res://scripts/ui/piece_panel.gd")
+const TerrainBrush = preload("res://scripts/player/terrain_brush.gd")
+const TerrainPanel = preload("res://scripts/ui/terrain_panel.gd")
+const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const WristPages = preload("res://scripts/player/wrist_pages.gd")
@@ -62,6 +65,7 @@ var player_rig: RigAuthoring
 var atmosphere: Atmosphere
 var pieces := PieceEditor.new()
 var piece_panel: Control
+var terrain_brush: TerrainBrush
 var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
 var wrist: WristComputer
@@ -270,6 +274,8 @@ func _setup_player() -> void:
 	scanner.setup("" if smoke_mode else "user://water-edits.json", wrist)
 	grabber = PropGrabber.new()
 	add_child(grabber)
+	terrain_brush = TerrainBrush.new()
+	add_child(terrain_brush)
 	gizmo = TransformGizmo.new()
 	gizmo.world = self
 	add_child(gizmo)
@@ -340,6 +346,8 @@ func _ui_label(parent: Node, at: Vector2, font_size: int) -> Label:
 	return label
 
 func _panel(title: String, description: String, height := 500.0, remember_palette := false) -> void:
+	if terrain_brush.active():
+		terrain_brush.cancel()
 	overlay.add_theme_stylebox_override("panel", overlay_panel_style)
 	var viewport_size := get_viewport().get_visible_rect().size
 	var side_margin := maxf((viewport_size.x - 680.0) * 0.5, 24.0)
@@ -383,6 +391,8 @@ func _button(title: String, callback: Callable) -> void:
 	overlay_content.add_child(button)
 
 func _close_panel() -> void:
+	if terrain_brush.active():
+		terrain_brush.cancel()
 	overlay.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -425,6 +435,23 @@ func _open_pieces() -> void:
 	piece_panel.setup(pieces, placement, aimed.piece, _close_panel)
 	_button(gizmo.mode_label(), gizmo.toggle_mode)
 	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
+
+func terrain_available() -> bool:
+	return _scene_ready() and TerrainTools.available(pieces)
+
+func _open_terrain() -> void:
+	if not terrain_available():
+		return
+	var screen := get_viewport().get_visible_rect().size
+	_panel("", "")
+	overlay.offset_left = maxf(screen.x - 470.0, screen.x * 0.55)
+	overlay.offset_top = 28
+	overlay.offset_right = -28
+	overlay.offset_bottom = minf(380, screen.y - 28) - screen.y
+	var editor := TerrainPanel.new()
+	overlay_content.add_child(editor)
+	editor.setup(pieces, _close_panel, TerrainTools.undo.bind(pieces, player))
+	terrain_brush.attach(pieces, editor, player, camera, _look)
 
 func _open_player_rig() -> void:
 	if shifting:
@@ -500,6 +527,8 @@ func _show_grid_palette() -> void:
 	overlay.offset_bottom = -overlay.offset_top
 	_palette_host.mount(overlay_content, zone_id, placement.point, placement.selected, world_tools, _workshop_action_catalog, _run_palette_action)
 	_button("Pieces", _open_pieces)
+	if terrain_available():
+		_button("Terrain", _open_terrain)
 	_button(gizmo.mode_label(), gizmo.toggle_mode)
 	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
 	_button("Back  [Esc]", _close_panel)
@@ -542,6 +571,7 @@ func _world_context() -> Dictionary:
 		environments.append({"id": zone.id, "name": zone.name, "description": zone.get("description", zone.get("subtitle", ""))})
 	return {"current": zone_id, "environments": environments, "workshop_tools": _workshop_action_catalog(),
 		"piece_edit": pieces.can_edit() and not shifting,
+		"terrain_edit": terrain_available(),
 		"behaviors": behavior_runtime.available() if behavior_runtime and not shifting else [],
 		"command_registry": Commands.snapshot()}
 
@@ -709,7 +739,7 @@ func _load_zone(destination: String) -> void:
 	_commit_zone(built)
 	WorldArt.apply_environment(self, destination, atmosphere.values_for(destination))
 	var spawn: Dictionary = WorldArt.spawn(destination)
-	player.position = spawn.position
+	player.position = TerrainTools.above_surface(pieces, spawn.position)
 	player.velocity = Vector3.ZERO
 	player.rotation.y = spawn.yaw
 	pitch = 0
@@ -822,7 +852,7 @@ func _is_workshop(id: String) -> bool:
 func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	if shifting or destination == zone_id:
 		return
-	if is_instance_valid(piece_panel) and piece_panel.is_visible_in_tree():
+	if terrain_brush.active() or (is_instance_valid(piece_panel) and piece_panel.is_visible_in_tree()):
 		_close_panel()
 	shifting = true
 	var built := await _build_zone_async(destination)
@@ -906,7 +936,7 @@ func _land_in(destination: String) -> void:
 		player.global_position.y = maxf(p.y, hit.position.y + 0.05)
 		return
 	var spawn: Dictionary = WorldArt.spawn(destination)
-	player.position = spawn.position
+	player.position = TerrainTools.above_surface(pieces, spawn.position)
 	player.velocity = Vector3.ZERO
 	player.rotation.y = spawn.yaw
 
@@ -936,7 +966,7 @@ func _physics_process(delta: float) -> void:
 	if not player:
 		return
 	var direction := Vector3.ZERO
-	var controls := not overlay.visible and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not smoke_mode \
+	var controls := (not overlay.visible or terrain_brush.looking()) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not smoke_mode \
 		and not wrist.blocks_movement()
 	if controls:
 		var axes := Input.get_vector("left", "right", "forward", "back")
@@ -947,7 +977,7 @@ func _physics_process(delta: float) -> void:
 	var depth: float = water.level - player.position.y if water.has else -1.0
 	var swimming := depth > 1.3
 	_player_motor.step(player, delta, direction, water, controls)
-	var scene_controls := controls and not wrist.is_open and _scene_ready()
+	var scene_controls := controls and not overlay.visible and not wrist.is_open and _scene_ready()
 	var gesture := grabber.tick(delta, player, camera, world_tools, player_avatar.hands, scene_controls)
 	player_avatar.tick(player, delta, swimming, gesture)
 	if wrist.is_open and wrist.current().get("id") == "scan" and _scene_ready():
@@ -957,7 +987,7 @@ func _physics_process(delta: float) -> void:
 	agent_presence.tick(player, delta)
 	if player.position.y < -100:
 		var spawn: Dictionary = WorldArt.spawn(zone_id)
-		player.position = spawn.position
+		player.position = TerrainTools.above_surface(pieces, spawn.position)
 		player.velocity = Vector3.ZERO
 	underwater.visible = water.has and camera.global_position.y < water.level - 0.05
 	_update_interaction_hint()
@@ -1089,7 +1119,8 @@ func _read_state(save_path: String) -> void:
 	_load_zone(state.zone)
 	var at = state.get("position", [])
 	if at is Array and at.size() == 3:
-		player.position = Vector3(clampf(float(at[0]),-150,150),clampf(float(at[1]),-20,60),clampf(float(at[2]),-150,150))
+		var restored := Vector3(clampf(float(at[0]),-150,150),clampf(float(at[1]),-20,60),clampf(float(at[2]),-150,150))
+		player.position = TerrainTools.above_surface(pieces, restored)
 	player.rotation.y = float(state.get("yaw",0))
 	pitch = clampf(float(state.get("pitch",0)),-1.35,1.35)
 	camera.rotation.x = pitch
@@ -1159,6 +1190,8 @@ func _notification(what: int) -> void:
 		_quit()
 	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT and not smoke_mode:
 		# Let go of the mouse; a click back in picks it up again.
+		if is_instance_valid(terrain_brush) and terrain_brush.active():
+			terrain_brush.cancel()
 		if is_instance_valid(wrist):
 			wrist.typing = false
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

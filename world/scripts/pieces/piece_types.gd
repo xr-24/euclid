@@ -27,15 +27,20 @@ static func valid(record: Variant) -> bool:
 		return false
 	var definition: Dictionary = _data.types[record.type]
 	var fields: Dictionary = definition.fields
+	var storage: Dictionary = definition.get("storage", {})
 	for key in ["id", "type"] + definition.required:
 		if not record.has(key):
 			return false
 	for key in record:
 		if key == "children":
 			continue
-		var rule: Variant = _data.common.get(key, fields.get(key))
+		var rule: Variant = _data.common.get(key, fields.get(key, storage.get(key)))
 		if not rule is Dictionary or not Commands.valid_value(record[key], rule):
 			return false
+	if not storage.is_empty():
+		var script := factory(record.type)
+		if script and script.has_script_method("valid_storage"):
+			return script.call("valid_storage", record) == true
 	return true
 
 ## A list of pieces and all their children: valid records, unique ids, bounded size and depth.

@@ -31,6 +31,8 @@ It copies the source environment's current piece tree. A package can increment
 `piece_revision` to add new root pieces to older documents and their undo snapshots.
 Existing Grid saves gain the structural pieces once, and later saves respect intentional
 removals.
+Packages can supply `piece_replacements` with exact previous root records. An upgrade can
+replace those untouched defaults while preserving locally edited pieces.
 
 ## Views and capabilities
 

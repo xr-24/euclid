@@ -28,7 +28,9 @@ static func sync(parent: Node3D, before: Array, after: Array) -> void:
 		if node == null:
 			_build(parent, record, true)
 			continue
-		var changed_fields: bool = old.type != record.type or Types.types()[record.type].fields.keys().any(
+		var definition: Dictionary = Types.types()[record.type]
+		var fields: Array = definition.fields.keys() + definition.get("storage", {}).keys()
+		var changed_fields: bool = old.type != record.type or fields.any(
 			func(key: String) -> bool: return old.get(key) != record.get(key))
 		if changed_fields and not _update_factory(node, old, record):
 			var replacement := _make(record)

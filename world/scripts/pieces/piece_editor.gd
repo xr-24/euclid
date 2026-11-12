@@ -81,6 +81,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 			var types := Types.types().duplicate(true)
 			for type in types:
 				types[type].erase("script")
+				types[type].erase("storage")
 			return {"ok": true, "message": "Registered pieces: " + ", ".join(types.keys()),
 				"types": types, "common": Types.common().duplicate(true), "models": EntityTypes.library_catalog()}
 		"list_pieces":
@@ -143,6 +144,26 @@ func _valid_position(position: Array, parent: String) -> bool:
 		point = _layer.to_local(anchor.to_global(point))
 	return Placement.contains(bounds, point)
 
+## Commit generated state through the same journal as ordinary piece edits.
+func commit_storage(id: String, updates: Dictionary, expected_revision: int, message: String) -> Dictionary:
+	if not can_edit() or expected_revision != revision:
+		return _failure("The environment changed during the edit.")
+	var next: Array = _document.pieces.duplicate(true)
+	var entry := _find(next, id)
+	if entry.is_empty():
+		return _failure("That piece no longer exists.")
+	var storage: Dictionary = Types.types()[entry.piece.type].get("storage", {})
+	for key in updates:
+		if not storage.has(key):
+			return _failure("This piece does not store that data.")
+		if updates[key] == "":
+			entry.piece.erase(key)
+		else:
+			entry.piece[key] = updates[key]
+	var undo: Array[Dictionary] = _document.history.duplicate()
+	undo.append({"pieces": _document.pieces})
+	return _save(next, undo, id, message)
+
 func _list(id: String, offset: int) -> Dictionary:
 	if not id.is_empty():
 		var found := _find(_document.pieces, id)
@@ -151,6 +172,8 @@ func _list(id: String, offset: int) -> Dictionary:
 		var piece: Dictionary = found.piece.duplicate()
 		var children: int = piece.get("children", []).size()
 		piece.erase("children")
+		for key in Types.types()[piece.type].get("storage", {}):
+			piece.erase(key)
 		return {"ok": true, "message": "Piece " + id, "piece": piece.duplicate(true), "parent": found.parent, "child_count": children}
 	var items := summaries()
 	var page := items.slice(offset, offset + PAGE_SIZE)

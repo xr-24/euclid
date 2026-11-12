@@ -18,7 +18,7 @@ static func path_for(zone: String, temporary: bool) -> String:
 static func filename(zone: String) -> String:
 	return "environment-pieces-%s.json" % zone
 
-func _init(path: String, defaults: Array, base_revision := 0) -> void:
+func _init(path: String, defaults: Array, base_revision := 0, replacements: Array = []) -> void:
 	_path = path
 	_base_revision = base_revision
 	pieces = defaults.duplicate(true)
@@ -35,7 +35,7 @@ func _init(path: String, defaults: Array, base_revision := 0) -> void:
 		return
 	var upgrade: bool = saved_revision < base_revision
 	_base_revision = maxi(int(saved_revision), base_revision)
-	pieces = _add_defaults(saved.pieces, defaults) if upgrade else saved.pieces
+	pieces = _add_defaults(saved.pieces, defaults, replacements) if upgrade else saved.pieces
 	if not Types.valid_tree(pieces):
 		pieces = defaults.duplicate(true)
 		error = "The environment piece document could not be upgraded."
@@ -44,7 +44,7 @@ func _init(path: String, defaults: Array, base_revision := 0) -> void:
 	if undo is Array and undo.size() <= SceneStore.MAX_UNDO and undo.all(
 			func(entry: Variant) -> bool: return entry is Dictionary and Types.valid_tree(entry.get("pieces"))):
 		for entry: Dictionary in undo:
-			var tree: Array = _add_defaults(entry.pieces, defaults) if upgrade else entry.pieces
+			var tree: Array = _add_defaults(entry.pieces, defaults, replacements) if upgrade else entry.pieces
 			if not Types.valid_tree(tree):
 				history.clear()
 				break
@@ -65,13 +65,17 @@ func save(next: Array, undo: Array[Dictionary]) -> bool:
 static func valid_revision(value: Variant) -> bool:
 	return (value is int or value is float) and is_finite(float(value)) and value >= 0 and value <= 10000 and value == floorf(value)
 
-static func _add_defaults(saved: Array, defaults: Array) -> Array:
+static func _add_defaults(saved: Array, defaults: Array, replacements: Array) -> Array:
 	var ids := {}
 	_collect_ids(saved, ids)
 	var next := saved.duplicate()
 	for record: Dictionary in defaults:
 		if not ids.has(record.id):
 			next.append(record.duplicate(true))
+		elif not replacements.is_empty():
+			var index := next.find_custom(func(item: Dictionary) -> bool: return item.id == record.id)
+			if index >= 0 and replacements.has(next[index]):
+				next[index] = record.duplicate(true)
 	return next
 
 static func _collect_ids(tree: Array, ids: Dictionary) -> void:

@@ -39,6 +39,8 @@ func _build() -> Dictionary:
 			"enabled": _world._scene_ready(), "why": "LOADING", "run": Callable(_world, "_request_grid_palette"), "close": true},
 		{"label": "PIECES", "enabled": _world._scene_ready(), "why": "LOADING",
 			"run": Callable(_world, "_open_pieces"), "close": true},
+		{"label": "TERRAIN", "enabled": _world.terrain_available(), "why": "ADD A TERRAIN PIECE",
+			"run": Callable(_world, "_open_terrain"), "close": true},
 		{"label": "ATMOSPHERE", "value": "EDITED" if not _world.atmosphere.values_for(_world.zone_id).is_empty() else "",
 			"tone": "accent", "enabled": not _world.shifting, "why": "SHIFTING",
 			"run": Callable(_world, "_open_atmosphere"), "close": true},

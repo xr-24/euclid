@@ -67,7 +67,8 @@ func create(title: Variant, catalog: Array, template := "") -> Dictionary:
 		var source := directory.path_join(PieceDocument.filename(package if template.is_empty() else template))
 		var definition := Packages.definition(package)
 		var base_revision: int = int(definition.get("piece_revision", 0))
-		var seed := PieceDocument.new(source, definition.get("pieces", []), base_revision)
+		var seed := PieceDocument.new(source, definition.get("pieces", []), base_revision,
+			definition.get("piece_replacements", []))
 		if not seed.error.is_empty():
 			return {"ok": false, "message": seed.error}
 		var document_path := directory.path_join(PieceDocument.filename(record.id))

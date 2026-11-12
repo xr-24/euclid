@@ -95,6 +95,20 @@
         "height_scale": {"type": "number", "description": "Scale the batch and its offsets along its local Y axis", "minimum": 0.1, "maximum": 8},
         "cast_shadow": {"type": "boolean"}
       }
+    },
+    "terrain": {
+      "label": "Terrain",
+      "description": "A walkable surface for sculpting and painting with the terrain brush.",
+      "script": "res://scripts/pieces/terrain_piece.gd",
+      "required": ["terrain_size"],
+      "defaults": { "terrain_size": [128, 128] },
+      "fields": {
+        "terrain_size": { "type": "array", "description": "Width and depth in metres", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 16, "maximum": 1200 } },
+        "cast_shadow": { "type": "boolean" }
+      },
+      "storage": {
+        "terrain_surface": { "type": "string", "maxLength": 360000, "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+      }
     }
   }
 }

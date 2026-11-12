@@ -55,6 +55,12 @@ left-click or press Enter to apply. Water uses a material preview and saves
 per-surface color, reflectivity, roughness, ripple and foam settings where supported.
 Right-click returns to Build.
 
+In **Open Ground**, open **Build → Terrain** or press **B → Terrain**. Pick **Raise**,
+**Lower**, **Smooth**, **Flatten**, or **Paint**, then left-drag the brush ring across the
+ground. Hold middle mouse to look and move. Flatten samples the height where you begin.
+Paint blends dry earth, sand, and rock. Releasing the mouse saves one undoable stroke
+and updates the walkable surface.
+
 Let go of the palm beam to drop the prop where it is; it keeps the turn you gave it.
 Right-click while holding it to place it and lock its physics there instead. Right-click a
 locked prop to make it movable again, including while holding it. Unlocked props respond to gravity and can be pushed by

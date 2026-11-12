@@ -5,6 +5,7 @@ const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
+const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
 
 var _world: Node3D
 
@@ -20,10 +21,19 @@ func _run_registered_action(plan: Dictionary) -> Dictionary:
 	return _world._run_registered_action(plan)
 
 func _piece_command(plan: Dictionary) -> Dictionary:
+	if plan.tool == "undo_piece":
+		return TerrainTools.undo(_world.pieces, _world.player)
 	var placement: Array = []
 	if plan.tool == "add_piece" and not plan.has("parent") and not plan.get("piece_values", {}).has("position"):
 		placement = _world._scene_spawn_position()
 	return _world.pieces.execute(plan, placement)
+
+func _terrain_command(plan: Dictionary) -> Dictionary:
+	var result := TerrainTools.execute(_world.pieces, plan)
+	if result.ok and plan.tool == "terrain_brush":
+		var player: CharacterBody3D = _world.player
+		player.global_position = TerrainTools.above_surface(_world.pieces, player.global_position, plan.target)
+	return result
 
 func _inspect_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.inspect(plan.get("target", ""))

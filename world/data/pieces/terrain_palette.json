@@ -1,0 +1,7 @@
+{
+  "materials": [
+    {"id": "earth", "name": "Dry earth", "texture": "dry_ground_01", "tile": 3.0, "color": "ad9274"},
+    {"id": "sand", "name": "Sand", "texture": "coast_sand_01", "tile": 3.5, "color": "cbb092"},
+    {"id": "rock", "name": "Rock", "texture": "rocky_terrain_02", "tile": 4.0, "color": "8f8171"}
+  ]
+}

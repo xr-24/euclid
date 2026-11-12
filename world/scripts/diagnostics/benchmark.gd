@@ -121,7 +121,7 @@ static func run(world: Node3D) -> void:
 			print("CONSTRUCT_BENCHMARK " + JSON.stringify(sample))
 			if variant == "default" or suite == "looks":
 				await RenderingServer.frame_post_draw
-				var suffix := "" if variant == "default" else "_" + variant
+				var suffix: String = "" if variant == "default" else "_" + str(variant)
 				viewport.get_texture().get_image().save_png(output.path_join(zone + "_" + str(view[0]) + suffix + ".png"))
 		for node in hidden:
 			if node is GeometryInstance3D and variant == "hedge_shadows":

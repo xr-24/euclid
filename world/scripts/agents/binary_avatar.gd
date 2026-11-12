@@ -12,17 +12,23 @@ const FOLLOW_DISTANCE := 3.3
 const FOLLOW_SPEED := 5.4
 const COMMAND_DISTANCE := 3.8
 const TINT := Color("ff0e49")
+const HIGHLIGHT := Color("ff4669")
+var tint := TINT
+var highlight := HIGHLIGHT
+var slot := 0
 var mode := "follow"
 var _parked_zone := ""
 var _parked_at := Vector3.ZERO
 var _projection: MeshInstance3D
 var _last_player_position := Vector3.ZERO
 var _daylight := false
+static var _filaments: ArrayMesh
 
-static func projection(tint := TINT, daylight := false) -> MeshInstance3D:
+static func projection(color := TINT, daylight := false, accent := HIGHLIGHT) -> MeshInstance3D:
 	var shader := ShaderMaterial.new()
 	shader.shader = AVATAR_DAYLIGHT_SHADER if daylight else AVATAR_SHADER
-	shader.set_shader_parameter("core_color", tint)
+	shader.set_shader_parameter("core_color", color)
+	shader.set_shader_parameter("highlight_color", accent)
 	var visual := AvatarHover.new()
 	var model := AvatarMesh.build()
 	var points: ArrayMesh = model.mesh
@@ -37,8 +43,11 @@ static func projection(tint := TINT, daylight := false) -> MeshInstance3D:
 	signals.name = "Filaments"
 	var signal_material := ShaderMaterial.new()
 	signal_material.shader = FILAMENT_DAYLIGHT_SHADER if daylight else FILAMENT_SHADER
-	signal_material.set_shader_parameter("core_color", tint)
-	signals.mesh = AvatarFilaments.build(points)
+	signal_material.set_shader_parameter("core_color", color)
+	signal_material.set_shader_parameter("highlight_color", accent)
+	if _filaments == null:
+		_filaments = AvatarFilaments.build(points)
+	signals.mesh = _filaments
 	signals.skin = model.skin
 	signals.skeleton = NodePath("../ProjectionRig")
 	signals.extra_cull_margin = 0.24
@@ -49,29 +58,30 @@ static func projection(tint := TINT, daylight := false) -> MeshInstance3D:
 	return visual
 
 func _ready() -> void:
-	_projection = projection()
+	_projection = projection(tint, false, highlight)
 	add_child(_projection)
 	hide()
 
 func animation_player() -> MeshInstance3D:
 	return _projection
 
-func arrive(zone: String, player: CharacterBody3D, daylight := false) -> void:
+func arrive(zone: String, player: CharacterBody3D, daylight := false, occupied: Array[Vector3] = []) -> void:
 	if daylight != _daylight:
 		_daylight = daylight
 		var body := _projection.material_override as ShaderMaterial
 		var filaments := (_projection.get_node("Filaments") as MeshInstance3D).material_override as ShaderMaterial
 		body.shader = AVATAR_DAYLIGHT_SHADER if daylight else AVATAR_SHADER
 		filaments.shader = FILAMENT_DAYLIGHT_SHADER if daylight else FILAMENT_SHADER
-		body.set_shader_parameter("core_color", TINT)
-		filaments.set_shader_parameter("core_color", TINT)
+		for material in [body, filaments]:
+			material.set_shader_parameter("core_color", tint)
+			material.set_shader_parameter("highlight_color", highlight)
 	_last_player_position = player.global_position
 	if _parked_zone.is_empty():
 		_parked_zone = zone
-		_parked_at = _near_player(player)
+		_parked_at = _near_player(player, occupied)
 	visible = mode == "follow" or _parked_zone == zone
 	if visible:
-		global_position = _near_player(player) if mode == "follow" else _parked_at
+		global_position = _near_player(player, occupied) if mode == "follow" else _parked_at
 
 func can_command(camera: Camera3D, player: CharacterBody3D) -> bool:
 	if not is_visible_in_tree():
@@ -84,9 +94,9 @@ func can_command(camera: Camera3D, player: CharacterBody3D) -> bool:
 	query.exclude = [player.get_rid()]
 	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
-func set_mode(next: String, zone: String, player: CharacterBody3D) -> void:
+func set_mode(next: String, zone: String, player: CharacterBody3D, occupied: Array[Vector3] = []) -> void:
 	if not visible:
-		global_position = _near_player(player)
+		global_position = _near_player(player, occupied)
 		show()
 	_last_player_position = player.global_position
 	mode = next
@@ -94,7 +104,7 @@ func set_mode(next: String, zone: String, player: CharacterBody3D) -> void:
 		_parked_zone = zone
 		_parked_at = global_position
 
-func tick(player: CharacterBody3D, delta: float) -> void:
+func tick(player: CharacterBody3D, delta: float, occupied: Array[Vector3] = []) -> void:
 	if not visible:
 		return
 	var facing := player.global_position - global_position
@@ -106,7 +116,7 @@ func tick(player: CharacterBody3D, delta: float) -> void:
 	var teleported := player_position.distance_squared_to(_last_player_position) > 144.0
 	_last_player_position = player_position
 	if teleported:
-		global_position = _near_player(player)
+		global_position = _near_player(player, occupied)
 		return
 	var horizontal := Vector3(facing.x, 0, facing.z)
 	var excess := maxf(horizontal.length() - FOLLOW_DISTANCE, 0.0)
@@ -119,15 +129,20 @@ func tick(player: CharacterBody3D, delta: float) -> void:
 		return
 	var query := PhysicsRayQueryParameters3D.create(global_position, next)
 	query.exclude = [player.get_rid()]
-	if player.get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+	if player.get_world_3d().direct_space_state.intersect_ray(query).is_empty() and _room(next, occupied):
 		global_position = next
 
-static func _near_player(player: CharacterBody3D) -> Vector3:
+func _near_player(player: CharacterBody3D, occupied: Array[Vector3] = []) -> Vector3:
 	var origin := player.global_position + Vector3.UP * HOVER_HEIGHT
 	var space := player.get_world_3d().direct_space_state
-	for offset in [Vector3(-1.55, 0, 2.9), Vector3(1.55, 0, 2.9), Vector3(-1.55, 0, -2.9), Vector3(1.55, 0, -2.9)]:
+	var angle := [0.0, -0.57, 0.57, -1.25, 1.25, -2.0, 2.0, PI][slot % 8] as float
+	for step in 12:
+		var offset := (player.global_basis * Vector3.FORWARD).rotated(Vector3.UP, angle + TAU * step / 12.0) * FOLLOW_DISTANCE
 		var query := PhysicsRayQueryParameters3D.create(origin, origin + offset)
 		query.exclude = [player.get_rid()]
-		if space.intersect_ray(query).is_empty():
+		if _room(origin + offset, occupied) and space.intersect_ray(query).is_empty():
 			return origin + offset
-	return origin
+	return origin + Vector3.UP * (0.8 + slot * 1.1)
+
+static func _room(point: Vector3, occupied: Array[Vector3]) -> bool:
+	return occupied.all(func(other: Vector3) -> bool: return point.distance_squared_to(other) >= 1.44)

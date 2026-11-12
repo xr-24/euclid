@@ -1,6 +1,7 @@
 extends RefCounted
 ## Movement only: no zone loading, UI, HTTP or persistence dependencies.
 const JUMP_SPEED := 4.8
+const PROP_PUSH_ACCELERATION := 20.0
 
 func step(player: CharacterBody3D, delta: float, direction: Vector3, water: Dictionary, controls: bool) -> void:
 	var depth: float = water.level - player.position.y if water.has else -1.0
@@ -25,3 +26,12 @@ func step(player: CharacterBody3D, delta: float, direction: Vector3, water: Dict
 		if controls and Input.is_action_just_pressed("jump") and player.is_on_floor():
 			player.velocity.y = JUMP_SPEED
 	player.move_and_slide()
+	for index in player.get_slide_collision_count():
+		var hit := player.get_slide_collision(index)
+		var body := hit.get_collider() as RigidBody3D
+		if body and not body.freeze:
+			var normal := hit.get_normal()
+			var away := Vector3(-normal.x, 0.0, -normal.z)
+			var push := direction.dot(away)
+			if push > 0.0 and body.linear_velocity.dot(away) < speed * push:
+				body.apply_central_impulse(away.normalized() * minf(body.mass, 25.0) * push * delta * PROP_PUSH_ACCELERATION)

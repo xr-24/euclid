@@ -14,9 +14,14 @@ var _draft_value := {}
 
 func _init(path: String, companion: Node) -> void:
 	_path = path
+	attach_companion(companion)
+
+func attach_companion(companion: Node) -> void:
+	if companion == _companion:
+		return
 	_companion = companion
-	if not path.is_empty() and FileAccess.file_exists(path):
-		var file := FileAccess.open(path, FileAccess.READ)
+	if companion and not _path.is_empty() and FileAccess.file_exists(_path):
+		var file := FileAccess.open(_path, FileAccess.READ)
 		if file and file.get_length() <= 65536:
 			var saved: Variant = JSON.parse_string(file.get_as_text())
 			if saved is Dictionary and saved.get("schema_version") == 1 and _valid_for(saved.get("clip"), companion):
@@ -124,7 +129,9 @@ func _player(id: String, workshop: RefCounted) -> Node:
 	return workshop.animation_player(id) if workshop else null
 
 func _targets(workshop: RefCounted) -> Array[Dictionary]:
-	var targets: Array[Dictionary] = [{"id": COMPANION, "name": "Codex companion", "channels": ["lift", "drift", "joint_rotation"]}]
+	var targets: Array[Dictionary] = []
+	if is_instance_valid(_companion):
+		targets.append({"id": COMPANION, "name": "Codex companion", "channels": ["lift", "drift", "joint_rotation"]})
 	if workshop:
 		targets.append_array(workshop.animation_targets())
 	return targets

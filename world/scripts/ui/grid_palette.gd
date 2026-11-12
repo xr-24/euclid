@@ -17,6 +17,7 @@ var _fields := {}
 var _numeric_fields := {}
 var _form_baseline := {}
 var _color: ColorPickerButton
+var _color_label: Label
 var _name: LineEdit
 var _library: OptionButton
 var _place_asset: Button
@@ -96,13 +97,15 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	var color_field := VBoxContainer.new()
 	properties.add_child(color_field)
 	color_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var color_label := Label.new()
-	color_label.text = "Color"
-	color_field.add_child(color_label)
+	_color_label = Label.new()
+	color_field.add_child(_color_label)
 	_color = ColorPickerButton.new()
 	_color.edit_alpha = false
 	_color.custom_minimum_size.y = 30
+	_color.tooltip_text = "Choose a color, then select Apply"
+	_color.color_changed.connect(_show_color_code)
 	color_field.add_child(_color)
+	_show_color_code(_color.color)
 	var actions := HBoxContainer.new()
 	add_child(actions)
 	var action_buttons := {}
@@ -183,6 +186,7 @@ func restore_view(view: Dictionary) -> bool:
 				input.value = fields[key].value
 				input.get_line_edit().text = fields[key].text
 		_color.color = view.get("color", _color.color)
+		_show_color_code(_color.color)
 		_name.text = view.get("name", _name.text)
 		_behaviors.restore_view(view.get("behavior", {}))
 	for index in range(1, _library.item_count):
@@ -388,4 +392,8 @@ func _select(index: int) -> void:
 	for key in _numeric_fields:
 		_fields[_numeric_fields[key]].value = record[key]
 	_color.color = Color.html(record.color)
+	_show_color_code(_color.color)
 	_form_baseline = _form_values()
+
+func _show_color_code(color: Color) -> void:
+	_color_label.text = "Color  #%s" % color.to_html(false).to_upper()

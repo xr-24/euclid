@@ -1,6 +1,7 @@
 #include "res://shaders/avatar_signal.gdshaderinc"
 
 uniform vec4 core_color : source_color = vec4(1.0, 0.004, 0.048, 1.0);
+uniform vec4 highlight_color : source_color = vec4(1.0, 0.061, 0.14, 1.0);
 // A nonnegative value freezes the effect for reproducible rendered comparisons.
 uniform float signal_time = -1.0;
 
@@ -30,9 +31,9 @@ void vertex() {
 		* (0.65 + contour * 1.2 + shoulder * 5.0) * sparkle;
 	float face = smoothstep(0.64, 0.75, p.y) * smoothstep(0.045, 0.13, p.z);
 	brightness *= 1.0 - face * 0.87;
-	point_color = mix(core_color.rgb * vec3(0.72, 0.24, 0.42),
-		mix(core_color.rgb, vec3(1.0, 0.015, 0.20), shoulder * 0.55 + flash * 0.34), seed * seed) * brightness;
-	point_color = mix(point_color, vec3(1.0, 0.16, 0.32) * brightness,
+	vec3 tint = mix(core_color.rgb, highlight_color.rgb, smoothstep(-0.8, 0.9, p.y) * 0.55);
+	point_color = mix(tint * 0.42, mix(tint, highlight_color.rgb, shoulder * 0.55 + flash * 0.34), seed * seed) * brightness;
+	point_color = mix(point_color, highlight_color.rgb * brightness,
 		shoulder * smoothstep(0.72, 0.99, seed) * 0.65);
 	// Sparse points peel into vertical echoes. The anatomical carrier is never visible.
 	float displaced = step(0.990, fract(seed * 97.17)) * smoothstep(0.28, 0.68, integrity);
@@ -65,8 +66,8 @@ void fragment() {
 	}
 #ifdef AVATAR_DAYLIGHT
 	// A dark edge gives each point contrast on pale stone, sand, and sky.
-	vec3 shadow = mix(vec3(0.036, 0.002, 0.019), core_color.rgb * 0.14, 0.6);
-	vec3 highlight = mix(core_color.rgb, vec3(1.0, 0.76, 0.86), 0.18);
+	vec3 shadow = core_color.rgb * 0.09;
+	vec3 highlight = mix(core_color.rgb, highlight_color.rgb, smoothstep(0.15, 1.1, length(point_color)));
 	float intensity = clamp(length(point_color) * 0.42, 0.0, 1.0);
 	float core = 1.0 - smoothstep(0.34, 0.76, radius);
 	vec3 pigment = mix(shadow, highlight, core * intensity);

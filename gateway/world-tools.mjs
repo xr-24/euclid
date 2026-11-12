@@ -54,7 +54,7 @@ export function createWorldBridge(assets) {
     return { command: session.pending?.command ?? null };
   }
 
-  async function call(id, plan, signal) {
+  async function call(id, plan, signal, actor) {
     prune();
     const session = sessions.get(id);
     if (!session || Date.now() - session.seen > 12000) return { ok: false, message: 'Open the Codex CLI from a running Euclid world.' };
@@ -71,13 +71,14 @@ export function createWorldBridge(assets) {
       const abort = () => finish({ ok: false, message: 'World tool cancelled.' });
       const timer = setTimeout(() => finish({ ok: false, message: 'Euclid did not report a result. Inspect the current environment before retrying.' }), 35000);
       const scope = commandFor(plan.tool, session.context)?.scope === 'scene' ? { zone: session.context.current } : {};
-      const command = { id: randomUUID(), ...scope, ...plan, expires_at: (Date.now() + 35000) / 1000 };
+      const command = { id: randomUUID(), ...scope, ...plan, ...(actor ? { agent_peer: actor } : {}),
+        expires_at: (Date.now() + 35000) / 1000 };
       session.pending = { command, finish };
       signal.addEventListener('abort', abort, { once: true });
     });
   }
 
-  async function rpc(session, message, signal) {
+  async function rpc(session, message, signal, actor = '') {
     const id = message?.id ?? null;
     const reply = result => ({ jsonrpc: '2.0', id, result });
     const error = (code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
@@ -139,7 +140,7 @@ export function createWorldBridge(assets) {
           }
         }
         if (!validWorldPlan(plan, context, true)) return error(-32602, 'Invalid world tool arguments');
-        return send(await call(session, plan, signal));
+        return send(await call(session, plan, signal, actor));
       }
       default: return error(-32601, 'Method not found');
     }

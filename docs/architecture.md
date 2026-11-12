@@ -29,7 +29,8 @@ All paths below are relative to `world/scripts/`.
 | `ui/world_ui.gd` | Menus and application previews | Emits user-intent signals; cannot load zones or save the world |
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
-| `agents/development_host.gd` | F4 Workbench panel, F2 console, development actions, benchmarks, native CLI and voice | Created with the world; uses its overlay and live extension lifecycle, never zones or saves directly |
+| `agents/development_host.gd` | F4 Workbench, Agent Chat, development actions, benchmarks, native CLI and voice | Routes conversations to the task gateway and avatar activation to the world coordinator |
+| `agents/agent_presence.gd` | Contact-triggered agent projections and their spacing | Receives player and zone state and never handles chat or network requests |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |
 | `ui/terminal_view.gd`, `agents/terminal_client.gd` | The F4 terminal: drawing the gateway's screen and sending keys | The shell and its screen live in `gateway/terminal/`, behind the Workbench capability |
@@ -134,10 +135,20 @@ under TAA, FSR upscaling and tone mapping, and keeps it out of mirrors and share
 
 Pages are plain data from `player/wrist_pages.gd`: an id, a tab title, rows and an optional
 log. Rows carry a label and at most a short state on the right (HERE, F4, OFFLINE); there is no
-descriptive text. The face uses the Grid's red-on-black colours. A row runs a Callable on Enter or takes one typed line, and can be
-disabled with a reason, ask for a second Enter, or lower the wrist first. Adding a page is a new
+descriptive text. The face uses the Grid's red-on-black colours. M1 or Enter activates the selected
+row or submits a typed line. M2 goes back. A row can be disabled with a reason, require a second
+confirmation, or lower the wrist first. Adding a page is a new
 function in that file; any object with `pages()` and `status_line()` can stand in for it, which
 is how `diagnostics/core_tests.gd` checks the keys without a world.
+
+`player/scene_scanner.gd` aims through the scanner frame and uses the existing scene commands to
+inspect and edit props. `ui/scanner_preview.gd` renders a small thumbnail when the target changes.
+Zone builders register water bodies with `workshop/water_edits.gd`, which applies per-body material
+settings and stores them by zone and body ID.
+
+`player/prop_grabber.gd` owns the temporary pose and beam while a prop is held. Releasing or locking
+commits through `workshop/world_tools.gd` as one scene edit. Spawned props use rigid bodies, and
+eligible authored scenery gets a box collider when unlocked.
 
 ## Source workbench
 

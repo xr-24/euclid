@@ -13,6 +13,7 @@ const DIM := Color("5c2024")
 const BORDER := Color("9c252c")
 const WARN := Color("ff9466")
 const BASE_WIDTH := 1008.0
+const SCAN_SPLIT := 0.45
 
 var wrist # wrist_computer.gd
 
@@ -39,7 +40,17 @@ func _draw() -> void:
 		var box := Rect2(area.position.x, area.end.y - 46.0 * u, area.size.x, 46.0 * u)
 		_draw_input(font, u, box)
 		area = area.grow_side(SIDE_BOTTOM, -62.0 * u)
-	if page.has("log"):
+	if page.has("scan_label"):
+		var preview := scanner_frame(size)
+		var split := preview.size.x
+		draw_rect(preview, Color(BORDER, 0.75), false, 2.0 * u)
+		if page.has("preview"):
+			draw_texture_rect(page.preview, preview.grow(-3.0 * u), false)
+		var label := str(page.scan_label) if not str(page.scan_label).is_empty() else "Aim the frame at a prop or water"
+		draw_string(font, Vector2(preview.position.x, preview.end.y + 26.0 * u), _fit(font, label, split, _px(17, u)),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, _px(17, u), BRIGHT)
+		_rows(font, u, Rect2(area.position + Vector2(split + 22.0 * u, 0), Vector2(area.size.x - split - 22.0 * u, area.size.y)), page)
+	elif page.has("log"):
 		var split := area.size.x * 0.4
 		_rows(font, u, Rect2(area.position, Vector2(split, area.size.y)), page)
 		var log_area := Rect2(area.position.x + split + 34.0 * u, area.position.y, area.size.x - split - 34.0 * u, area.size.y)
@@ -47,6 +58,12 @@ func _draw() -> void:
 		_log(font, u, log_area, page.log)
 	else:
 		_rows(font, u, area, page)
+
+static func scanner_frame(face_size: Vector2) -> Rect2:
+	var u := face_size.x / BASE_WIDTH
+	var inset := 34.0 * u
+	var width := (face_size.x - inset * 2.0) * SCAN_SPLIT
+	return Rect2(Vector2(inset, 132.0 * u), Vector2(width, width * 0.8))
 
 func _tabs(font: Font, u: float, left: float, top: float) -> float:
 	var height := 36.0 * u
@@ -128,9 +145,12 @@ func _draw_input(font: Font, u: float, box: Rect2) -> void:
 	# Keep the end of a long line in view, the way a single-line field scrolls.
 	while text.length() > 1 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > room:
 		text = text.substr(1)
+	var text_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	if wrist.entry_selected:
+		draw_rect(Rect2(left - 2.0 * u, box.get_center().y - 12.0 * u, text_width + 4.0 * u, 24.0 * u), Color(ACCENT, 0.36))
 	draw_string(font, Vector2(left, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, BRIGHT)
-	if fposmod(wrist.time, 1.0) < 0.55:
-		var caret_x := left + (0.0 if wrist.entry.is_empty() else font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x) + 2.0 * u
+	if not wrist.entry_selected and fposmod(wrist.time, 1.0) < 0.55:
+		var caret_x := left + text_width + 2.0 * u
 		draw_rect(Rect2(caret_x, box.get_center().y - 11.0 * u, 2.0 * u, 22.0 * u), ACCENT)
 
 ## Only what the wrist has to say back: why a row is unavailable, or to press Enter again.

@@ -6,7 +6,7 @@ extends Node
 ##
 ##   Tab            raise / lower          Escape   lower, or raise on SYSTEM
 ##   Q / E, ← →     previous / next page   ↑ ↓, wheel   select
-##   Enter          choose; on a typing row, takes the keyboard for one line
+##   M1 / Enter     choose / submit         M2       back
 ##
 ## Walking and looking stay free while the wrist is up; only typing holds you still.
 ## The face is drawn into its own viewport at the size it appears, then laid over the view in
@@ -20,8 +20,6 @@ const OPEN_SECONDS := 0.3
 const CLOSE_SECONDS := 0.2
 ## The face's share of the window width (its height follows the 3:2 face).
 const SCREEN_WIDTH := 0.42
-## How far the face leans from above the emitter toward the middle of the view, 0 to 1.
-const LEAN := 0.45
 ## Where the emitter sits on the forearm, lifted off the sleeve, in camera space.
 const EMITTER_LIFT := Vector3(0, 0.03, 0)
 const INPUT_LIMIT := 240
@@ -33,6 +31,7 @@ var open_t := 0.0
 var page := 0
 var typing := false
 var entry := ""
+var entry_selected := false
 var time := 0.0
 var _pages: Array = []
 var _cursors := {}
@@ -132,6 +131,13 @@ func cursor() -> int:
 	var count := rows().size()
 	return clampi(int(_cursors.get(current().get("id", ""), 0)), 0, maxi(0, count - 1))
 
+func reset_cursor(id: String) -> void:
+	_cursors.erase(id)
+
+func scanner_pixel() -> Vector2:
+	var face_size := Vector2(_viewport.size)
+	return _rect.position + _rect.size * (Face.scanner_frame(face_size).get_center() / face_size)
+
 func status_line() -> String:
 	return source.status_line() if source != null and source.has_method("status_line") else ""
 
@@ -168,7 +174,12 @@ func toggle_wrist() -> void:
 func turn(direction: int) -> void:
 	if _pages.is_empty():
 		return
+	if current().get("id") == "scan":
+		raise_wrist("build")
+		return
 	page = posmod(page + direction, _pages.size())
+	if current().get("id") == "scan":
+		page = posmod(page + direction, _pages.size())
 	typing = false
 	_armed = ""
 
@@ -196,7 +207,8 @@ func choose() -> void:
 	var run: Callable = row.get("run", Callable())
 	if row.get("input", false):
 		typing = true
-		entry = ""
+		entry = str(row.get("entry", ""))
+		entry_selected = not entry.is_empty()
 		_submit_to = run
 		_then_page = str(row.get("then", ""))
 		return
@@ -216,6 +228,20 @@ func handle(event: InputEvent) -> bool:
 		var button := event as InputEventMouseButton
 		if not is_open or not button.pressed:
 			return false
+		if button.button_index == MOUSE_BUTTON_LEFT:
+			if typing:
+				_submit()
+			else:
+				choose()
+			return true
+		if button.button_index == MOUSE_BUTTON_RIGHT:
+			if typing:
+				typing = false
+			elif current().get("id") == "scan":
+				raise_wrist("build")
+			else:
+				lower_wrist()
+			return true
 		if button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			move(-1)
 			return true
@@ -260,28 +286,36 @@ func handle(event: InputEvent) -> bool:
 	return true
 
 func _type(key: InputEventKey) -> bool:
+	if key.ctrl_pressed and key.keycode == KEY_A:
+		entry_selected = true
+		return true
 	match key.keycode:
 		KEY_ESCAPE:
 			typing = false
 		KEY_ENTER, KEY_KP_ENTER:
 			_submit()
 		KEY_BACKSPACE:
-			entry = entry.left(-1)
+			entry = "" if entry_selected else entry.left(-1)
+			entry_selected = false
+		KEY_LEFT, KEY_RIGHT:
+			entry_selected = false
 		KEY_TAB:
 			lower_wrist()
 		_:
 			if key.ctrl_pressed and key.keycode == KEY_V:
 				var pasted := DisplayServer.clipboard_get().replace("\r", " ").replace("\n", " ")
-				entry = (entry + pasted).left(INPUT_LIMIT)
-			elif key.unicode >= 32 and not key.ctrl_pressed and entry.length() < INPUT_LIMIT:
-				entry += char(key.unicode)
+				entry = (("" if entry_selected else entry) + pasted).left(INPUT_LIMIT)
+				entry_selected = false
+			elif key.unicode >= 32 and not key.ctrl_pressed:
+				entry = (("" if entry_selected else entry) + char(key.unicode)).left(INPUT_LIMIT)
+				entry_selected = false
 	return true
 
 func _submit() -> void:
 	var line := entry.strip_edges()
 	entry = ""
 	typing = false
-	if line.is_empty() or not _submit_to.is_valid():
+	if not _submit_to.is_valid() or (line.is_empty() and current().get("id") != "scan"):
 		return
 	if not _then_page.is_empty():
 		raise_wrist(_then_page)
@@ -328,7 +362,8 @@ func _layout(window: Vector2) -> void:
 	var face := Vector2(pixels)
 	var height := face.y * _k
 	var margin := window.y * 0.03
-	var center := Vector2(_emitter.x + (window.x * 0.5 - _emitter.x) * LEAN * _k, _emitter.y - window.y * 0.012 - height * 0.5)
+	var above_wrist := _emitter - Vector2(0.0, window.y * 0.012 + height * 0.5)
+	var center := above_wrist.lerp(window * 0.5, _k)
 	center.x = clampf(center.x, face.x * 0.5 + margin, maxf(face.x * 0.5 + margin, window.x - face.x * 0.5 - margin))
 	center.y = clampf(center.y, height * 0.5 + margin, maxf(height * 0.5 + margin, window.y - height * 0.5 - margin))
 	_rect = Rect2(center - Vector2(face.x, height) * 0.5, Vector2(face.x, height))

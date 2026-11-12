@@ -1,6 +1,7 @@
 #include "res://shaders/avatar_signal.gdshaderinc"
 
 uniform vec4 core_color : source_color = vec4(1.0, 0.004, 0.048, 1.0);
+uniform vec4 highlight_color : source_color = vec4(1.0, 0.061, 0.14, 1.0);
 uniform float signal_time = -1.0;
 uniform vec2 hover_pose = vec2(0.0);
 varying vec3 world_point;
@@ -33,9 +34,9 @@ void fragment() {
 	float breakup = smoothstep(0.42, 0.61, cluster * 0.60 + segments * 0.40);
 	float fibre = hair_tip * (0.15 + pulse * 1.2 + head * 2.6) * (0.25 + phase * phase);
 	float streak = sin(along * 3.1415927) * (0.11 + 0.89 * pulse) * (0.47 + phase * 0.22);
-	vec3 hair_color = mix(core_color.rgb, vec3(1.0, 0.032, 0.25), 0.62);
-	hair_color = mix(hair_color, vec3(1.0, 0.41, 0.58), step(0.93, phase) * head);
-	vec3 line_color = mix(vec3(0.055, 0.78, 1.0), vec3(1.0, 0.014, 0.12), step(0.52, phase));
+	vec3 hair_color = mix(core_color.rgb, highlight_color.rgb, 0.62);
+	hair_color = mix(hair_color, mix(highlight_color.rgb, vec3(1.0), 0.25), step(0.93, phase) * head);
+	vec3 line_color = mix(highlight_color.rgb, core_color.rgb, step(0.52, phase));
 	vec3 signal_color = mix(line_color, hair_color * fibre * 1.4, COLOR.r);
 	float coverage = width * COLOR.b * mix(streak * 0.84, hair_tip, COLOR.r) * breakup;
 #ifdef AVATAR_DAYLIGHT

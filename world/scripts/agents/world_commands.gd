@@ -91,7 +91,9 @@ func _create_environment(plan: Dictionary) -> Dictionary:
 
 func _companion_mode(plan: Dictionary) -> Dictionary:
 	var mode: String = Commands.command(plan.tool).mode
-	_world.companion.set_mode(mode, _world.zone_id, _world.player)
+	var peer: String = plan.agent_peer
+	_world._activate_agent(peer)
+	_world.agent_presence.set_mode(peer, mode, _world.zone_id, _world.player)
 	return {"ok": true, "message": "I’ll follow you." if mode == "follow" else "I’ll stay here.", "mode": mode}
 
 func _unsupported_command(_plan: Dictionary) -> Dictionary:

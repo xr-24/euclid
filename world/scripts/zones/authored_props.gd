@@ -41,6 +41,8 @@ static func register(root: Node3D, id: String, node: Node3D, asset: String, yaw:
 			picker.get_parent().set_meta("entity_id", id)
 			shapes[picker] = false
 	var entry := {"record": record, "node": node, "shapes": shapes, "basis": node.basis}
+	if not options.get("placement_surface", false) and not node.has_node("TerminalSurface"):
+		entry["physics_bounds"] = _bounds(node, Transform3D.IDENTITY)
 	if node is RigidBody3D:
 		var parts := {}
 		var boxes := {}

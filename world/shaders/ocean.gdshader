@@ -24,6 +24,7 @@ uniform float refraction = 0.035;
 uniform float foam_width = 0.45;      // metres of depth that carry shore foam
 uniform float foam_amount = 1.0;
 uniform float roughness_value : hint_range(0.0, 1.0) = 0.035;
+uniform float reflection_strength = 1.0;
 // Where the shoreline solver runs (shore_water.gdshader) this surface steps aside, with the
 // matching a continuous, level seam at the simulation boundary.
 uniform bool sim_enabled = false;
@@ -150,7 +151,7 @@ void fragment() {
 		EMISSION = transmitted * (1.0 - foam);
 		ROUGHNESS = mix(roughness_value, 0.85, foam);
 		METALLIC = 0.0;
-		SPECULAR = mix(0.5, 0.2, foam);
+		SPECULAR = mix(0.5, 0.2, foam) * reflection_strength;
 		ALBEDO *= 1.0 - cfx_wire * 0.85;
 		EMISSION += cfx.rgb;
 	}

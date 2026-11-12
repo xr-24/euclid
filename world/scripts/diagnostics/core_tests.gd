@@ -527,6 +527,11 @@ func _check_authored_dressing(path: String) -> void:
 	var shape := CollisionShape3D.new()
 	shape.shape = BoxShape3D.new()
 	statue.add_child(shape)
+	var model := MeshInstance3D.new()
+	model.mesh = BoxMesh.new()
+	var finish := StandardMaterial3D.new()
+	model.material_override = finish
+	statue.add_child(model)
 	zone.add_child(statue)
 	var id := "a".repeat(32)
 	AuthoredProps.register(zone, id, statue, "test", 0.0, {"label": "River statue", "position": [0, 0, 0]})
@@ -541,13 +546,15 @@ func _check_authored_dressing(path: String) -> void:
 	_check(tools.execute("edit", {"id": id, "changes": changes}).ok and statue.position.x == 3.0
 		and is_equal_approx(statue.rotation_degrees.y, 90.0) and statue.scale == Vector3.ONE * 1.5,
 		"transform an authored prop and its collision together")
-	_check(not tools.execute("edit", {"id": id, "changes": {"color": "0088ff"}}).ok,
-		"keep the original finish on authored props")
+	_check(tools.execute("edit", {"id": id, "changes": {"color": "0088ff"}}).ok
+		and model.material_override.albedo_color.is_equal_approx(Color("0088ff")) and finish.albedo_color == Color.WHITE,
+		"tint an authored prop without changing its shared finish")
 	_check(tools.execute("delete", {"id": id}).ok and not statue.visible and shape.disabled,
 		"hide authored visuals and collision together")
 	var state: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	_check(state.schema_version == 2 and state.entities == [legacy] and state.dressing[id].hidden
-		and state.undo.size() == 2 and authored.position == [0, 0, 0], "save overrides and history together without changing authored data")
+		and state.dressing[id].color == "0088ff" and state.undo.size() == 3 and authored.position == [0, 0, 0],
+		"save overrides and history together without changing authored data")
 	tools = WorldTools.new(path)
 	tools.attach(zone)
 	_check(tools.execute("inspect", {"id": id}).get("entity", {}).get("hidden", false) and shape.disabled,
@@ -556,7 +563,7 @@ func _check_authored_dressing(path: String) -> void:
 		and not shape.disabled and statue.position.x == 3.0, "undo the hide after reload without discarding earlier edits")
 	var restored := SceneCommands.execute(tools, {"tool": "restore_dressing", "target": id}, [])
 	_check(restored.ok and not restored.entity.overridden and statue.position == Vector3.ZERO
-		and statue.scale == Vector3.ONE, "restore the authored defaults")
+		and statue.scale == Vector3.ONE and model.material_override == finish, "restore the authored defaults")
 	_check(tools.execute("undo").ok and statue.position.x == 3.0, "undo restoring the authored defaults")
 	state = JSON.parse_string(FileAccess.get_file_as_string(path))
 	state.undo = [{"id": id, "previous": [], "dressing": {}}]
@@ -600,6 +607,12 @@ func _check_registered_props() -> void:
 		"rotate and scale a sloped prop relative to its authored basis")
 	_check(tools.execute("restore_dressing", {"id": rock_id}).ok and rock.basis.is_equal_approx(rock_basis),
 		"restore the exact authored basis and scale")
+	var unlocked := tools.commit_grab(rock_id, rock, {"locked": false})
+	var released := tools.scene_node(rock_id) as RigidBody3D
+	_check(unlocked.ok and released != null and not released.freeze and picker.get_child(0).disabled,
+		"unlock an authored static prop with a rigid collider and disable its original picker")
+	_check(tools.execute("undo").ok and released != null and released.freeze,
+		"undo the unlock and restore the authored prop's locked state")
 	floater.position.x += 3.0
 	var renamed := tools.execute("edit", {"id": floater_id, "changes": {"name": "Drifting buoy"}})
 	_check(renamed.ok and renamed.entity.position[0] == 2.0 and renamed.entity.live_position[0] == 5.0,
@@ -713,6 +726,15 @@ func _check_text_tools() -> void:
 	console.setup(PackedStringArray(["> hello", "world"]), false, false)
 	console.update_display(PackedStringArray(["> hello", "world", "more output"]), false)
 	_check(console._history.visible_characters >= 0, "new console output types in")
+	var agents := {"local-codex": "Codex", "local-claude": "Claude", "muse": "Cloud · muse"}
+	var tabs: Array[String] = ["local-codex", "local-claude", "muse"]
+	console.set_conversations(agents, tabs, "local-codex")
+	console._entry.text = "Unsent Codex request"
+	console.set_conversations(agents, tabs, "local-claude")
+	_check(console._entry.text.is_empty() and console._tabs.current_tab == 1 and not console._cli.visible,
+		"switch to Claude without carrying the Codex composer or CLI shortcut")
+	console.set_conversations(agents, tabs, "local-codex")
+	_check(console._entry.text == "Unsent Codex request", "restore the selected conversation's unsent text")
 	console.free()
 
 func _check_development_session() -> void:
@@ -722,9 +744,12 @@ func _check_development_session() -> void:
 	var prompts := PackedStringArray(["Fix the failing check"])
 	session.save_console(lines, prompts)
 	session.save_view("world/scripts/world.gd", "Checks")
+	session.save_chat_tabs(["local-codex", "local-claude", "muse"], "muse")
 	var reopened := DevelopmentSession.new(path)
 	_check(reopened.lines == lines and reopened.prompts == prompts, "reopen console scrollback and prompt recall")
 	_check(reopened.file == "world/scripts/world.gd" and reopened.tab == "Checks", "reopen selected Workbench file and tab")
+	_check(reopened.chat_tabs == ["local-codex", "local-claude", "muse"] and reopened.chat_peer == "muse",
+		"reopen the same Agent Chat conversations and selection")
 	Store.write_json(path, {"schema_version": 2, "lines": Array(lines)})
 	_check(DevelopmentSession.new(path).lines.is_empty(), "ignore unsupported development session saves")
 	DirAccess.remove_absolute(path)
@@ -878,6 +903,17 @@ func _check_wrist_computer() -> void:
 	_check(wrist.handle(_press(KEY_ESCAPE)) and wrist.is_open, "raise the wrist with Escape")
 	wrist.handle(_press(KEY_ESCAPE))
 	_check(not wrist.is_open, "lower it again with Escape")
+	var confirm := InputEventMouseButton.new()
+	confirm.button_index = MOUSE_BUTTON_LEFT
+	confirm.pressed = true
+	var back := InputEventMouseButton.new()
+	back.button_index = MOUSE_BUTTON_RIGHT
+	back.pressed = true
+	wrist.raise_wrist("two")
+	wrist.move(-1)
+	_check(wrist.handle(confirm) and wrist.typing, "M1 starts editing the selected wrist row")
+	_check(wrist.handle(back) and not wrist.typing and wrist.is_open, "M2 backs out of a wrist edit")
+	_check(wrist.handle(back) and not wrist.is_open, "M2 lowers the wrist from a top-level page")
 	wrist.free()
 
 func _check_agents_panel() -> void:

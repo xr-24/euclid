@@ -20,11 +20,13 @@ const GridAgentClient = preload("res://scripts/agents/grid_agent_client.gd")
 const AssetClient = preload("res://scripts/agents/asset_client.gd")
 const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
-const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
-const TaskPresence = preload("res://scripts/agents/task_presence.gd")
+const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
+const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
 const PlayerAvatar = preload("res://scripts/player/player_avatar.gd")
+const PropGrabber = preload("res://scripts/player/prop_grabber.gd")
+const SceneScanner = preload("res://scripts/player/scene_scanner.gd")
 const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
 const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
@@ -45,6 +47,8 @@ var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
 var player_avatar: PlayerAvatar
+var grabber: PropGrabber
+var scanner: SceneScanner
 var player_rig: RigAuthoring
 var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
@@ -55,7 +59,7 @@ var sun: DirectionalLight3D
 var hud: Label
 var hint: Label
 var gateway_label: Label
-var overlay: PanelContainer
+var overlay: DesktopPanel
 var overlay_content: VBoxContainer
 var overlay_panel_style: StyleBoxFlat
 var interactables: Array[Dictionary] = []
@@ -93,15 +97,13 @@ var _palette_host := GridPaletteHost.new()
 var grid_agent: HTTPRequest
 var world_bridge: HTTPRequest
 var environment_library: RefCounted
-var companion: Node3D
+var agent_presence := AgentPresence.new()
 var scene_animations: RefCounted
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
 var _live := LiveExtensions.new()
 var _dev: DevelopmentHost = DevelopmentHost.new(self)
-var _task_presence: TaskPresence
-var _task_agents: Array = []
 var _world_commands := WorldCommands.new(self)
 var _development_commands := DevelopmentCommands.new(self)
 
@@ -129,10 +131,8 @@ func _ready() -> void:
 	behavior_runtime = BehaviorRuntime.new(player)
 	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library, behavior_runtime)
 	_register_live_extensions()
-	companion = BinaryAvatar.new()
-	companion.name = "CodexAvatar"
-	add_child(companion)
-	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", companion.animation_player())
+	add_child(agent_presence)
+	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", null)
 	_setup_ui()
 	_setup_gateway()
 	WorldArt.init(self)
@@ -252,6 +252,11 @@ func _setup_player() -> void:
 	player_avatar.mount(player, camera)
 	player_rig = RigAuthoring.new(player_avatar, "" if smoke_mode else "user://player-rig.json")
 	wrist = WristComputer.new()
+	scanner = SceneScanner.new()
+	add_child(scanner)
+	scanner.setup("" if smoke_mode else "user://water-edits.json", wrist)
+	grabber = PropGrabber.new()
+	add_child(grabber)
 	wrist.mount(self, camera, player_avatar.hands, WristPages.new(self))
 
 func _setup_ui() -> void:
@@ -287,7 +292,7 @@ func _setup_ui() -> void:
 	var crosshair := _ui_label(ui, Vector2.ZERO, 14)
 	crosshair.text = "·"
 	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	overlay = PanelContainer.new()
+	overlay = DesktopPanel.new()
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.offset_left = 80
@@ -301,9 +306,7 @@ func _setup_ui() -> void:
 	style.content_margin_bottom = 20
 	overlay_panel_style = style
 	overlay.add_theme_stylebox_override("panel", overlay_panel_style)
-	overlay_content = VBoxContainer.new()
-	overlay_content.add_theme_constant_override("separation", 10)
-	overlay.add_child(overlay_content)
+	overlay_content = overlay.content
 	overlay.hide()
 
 func _ui_label(parent: Node, at: Vector2, font_size: int) -> Label:
@@ -439,6 +442,8 @@ func _show_grid_palette() -> void:
 	_button("Back  [Esc]", _close_panel)
 
 func _run_grid_agent(prompt: String, placement: Array, palette: Control) -> void:
+	if gateway_connected:
+		_activate_agent(AgentPresence.CODEX)
 	var requested_zone := zone_root
 	var response: Dictionary = await grid_agent.plan(prompt)
 	if not is_instance_valid(palette) or not palette.is_visible_in_tree() or requested_zone != zone_root or shifting:
@@ -489,6 +494,7 @@ func _submit_codex_command(prompt: String) -> void:
 		_console_notice("World commands take up to 240 characters. Use /task for longer requests.")
 		return
 	_dev.busy = true
+	_activate_agent(AgentPresence.CODEX)
 	_console_notice("> " + prompt)
 	var context := _world_context()
 	context["shoreline_preview"] = _dev.client != null and _shoreline.available() and not shifting
@@ -536,19 +542,26 @@ func _submit_codex_command(prompt: String) -> void:
 	else:
 		await _call_world_tool(plan)
 	_dev.busy = false
-	if is_instance_valid(_dev.console):
-		_dev.console.update_display(_dev.console_lines, false)
+	_dev.refresh_chat()
+
+func _activate_agent(id: String) -> Node3D:
+	var avatar := agent_presence.activate(id, zone_id, player, not _is_workshop(zone_id))
+	if id == AgentPresence.CODEX:
+		scene_animations.attach_companion(avatar.animation_player())
+	return avatar
 
 func _call_world_tool(plan: Dictionary) -> Dictionary:
-	var result := await _execute_world_tool(plan)
-	_console_notice(str(result.message))
-	if _dev.voice_enabled and result.ok and DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
-		var voices := DisplayServer.tts_get_voices_for_language("en")
-		if not voices.is_empty():
-			DisplayServer.tts_speak(str(result.message).xml_escape(), voices[0], 65, 1.0, 1.0, 0, true)
+	var peer: String = plan.get("agent_peer", AgentPresence.CODEX)
+	var command := plan.duplicate()
+	command.erase("agent_peer")
+	var result := await _execute_world_tool(command, peer)
+	if peer == AgentPresence.CODEX and not plan.has("agent_peer"):
+		_console_notice(str(result.message))
+		if result.ok:
+			_dev.speak(str(result.message))
 	return result
 
-func _execute_world_tool(plan: Dictionary) -> Dictionary:
+func _execute_world_tool(plan: Dictionary, peer := AgentPresence.CODEX) -> Dictionary:
 	var definition := Commands.command(plan.get("tool"))
 	if definition.is_empty() or definition.get("internal", false) or not Commands.valid_plan(definition, plan):
 		return {"ok": false, "message": "Invalid world command arguments."}
@@ -568,6 +581,8 @@ func _execute_world_tool(plan: Dictionary) -> Dictionary:
 				return {"ok": false, "message": "Wait for the current environment to finish loading."}
 			return scene_animations.execute(plan, world_tools)
 		"world":
+			if definition.handler == "_companion_mode":
+				plan["agent_peer"] = peer
 			return await _world_commands.execute(definition, plan)
 	return {"ok": false, "message": "That command is unavailable in this world session."}
 
@@ -618,8 +633,7 @@ func _load_zone(destination: String) -> void:
 	player.rotation.y = spawn.yaw
 	pitch = 0
 	camera.rotation.x = 0
-	if is_instance_valid(companion):
-		companion.arrive(zone_id, player, not _is_workshop(zone_id))
+	agent_presence.arrive(zone_id, player, not _is_workshop(zone_id))
 	_update_agent_labels()
 	_announce_zone()
 
@@ -661,6 +675,7 @@ func _build_zone_async(destination: String) -> Dictionary:
 	return result
 
 func _commit_zone(built: Dictionary, side := 0.0) -> void:
+	grabber.cancel()
 	if scene_animations:
 		scene_animations.leave_workshop()
 	if zone_id != built.id:
@@ -687,6 +702,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	if side != 0.0:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
+	scanner.attach(zone_root, zone_id, world_tools)
 	_shoreline.attach(zone_root)
 	_dev.refresh_actions()
 	interactables = built.interactables
@@ -733,8 +749,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	_commit_zone(built, 1.0)
 	_shift_log("commit", us)
 	await _land_in(destination)
-	if is_instance_valid(companion):
-		companion.arrive(zone_id, player, not _is_workshop(zone_id))
+	agent_presence.arrive(zone_id, player, not _is_workshop(zone_id))
 	var old_lights := old_root.find_children("*", "Light3D", true, false)
 	var new_lights := zone_root.find_children("*", "Light3D", true, false)
 	for light in old_lights + new_lights:
@@ -827,9 +842,6 @@ func _add_anchor(anchor: Dictionary) -> void:
 	if anchor.kind == "application":
 		item["prop"] = Workstations.build(build_root, at, anchor)
 	else:
-		var avatar := BinaryAvatar.projection(Color("8aaeff"), not _is_workshop(anchor.zone))
-		avatar.position = at + Vector3(0, 1.2, 0)
-		build_root.add_child(avatar)
 		build_agent_labels[anchor.agent_id] = _label3d(anchor.label, at + Vector3(0,2.2,0), Color("d8e7ff"), 30)
 		build_agent_labels[anchor.agent_id].set_meta("name", anchor.label)
 
@@ -848,9 +860,14 @@ func _physics_process(delta: float) -> void:
 	var depth: float = water.level - player.position.y if water.has else -1.0
 	var swimming := depth > 1.3
 	_player_motor.step(player, delta, direction, water, controls)
-	player_avatar.tick(player, delta, swimming, controls and not shifting)
-	if is_instance_valid(companion):
-		companion.tick(player, delta)
+	var scene_controls := controls and not wrist.is_open and _scene_ready()
+	var gesture := grabber.tick(delta, player, camera, world_tools, player_avatar.hands, scene_controls)
+	player_avatar.tick(player, delta, swimming, gesture)
+	if wrist.is_open and wrist.current().get("id") == "scan" and _scene_ready():
+		scanner.tick(delta, player, camera, wrist.scanner_pixel())
+	else:
+		scanner.clear()
+	agent_presence.tick(player, delta)
 	if player.position.y < -100:
 		var spawn: Dictionary = WorldArt.spawn(zone_id)
 		player.position = spawn.position
@@ -870,8 +887,13 @@ func _update_interaction_hint() -> void:
 	if overlay.visible or shifting or wrist.is_open:
 		hint.text = ""
 		return
-	if is_instance_valid(companion) and companion.can_command(camera, player):
-		nearest = {"kind": "companion"}
+	var grab_hint := grabber.hint()
+	if not grab_hint.is_empty():
+		hint.text = grab_hint
+		return
+	var agent := agent_presence.aimed(camera, player)
+	if not agent.is_empty():
+		nearest = {"kind": "companion", "agent_id": agent}
 		hint.text = "E: Command agent"
 		return
 	var best := 3.0
@@ -907,6 +929,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not overlay.visible and wrist.handle(event):
 		get_viewport().set_input_as_handled()
 		return
+	if overlay.visible and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		_close_panel()
+		get_viewport().set_input_as_handled()
+		return
+	if not overlay.visible and not wrist.is_open and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _scene_ready() and grabber.handle(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_B:
 		if not overlay.visible and _scene_ready():
 			_request_grid_palette()
@@ -921,7 +950,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact") and not overlay.visible and not nearest.is_empty():
 		player_avatar.interact()
 		if nearest.kind == "companion":
-			_dev.open_console()
+			_dev.open_console(nearest.agent_id)
 		elif nearest.kind == "application":
 			_open_app(nearest.app_id, nearest.get("prop"))
 		else:
@@ -943,10 +972,10 @@ func _zone_key(event: InputEvent) -> int:
 
 func _open_app(app_id: String, station: Node3D = null) -> void:
 	_panel("", "")
-	overlay.offset_left = 0
-	overlay.offset_top = 0
-	overlay.offset_right = 0
-	overlay.offset_bottom = 0
+	overlay.offset_left = 24
+	overlay.offset_top = 24
+	overlay.offset_right = -24
+	overlay.offset_bottom = -24
 	_dev.open_application(app_id, station)
 
 func _save() -> void:
@@ -1032,17 +1061,9 @@ func _gateway_result(_result: int, code: int, _headers: PackedStringArray, body:
 	agent_states.clear()
 	for agent in data.agents:
 		agent_states[agent.agent_id] = agent
-	_task_agents = data.get("task_agents", [])
 	_update_agent_labels()
 
 func _update_agent_labels() -> void:
-	if is_instance_valid(zone_root):
-		if not is_instance_valid(_task_presence) or _task_presence.get_parent() != zone_root:
-			_task_presence = TaskPresence.new()
-			_task_presence.add_to_group("private_world_surfaces")
-			zone_root.add_child(_task_presence)
-		var spawn: Dictionary = WorldArt.spawn(zone_id)
-		_task_presence.update_agents(_task_agents if gateway_connected else [], spawn.position)
 	for id in agent_labels:
 		var state: Dictionary = agent_states.get(id, {})
 		var online: bool = gateway_connected and state.get("connected", false)

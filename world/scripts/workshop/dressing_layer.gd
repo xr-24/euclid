@@ -4,6 +4,7 @@ extends RefCounted
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
+const Art = preload("res://scripts/rendering/zone_effects.gd")
 
 var _entries := {}
 
@@ -15,6 +16,13 @@ func attach(zone: Node3D, overrides: Dictionary) -> void:
 
 func has(id: Variant) -> bool:
 	return _entries.has(id)
+
+func scene_node(id: String) -> Node3D:
+	return _entries.get(id, {}).get("node") as Node3D
+
+func can_unlock(id: String) -> bool:
+	var entry: Dictionary = _entries.get(id, {})
+	return entry.has("rigid") or (entry.get("physics_bounds", AABB()) as AABB).has_volume()
 
 func records(overrides: Dictionary) -> Array:
 	var result := []
@@ -31,6 +39,9 @@ func record(id: String, override: Dictionary) -> Dictionary:
 	value["overridden"] = not override.is_empty()
 	if _entries[id].has("rigid") and not value.hidden:
 		value["live_position"] = Placement.coordinates(_entries[id].node.position)
+		value["locked"] = override.get("locked", _entries[id].rigid.freeze)
+	elif can_unlock(id):
+		value["locked"] = override.get("locked", true)
 	return value
 
 func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dictionary:
@@ -41,6 +52,10 @@ func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dicti
 	for key in Commands.prop_fields(true):
 		if proposed.has(key) and proposed[key] != base.get(key):
 			result[key] = proposed[key]
+	if can_unlock(id):
+		var base_lock: bool = _entries[id].get("rigid", {}).get("freeze", true)
+		if proposed.get("locked", base_lock) != base_lock:
+			result["locked"] = proposed.locked
 	return result
 
 static func changes_geometry(before: Dictionary, after: Dictionary) -> bool:
@@ -53,7 +68,10 @@ func apply(id: String, override: Dictionary, previous := {}) -> void:
 	var entry: Dictionary = _entries[id]
 	var value := record(id, override)
 	var node: Node3D = entry.node
-	if entry.has("rigid"):
+	if not entry.has("rigid") and override.get("locked", true) == false and can_unlock(id):
+		node = _make_rigid(id, entry)
+		_apply_rigid(node, entry, value, record(id, previous), true)
+	elif entry.has("rigid"):
 		_apply_rigid(node as RigidBody3D, entry, value, record(id, previous))
 	else:
 		node.position = Vector3(value.position[0], value.position[1], value.position[2])
@@ -63,6 +81,66 @@ func apply(id: String, override: Dictionary, previous := {}) -> void:
 	node.visible = not value.hidden
 	for shape in entry.shapes:
 		shape.disabled = value.hidden or entry.shapes[shape]
+	if override.get("color") != previous.get("color"):
+		_apply_color(node, entry, Color.html(value.color))
+
+static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
+	if not entry.has("color_surfaces"):
+		var bindings := []
+		var meshes := node.find_children("*", "MeshInstance3D", true, false)
+		if node is MeshInstance3D:
+			meshes.push_front(node)
+		for mesh: MeshInstance3D in meshes:
+			if mesh.material_override:
+				bindings.append([mesh, -1, mesh.material_override])
+			elif mesh.mesh:
+				for index in mesh.mesh.get_surface_count():
+					bindings.append([mesh, index, mesh.get_active_material(index)])
+		entry["color_surfaces"] = bindings
+	for binding in entry.color_surfaces:
+		var original: Material = binding[2]
+		var material := original
+		if original is BaseMaterial3D and tint != Color.WHITE:
+			material = original.duplicate()
+			material.albedo_color = original.albedo_color * tint
+		elif original is ShaderMaterial and original.shader and original.shader.resource_path in Art.CFX_SHADERS.values() and tint != Color.WHITE:
+			material = original.duplicate()
+			var albedo: Color = original.get_shader_parameter("albedo")
+			material.set_shader_parameter("albedo", albedo * tint)
+		var mesh: MeshInstance3D = binding[0]
+		if binding[1] < 0:
+			mesh.material_override = material
+		else:
+			mesh.set_surface_override_material(binding[1], material)
+
+static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
+	var model: Node3D = entry.node
+	var parent := model.get_parent()
+	var box: AABB = Transform3D(entry.basis, Vector3.ZERO) * entry.physics_bounds
+	var body := RigidBody3D.new()
+	body.name = "Dressing_" + id
+	body.freeze = true
+	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	body.mass = clampf(box.get_volume() * 7.0, 3.0, 90.0)
+	body.continuous_cd = true
+	body.set_meta("entity_id", id)
+	parent.remove_child(model)
+	parent.add_child(body)
+	body.add_child(model)
+	model.transform = Transform3D(entry.basis, Vector3.ZERO)
+	for old_shape in entry.shapes:
+		old_shape.disabled = true
+	var shape := CollisionShape3D.new()
+	var collider := BoxShape3D.new()
+	collider.size = box.size.max(Vector3.ONE * 0.04)
+	shape.shape = collider
+	shape.position = box.get_center()
+	body.add_child(shape)
+	entry.node = body
+	entry.basis = Basis.IDENTITY
+	entry.shapes = {shape: false}
+	entry.rigid = {"parts": {model: model.transform, shape: shape.transform}, "boxes": {shape: collider.size}, "freeze": true}
+	return body
 
 func reset_motion(id: String) -> void:
 	var entry: Dictionary = _entries[id]
@@ -71,7 +149,7 @@ func reset_motion(id: String) -> void:
 		_apply_rigid(entry.node, entry, value, value, true)
 
 static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary, previous: Dictionary, reset := false) -> void:
-	if not reset and not changes_geometry(previous, value):
+	if not reset and not changes_geometry(previous, value) and previous.get("locked") == value.get("locked"):
 		return
 	var rigid: Dictionary = entry.rigid
 	body.freeze = true
@@ -79,7 +157,7 @@ static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary
 		body.position = Vector3(value.position[0], value.position[1], value.position[2])
 	if reset or value.yaw != previous.yaw:
 		body.basis = Basis(Vector3.UP, deg_to_rad(float(value.yaw) - float(entry.record.yaw))) * entry.basis
-	if value.scale != previous.scale:
+	if reset or value.scale != previous.scale:
 		var multiplier := Vector3.ONE * float(value.scale)
 		for part in rigid.parts:
 			var authored_transform: Transform3D = rigid.parts[part]
@@ -91,7 +169,7 @@ static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary
 	body.linear_velocity = Vector3.ZERO
 	body.angular_velocity = Vector3.ZERO
 	body.reset_physics_interpolation()
-	body.freeze = value.hidden or rigid.freeze
+	body.freeze = value.hidden or value.get("locked", rigid.freeze)
 	if not body.freeze:
 		body.sleeping = false
 
@@ -108,7 +186,11 @@ static func valid_override(override: Variant, bounds: AABB) -> bool:
 				if not Commands.valid_field("scale", override.scale): return false
 			"name":
 				if not EntityTypes.valid_name(override.name): return false
+			"color":
+				if not Commands.valid_field("color", override.color): return false
 			"hidden":
 				if not override.hidden is bool or not override.hidden: return false
+			"locked":
+				if not override.locked is bool: return false
 			_: return false
 	return true

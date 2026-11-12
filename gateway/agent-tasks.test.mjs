@@ -63,6 +63,13 @@ test('player task and screenshot routes are protected and images go only to the 
   const claimed = JSON.parse((await call('muse', 'claim_task')).content[0].text).task;
   assert.equal(claimed.text, task.text);
   assert.equal(claimed.session, undefined);
+  await post('/v1/tasks/send_message', { to: 'other', text: 'A separate conversation.' }, true);
+  await call('muse', 'send_message', { to: 'you', text: 'Muse replied.' });
+  const inbox = await post('/v1/tasks/inbox', { peers: ['muse', 'other'] }, true);
+  const { conversations } = await inbox.json();
+  assert.deepEqual(conversations.muse.messages.map(message => message.text), ['Muse replied.']);
+  assert.deepEqual(conversations.other.messages.map(message => message.text), ['A separate conversation.']);
+  assert.deepEqual(conversations.other.tasks, []);
   const image = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
   assert.equal((await post('/v1/tasks/share_view', { to: 'muse', image }, true)).status, 200);
   assert.equal((await call('other', 'look_at_world')).isError, true);

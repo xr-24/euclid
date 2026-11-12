@@ -55,7 +55,14 @@ export async function createTaskBoard(file) {
   }
   async function call(actor, name, args, signal) {
     switch (name) {
-      case 'inbox': return inbox(actor, args.peer ? target(args.peer === 'you' ? person : args.peer, person) : undefined);
+      case 'inbox': {
+        if (actor === person && Array.isArray(args.peers)) {
+          if (args.peers.length > 12) throw new Error('Choose up to 12 conversations.');
+          const peers = [...new Set(args.peers.map(peer => target(peer)))];
+          return { ok: true, conversations: Object.fromEntries(peers.map(peer => [peer, inbox(actor, peer)])) };
+        }
+        return inbox(actor, args.peer ? target(args.peer === 'you' ? person : args.peer, person) : undefined);
+      }
       case 'task_log':
         return { ok: true, entries: state.journal.slice(-20).reverse() };
       case 'assign':

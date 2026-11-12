@@ -340,7 +340,8 @@
     "position",
     "yaw",
     "scale",
-    "name"
+    "name",
+    "color"
   ],
   "entity_types": {
     "traffic_cone": {

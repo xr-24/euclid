@@ -182,6 +182,7 @@ static func _sea(root: Node3D, sea_y: float) -> void:
 	sea.material_override = WorldArt.water_material(true)
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(sea)
+	Water.WaterEdits.register(root, "ocean", "Villa coast", Rect2(-3000, -100, 6000, 4000), sea_y, [sea.material_override])
 
 
 # ---------------------------------------------------------------- water features
@@ -203,6 +204,10 @@ static func _still_water(root: Node3D, layout: Dictionary) -> void:
 		disc.material_override = WorldArt.water_material(false)
 		disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(disc)
+		var radius := float(f.radius)
+		var center := Vector2(f.centre[0], f.centre[1])
+		Water.WaterEdits.register(root, "fountain_%s" % str(center), "Fountain", Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0),
+			float(f.y), [disc.material_override], radius)
 		var j: Array = f.jet
 		root.add_child(_jet(Vector3(j[0], j[1], j[2]), Vector3.UP, 2.6, 0.9, 360))
 
@@ -217,6 +222,7 @@ static func _water_plane(root: Node3D, rect: Rect2, y: float) -> void:
 	mi.material_override = WorldArt.water_material(false)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(mi)
+	Water.WaterEdits.register(root, "pool_%s" % str(rect.position), "Courtyard pool", rect, y, [mi.material_override])
 
 ## Bronze lion heads spouting into the water: free-standing on short pedestals at the reflecting
 ## pool, or set into a wall. Jets landing in a simulated pool keep it rippling.

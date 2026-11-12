@@ -18,6 +18,7 @@ static func valid_properties(record: Dictionary) -> bool:
 		and (not record.has("name") or valid_name(record.name)) \
 		and (not record.has("animation") or (MotionClip.valid(record.animation) and MotionClip.supports(record.animation, false))) \
 		and (not record.has("behavior") or BehaviorRegistry.valid_record(record.behavior)) \
+		and record.get("locked", false) is bool \
 		and Commands.valid_field("yaw", record.get("yaw")) \
 		and Commands.valid_field("scale", record.get("scale")) \
 		and Commands.valid_field("color", record.get("color"))
@@ -52,9 +53,19 @@ static func library_catalog() -> Array[Dictionary]:
 				"category": entry.category, "license": entry.get("licence", "")})
 	return available
 
-static func create(record: Dictionary) -> AnimatableBody3D:
-	var body := AnimatableBody3D.new()
-	body.sync_to_physics = false
+static func create(record: Dictionary) -> PhysicsBody3D:
+	var body: PhysicsBody3D
+	if TYPES[record.type].factory != "door":
+		var rigid := RigidBody3D.new()
+		rigid.freeze = record.get("locked", false) or not movable(record)
+		rigid.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		rigid.continuous_cd = true
+		rigid.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
+		body = rigid
+	else:
+		var scripted := AnimatableBody3D.new()
+		scripted.sync_to_physics = false
+		body = scripted
 	body.name = "Entity_" + record.id
 	body.set_meta("entity_id", record.id)
 	var point: Array = record.position
@@ -88,11 +99,42 @@ static func create(record: Dictionary) -> AnimatableBody3D:
 				body.set_meta("asset_unavailable", true)
 	return body
 
+static func movable(record: Dictionary) -> bool:
+	return TYPES.get(record.get("type"), {}).get("factory") != "door" and not record.has("animation") and not record.has("behavior")
+
+static func update_placement(body: RigidBody3D, previous: Dictionary, record: Dictionary) -> void:
+	if previous.position != record.position:
+		body.position = Vector3(record.position[0], record.position[1], record.position[2])
+	if previous.yaw != record.yaw:
+		body.rotation.y = deg_to_rad(record.yaw)
+	if previous.scale != record.scale:
+		var factor: float = float(record.scale) / float(previous.scale)
+		for part in body.get_children():
+			if part is CollisionShape3D:
+				part.position *= factor
+				if part.shape is BoxShape3D:
+					part.shape.size *= factor
+				elif part.shape is ConvexPolygonShape3D:
+					var points: PackedVector3Array = part.shape.points
+					for index in points.size():
+						points[index] *= factor
+					part.shape.points = points
+			elif part is Node3D:
+				part.transform = part.transform.scaled(Vector3.ONE * factor)
+		body.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
+	var locked: bool = record.get("locked", false)
+	if body.freeze != locked:
+		body.freeze = locked
+		body.linear_velocity = Vector3.ZERO
+		body.angular_velocity = Vector3.ZERO
+		if not locked:
+			body.sleeping = false
+
 static func _size(definition: Dictionary) -> Vector3:
 	var size: Array = definition.size
 	return Vector3(size[0], size[1], size[2])
 
-static func _place_model(body: AnimatableBody3D, model: Node3D, size: float, color: String) -> void:
+static func _place_model(body: PhysicsBody3D, model: Node3D, size: float, color: String) -> void:
 	var placement := Node3D.new()
 	placement.scale = Vector3.ONE * size
 	body.add_child(placement)
@@ -123,7 +165,7 @@ static func _place_model(body: AnimatableBody3D, model: Node3D, size: float, col
 	collider.position = bounds.get_center() * size
 	body.add_child(collider)
 
-static func _box_body(body: StaticBody3D, size: Vector3, color: Color) -> MeshInstance3D:
+static func _box_body(body: PhysicsBody3D, size: Vector3, color: Color) -> MeshInstance3D:
 	var shape := BoxShape3D.new()
 	shape.size = size
 	var collider := CollisionShape3D.new()
@@ -134,7 +176,7 @@ static func _box_body(body: StaticBody3D, size: Vector3, color: Color) -> MeshIn
 	mesh.size = size
 	return _mesh(body, mesh, size.y * 0.5, color, 0.48)
 
-static func _cone(body: StaticBody3D, color: Color, size: float) -> void:
+static func _cone(body: PhysicsBody3D, color: Color, size: float) -> void:
 	var base := BoxMesh.new()
 	base.size = Vector3(0.58, 0.07, 0.58) * size
 	_mesh(body, base, 0.035 * size, Color("22292e"), 0.88)

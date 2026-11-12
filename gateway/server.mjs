@@ -101,7 +101,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 26 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 27 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
@@ -118,7 +118,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
           const names = new Set(result.result.tools.map(tool => tool.name));
           result.result.tools.push(...world.result.tools.filter(tool => !names.has(tool.name)));
         } else if (job.task.session && body?.method === 'tools/call' && result?.error?.message === 'Unknown workbench tool') {
-          result = await bridge.rpc(job.task.session, body, signal);
+          result = await bridge.rpc(job.task.session, body, signal, job.actor);
         }
         if (res.destroyed) return;
         return result === null ? res.writeHead(202).end() : reply(res, 200, result);

@@ -10,6 +10,8 @@ const DevelopmentSession = preload("res://scripts/persistence/development_sessio
 const WorkbenchDiagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const TaskClient = preload("res://scripts/agents/task_client.gd")
 const ApplicationWindow = preload("res://scripts/ui/application_window.gd")
+const Presence = preload("res://scripts/agents/agent_presence.gd")
+const ChatHistory = preload("res://scripts/agents/chat_history.gd")
 const CONSOLE_SCROLLBACK := 300
 
 ## The local Workbench capability the launcher handed over. Empty without one.
@@ -28,6 +30,15 @@ var _benchmark_id := ""
 var _benchmark_display := {}
 var _action_busy := false
 var _announced := ""
+var chat_peer := Presence.CODEX
+var _chat_tabs: Array[String] = [Presence.CODEX, Presence.CLAUDE]
+var _chat_agents := {Presence.CODEX: "Codex", Presence.CLAUDE: "Claude"}
+var _conversations := {}
+var _chat_requests := {}
+var _chat_errors := {}
+var _polling_chat := false
+var _chat_dirty := false
+var _directory_due := 0
 
 func _init(world) -> void:
 	_world = world
@@ -47,12 +58,22 @@ func connect_gateway(url: String, token: String) -> void:
 	add_child(_tasks)
 	_tasks.configure(url, token, capability)
 	_tasks.notice.connect(notice)
+	_tasks.addressed.connect(func(peer: String) -> void:
+		if _chat_agents.has(peer):
+			_world._activate_agent(peer)
+			if peer not in _chat_tabs:
+				_chat_tabs.append(peer)
+				if _session:
+					_session.save_chat_tabs(_chat_tabs, chat_peer)
+				if is_instance_valid(console):
+					console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+		_poll_chat())
 	var task_poll := Timer.new()
 	task_poll.wait_time = 3
 	add_child(task_poll)
 	task_poll.timeout.connect(func() -> void:
-		if is_instance_valid(console) and _world.overlay.visible:
-			_tasks.poll())
+		if (is_instance_valid(console) and _world.overlay.visible) or _world.wrist.is_open:
+			_poll_chat())
 	task_poll.start()
 
 func is_task_command(prompt: String) -> bool:
@@ -187,20 +208,25 @@ func _restart() -> void:
 			return
 	get_tree().quit()
 
-func open_console() -> void:
+func open_console(peer := "") -> void:
+	if not peer.is_empty():
+		select_chat(peer)
 	if is_instance_valid(console):
 		if console.is_visible_in_tree():
-			_world._close_panel()
+			if peer.is_empty():
+				_world._close_panel()
 		else:
 			_world._show_panel()
 			console.focus_entry()
+			_poll_chat()
 		return
 	_world._panel("", "", 500.0, true)
 	_world.overlay.add_theme_stylebox_override("panel", CodexConsole.frame_style())
 	console = CodexConsole.new()
 	console.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_world.overlay_content.add_child(console)
-	console.submitted.connect(Callable(_world, "_submit_codex_command"))
+	console.submitted.connect(send_chat)
+	console.peer_selected.connect(select_chat)
 	console.cli_requested.connect(_open_native_cli)
 	console.minimize_requested.connect(Callable(_world, "_close_panel"))
 	console.layout_requested.connect(_layout_console)
@@ -208,12 +234,134 @@ func open_console() -> void:
 	console.development_requested.connect(_console_action)
 	_layout_console(false)
 	console.setup(console_lines, busy, voice_enabled)
+	console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+	refresh_chat()
+	_poll_chat()
 	refresh_actions()
 	if client:
 		client.refresh()
 
+func select_chat(peer: String) -> void:
+	if not _chat_agents.has(peer) and peer not in _chat_tabs:
+		return
+	if peer not in _chat_tabs:
+		_chat_tabs.append(peer)
+	chat_peer = peer
+	if _session:
+		_session.save_chat_tabs(_chat_tabs, peer)
+	if is_instance_valid(console):
+		console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+	refresh_chat()
+	_poll_chat()
+
+func cycle_agent() -> void:
+	var choices := _chat_agents.keys()
+	select_chat(choices[(choices.find(chat_peer) + 1) % choices.size()])
+
+func chat_label() -> String:
+	return _chat_agents.get(chat_peer, Presence.label(chat_peer))
+
+func can_message() -> bool:
+	return _tasks != null and _chat_agents.has(chat_peer)
+
+func chat_log(peer: String, limit := 0) -> PackedStringArray:
+	var transcript: PackedStringArray = _conversations.get(peer, {}).get("lines", PackedStringArray())
+	var lines := PackedStringArray()
+	if peer == Presence.CODEX:
+		lines = console_lines.duplicate() if limit == 0 else console_lines.slice(-limit)
+	lines.append_array(transcript if limit == 0 else transcript.slice(-limit))
+	var error: String = _chat_errors.get(peer, "")
+	if not error.is_empty():
+		lines.append(error)
+	return lines if limit == 0 else lines.slice(-limit)
+
+func refresh_chat() -> void:
+	if not is_instance_valid(console):
+		return
+	var recent := CodexConsole.prompts.duplicate() if chat_peer == Presence.CODEX else PackedStringArray()
+	recent.append_array(_conversations.get(chat_peer, {}).get("prompts", PackedStringArray()))
+	console.display_conversation(chat_log(chat_peer), recent, _chat_requests.has(chat_peer), can_message())
+	refresh_actions()
+
+func quick_command(prompt: String) -> void:
+	if chat_peer == Presence.CODEX:
+		if CodexConsole.prompts.is_empty() or CodexConsole.prompts[-1] != prompt:
+			CodexConsole.prompts.append(prompt)
+			if CodexConsole.prompts.size() > CodexConsole.HISTORY_LIMIT:
+				CodexConsole.prompts.remove_at(0)
+		_world._submit_codex_command(prompt)
+	else:
+		send_chat(prompt)
+
+func send_chat(prompt: String) -> void:
+	var peer := chat_peer
+	if is_task_command(prompt):
+		task_command(prompt)
+		return
+	if not can_message() or _chat_requests.has(peer):
+		return
+	if prompt.length() > 4000:
+		_chat_errors[peer] = "Enter up to 4000 characters."
+		refresh_chat()
+		return
+	_chat_errors.erase(peer)
+	_chat_requests[peer] = true
+	refresh_chat()
+	var session: String = _world.world_bridge.session if is_instance_valid(_world.world_bridge) else ""
+	var local := peer in [Presence.CODEX, Presence.CLAUDE]
+	var result := await _tasks.send_chat(peer, prompt, session, local)
+	_chat_requests.erase(peer)
+	if result.has("error"):
+		_chat_errors[peer] = str(result.error)
+	else:
+		_world._activate_agent(peer)
+		_poll_chat()
+	refresh_chat()
+
+func _poll_chat() -> void:
+	if _tasks == null:
+		return
+	if _polling_chat:
+		_chat_dirty = true
+		return
+	_polling_chat = true
+	var changed := false
+	if Time.get_ticks_msec() >= _directory_due:
+		_directory_due = Time.get_ticks_msec() + 12000
+		var directory := await _tasks.directory()
+		if not directory.has("error"):
+			var agents := {Presence.CODEX: "Codex", Presence.CLAUDE: "Claude"}
+			for agent: Dictionary in directory.get("agents", []):
+				if agent.remote:
+					agents[agent.name] = "Cloud · " + agent.name
+			if agents != _chat_agents:
+				_chat_agents = agents
+				changed = true
+				if is_instance_valid(console):
+					console.set_conversations(_chat_agents, _chat_tabs, chat_peer)
+	var peers: Array[String] = _chat_tabs.duplicate()
+	for start in range(0, peers.size(), 12):
+		var result := await _tasks.conversations(peers.slice(start, start + 12))
+		for peer in result.get("conversations", {}):
+			var history := ChatHistory.read(result.conversations[peer])
+			if history != _conversations.get(peer):
+				var previous: Dictionary = _conversations.get(peer, {})
+				if peer == chat_peer and not previous.is_empty() and not history.reply.is_empty() and history.reply != previous.reply:
+					speak(history.reply.text)
+				_conversations[peer] = history
+				changed = true
+	if changed:
+		refresh_chat()
+	_polling_chat = false
+	if _chat_dirty:
+		_chat_dirty = false
+		_poll_chat.call_deferred()
+
 func refresh_actions() -> void:
 	if is_instance_valid(console) and client:
+		if chat_peer != Presence.CODEX:
+			console.update_development({}, false, false)
+			return
 		var draft := client.draft
 		var available := false
 		match draft.get("subject", ""):
@@ -305,12 +453,17 @@ func notice(line: String) -> void:
 	if _session:
 		_session.save_console(console_lines, CodexConsole.prompts)
 	if is_instance_valid(console):
-		console.update_display(console_lines, busy)
+		refresh_chat()
 
 func resume(path: String) -> void:
 	_session = DevelopmentSession.new(path)
 	console_lines = _session.lines
 	CodexConsole.prompts = _session.prompts
+	for peer in _session.chat_tabs:
+		if peer not in _chat_tabs:
+			_chat_tabs.append(peer)
+	if not _session.chat_peer.is_empty():
+		chat_peer = _session.chat_peer
 
 func run_benchmark(action: String, arguments: Dictionary) -> Dictionary:
 	if not client or _world.shifting:
@@ -361,6 +514,15 @@ func _open_native_cli() -> void:
 		"-File", script_path, "-WorldSession", _world.world_bridge.session], true)
 	if _cli_process <= 0:
 		notice("The native terminal could not be opened.")
+	else:
+		_world._activate_agent(Presence.CODEX)
+
+func speak(text: String) -> void:
+	if not voice_enabled or not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
+		return
+	var voices := DisplayServer.tts_get_voices_for_language("en")
+	if not voices.is_empty():
+		DisplayServer.tts_speak(text.xml_escape(), voices[0], 65, 1.0, 1.0, 0, true)
 
 func _set_voice(enabled: bool) -> void:
 	voice_enabled = enabled

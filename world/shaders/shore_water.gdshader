@@ -46,7 +46,10 @@ uniform float refraction_strength : hint_range(0.0, 0.3) = 0.06;
 uniform float detail_normal_strength : hint_range(0.0, 2.0) = 0.32;
 uniform float foam_strength : hint_range(0.0, 1.0) = 1.0;
 uniform float foam_softness : hint_range(0.5, 2.0) = 1.0;
+uniform float foam_strength_override = -1.0;
+uniform float foam_softness_override = -1.0;
 uniform float base_roughness : hint_range(0.0, 1.0) = 0.045;
+uniform float reflection_strength = 1.0;
 uniform float lace_scale_coarse : hint_range(0.1, 10.0) = 1.2;
 uniform float lace_scale_fine : hint_range(0.01, 2.0) = 0.12;
 uniform float flow_speed_scale : hint_range(0.0, 4.0) = 1.0;
@@ -243,14 +246,16 @@ void fragment() {
 		trans = mix(vec3(1.0), trans, shore);
 		vec3 water_col = refr_rgb * trans + scat * (1.0 - trans);
 
-		float fv = pow(foam_vis, 1.5) * 0.8 * smoothstep(0.0005, 0.006, h) * foam_strength;
+		float strength = foam_strength_override >= 0.0 ? foam_strength_override : foam_strength;
+		float softness = foam_softness_override >= 0.0 ? foam_softness_override : foam_softness;
+		float fv = pow(foam_vis, 1.5) * 0.8 * smoothstep(0.0005, 0.006, h) * strength;
 		float lace_c = flow_lace(v_world_pos.xz, lace_scale_coarse, disp, t_flow);
 		float lace_f = flow_lace(v_world_pos.xz, lace_scale_fine, disp, t_flow + pn.g);
 		float lace = 0.72 * lace_c + 0.28 * lace_f;
-		float foam_mask = smoothstep(1.0 - fv, 1.0 - fv + 0.38 * foam_softness, lace) * 0.94;
+		float foam_mask = smoothstep(1.0 - fv, 1.0 - fv + 0.38 * softness, lace) * 0.94;
 
 		float fres = 0.02 + 0.98 * pow(1.0 - clamp(dot(VIEW, NORMAL), 0.0, 1.0), 5.0);
-		fres *= shore * (1.0 - foam_mask);
+		fres *= shore * (1.0 - foam_mask) * reflection_strength;
 
 		vec3 reflection_col = vec3(0.0);
 		float planar = 0.0;
@@ -273,7 +278,7 @@ void fragment() {
 		EMISSION = water_light + cfx.rgb;
 		ALBEDO = foam_albedo * foam_mask * (1.0 - cfx_wire * 0.85);
 		ALBEDO *= contact;
-		SPECULAR = 0.25 * (1.0-planar) * contact;
+		SPECULAR = 0.25 * (1.0-planar) * contact * reflection_strength;
 		ROUGHNESS = mix(base_roughness, 0.85, max(foam_mask, aeration * 0.5));
 		if (debug_surface != 0) {
 			ALBEDO = vec3(0.0);

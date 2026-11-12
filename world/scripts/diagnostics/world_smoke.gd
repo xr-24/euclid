@@ -5,6 +5,7 @@ extends RefCounted
 
 static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
+	await _check_prop_lock(world, tree)
 	for zone in world.manifest.zones:
 		world._load_zone(zone.id)
 		if zone.id == "construct":
@@ -54,3 +55,43 @@ static func run(world: Node3D) -> void:
 		print("CONSTRUCT_GATEWAY_OK: authenticated snapshot received in Godot")
 	print("CONSTRUCT_SMOKE_OK: three zones, anchors, collision, application return, saved location round trip, in-place shift")
 	tree.quit()
+
+static func _check_prop_lock(world: Node3D, tree: SceneTree) -> void:
+	world.set_physics_process(false)
+	var tools = world.world_tools
+	var spawned: Dictionary = tools.execute("spawn", {"type": "traffic_cone", "position": [0.65, 0.4, -2.6]})
+	assert(spawned.ok)
+	var body: RigidBody3D = tools.scene_node(spawned.id)
+	var grab := InputEventMouseButton.new()
+	grab.button_index = MOUSE_BUTTON_LEFT
+	grab.pressed = true
+	var toggle := InputEventMouseButton.new()
+	toggle.button_index = MOUSE_BUTTON_RIGHT
+	toggle.pressed = true
+	var player: CharacterBody3D = world.player
+	var camera: Camera3D = world.camera
+	var grabber = world.grabber
+	var hands = world.player_avatar.hands
+	player.position = Vector3.ZERO
+	for grab_locked_prop in [true, false]:
+		for frame in 2:
+			await tree.physics_frame
+		camera.look_at(tools.scene_node(spawned.id).global_position + Vector3.UP * 0.35)
+		grabber.handle(grab)
+		grabber.tick(1.0 / 60.0, player, camera, tools, hands, true)
+		grabber.handle(toggle)
+		grabber.tick(1.0 / 60.0, player, camera, tools, hands, true)
+		assert(tools.scene_node(spawned.id).freeze and grabber.hint() == "Locked")
+		assert(tools.scene_node(spawned.id) == body, "Locking keeps the rendered prop in place.")
+		for frame in 2:
+			await tree.physics_frame
+		if grab_locked_prop:
+			grabber.handle(grab)
+			grabber.tick(1.0 / 60.0, player, camera, tools, hands, true)
+		grabber.handle(toggle)
+		grabber.tick(1.0 / 60.0, player, camera, tools, hands, true)
+		assert(not tools.scene_node(spawned.id).freeze and grabber.hint() == "Unlocked")
+		assert(tools.scene_node(spawned.id) == body, "Unlocking keeps the rendered prop in place.")
+	assert(tools.execute("delete", {"id": spawned.id}).ok)
+	grabber.cancel()
+	world.set_physics_process(true)

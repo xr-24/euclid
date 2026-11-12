@@ -39,7 +39,7 @@ if (-not $NoGateway) {
     $health = $null
     try { $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2 } catch {}
     if ($health.service -eq 'construct-gateway') {
-        if ($health.version -ge 26) {
+        if ($health.version -ge 27) {
             $gatewayReady = $true
         } else {
             & (Join-Path $PSScriptRoot 'stop-gateway.ps1')

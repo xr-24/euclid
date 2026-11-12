@@ -154,7 +154,7 @@ func _edit_entity(args: Dictionary) -> Dictionary:
 	var proposed := record.duplicate()
 	for key in changes:
 		if authored and key not in Commands.prop_fields(true):
-			return _error("Authored props support position, rotation, scale and name edits.")
+			return _error("Authored props support position, rotation, scale, name and color edits.")
 		if key != "animation" and key not in Commands.prop_fields(false):
 			return _error("Unknown editable property.")
 		if key == "name" and changes.name is String:
@@ -358,9 +358,9 @@ func _spawn_prefab(args: Dictionary) -> Dictionary:
 	placement["position"] = args.get("position")
 	return execute("spawn", placement)
 
-func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary:
+func _edit(id: String, previous: Dictionary, proposed: Dictionary, from_grab := false) -> Dictionary:
 	if _dressing.has(id):
-		return _edit_dressing(id, _dressing.changes_for(id, proposed, _overrides.get(id, {})))
+		return _edit_dressing(id, _dressing.changes_for(id, proposed, _overrides.get(id, {})), from_grab)
 	if not proposed.is_empty() and not _valid_record(proposed):
 		return _error("Use a position inside this scene, a scale from 0.25 to 4, a six-digit color, and a printable name.")
 	if proposed == previous:
@@ -370,13 +370,13 @@ func _edit(id: String, previous: Dictionary, proposed: Dictionary) -> Dictionary
 		return _error("The scene prop save could not be written.")
 	return {"ok": true, "id": id, "entity": next.duplicate(true)}
 
-func _edit_dressing(id: String, proposed: Dictionary) -> Dictionary:
+func _edit_dressing(id: String, proposed: Dictionary, from_grab := false) -> Dictionary:
 	if not DressingLayer.valid_override(proposed, bounds):
-		return _error("Use a position inside this scene, a scale from 0.25 to 4, and a printable name.")
+		return _error("Use a position inside this scene, a scale from 0.25 to 4, a six-digit color, and a printable name.")
 	var previous: Dictionary = _overrides.get(id, {})
 	if proposed != previous:
 		var history := _with_undo({"id": id, "previous": {}, "dressing": {id: previous}})
-		if not _commit({}, {id: proposed.duplicate(true)}, history):
+		if not _commit({}, {id: proposed.duplicate(true)}, history, from_grab):
 			return _error("The scene prop save could not be written.")
 	return {"ok": true, "id": id, "entity": _record(id)}
 
@@ -400,7 +400,7 @@ static func _updated(layer: Dictionary, updates: Dictionary) -> Dictionary:
 			next[id] = updates[id]
 	return next
 
-func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionary]) -> bool:
+func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionary], from_grab := false) -> bool:
 	var previous := _entities
 	var previous_overrides := _overrides
 	var next := _updated(_entities, records)
@@ -419,7 +419,8 @@ func _commit(records: Dictionary, dressing: Dictionary, history: Array[Dictionar
 			var old_override: Dictionary = previous_overrides.get(id, {})
 			_dressing.apply(id, override, old_override)
 			geometry_changed = geometry_changed or DressingLayer.changes_geometry(old_override, override)
-	if geometry_changed:
+	# A grab is already visible while moving. Resetting SDFGI here blanks the whole view.
+	if geometry_changed and not from_grab:
 		authored_geometry_changed.emit()
 	return true
 
@@ -427,6 +428,10 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
 	if record.is_empty() and _preview.get("entity") == id:
 		_preview = {}
 	if _nodes.has(id):
+		var body := _nodes[id] as RigidBody3D
+		if body and _can_sync_rigid(previous, record):
+			EntityTypes.update_placement(body, previous, record)
+			return
 		if not record.is_empty() and _same_placement(previous, record):
 			var player := animation_player(id)
 			if player:
@@ -435,6 +440,8 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
 					player.set_clip(clip)
 				if previous.get("behavior") != record.get("behavior"):
 					_sync_behavior(_nodes[id], _effective(record))
+				if body and (previous.get("behavior") != record.get("behavior") or previous.get("animation") != record.get("animation")):
+					body.freeze = record.get("locked", false) or not EntityTypes.movable(record)
 				return
 		_nodes[id].free()
 		_nodes.erase(id)
@@ -442,10 +449,14 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
 		_show(record)
 
 static func _same_placement(a: Dictionary, b: Dictionary) -> bool:
-	for key in ["type", "asset_id", "position", "yaw", "scale", "color"]:
+	for key in ["type", "asset_id", "position", "yaw", "scale", "color", "locked"]:
 		if a.get(key) != b.get(key):
 			return false
 	return true
+
+static func _can_sync_rigid(before: Dictionary, after: Dictionary) -> bool:
+	return not after.is_empty() and EntityTypes.movable(before) and EntityTypes.movable(after) \
+		and before.type == after.type and before.get("asset_id") == after.get("asset_id") and before.color == after.color
 
 func _show(record: Dictionary) -> void:
 	var entity := EntityTypes.create(record)
@@ -505,6 +516,24 @@ func _valid_record(record: Dictionary) -> bool:
 	return SceneStore.valid_id(record.get("id")) \
 		and EntityTypes.valid_properties(record) \
 		and Placement.valid_coordinates(bounds, record.get("position"))
+
+func scene_node(id: String) -> Node3D:
+	return _dressing.scene_node(id) if _dressing.has(id) else _nodes.get(id) as Node3D
+
+func can_toggle_lock(id: String) -> bool:
+	if _dressing.has(id):
+		return _dressing.can_unlock(id)
+	var record := _record(id)
+	return not record.is_empty() and EntityTypes.movable(record)
+
+func commit_grab(id: String, node: Node3D, changes: Dictionary) -> Dictionary:
+	if not is_instance_valid(_root) or not _root.get_parent().get_meta("scene_edit", true) or not _load_error.is_empty():
+		return _error("Scene edits are unavailable.")
+	if scene_node(id) != node:
+		return _error("The prop changed during the grab.")
+	var record := _record(id)
+	var next := record.merged(changes, true)
+	return _edit(id, record, next, true)
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "error": message}

@@ -7,14 +7,11 @@ const Motion = preload("res://scripts/animation/motion_clip.gd")
 const Follow = preload("res://scripts/player/spring_follow.gd")
 const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 const SIDES := ["l", "r"]
-## The wrist computer pose, like checking a watch: the left forearm laid across the lower middle
-## of the view, back of the hand up, a loose fist. Camera space (-Z ahead, +X right). The wrist
-## goes this fraction of the arm's reach from the shoulder, in this direction.
-const WATCH_DIRECTION := Vector3(0.55, 0.2, -0.81)
-const WATCH_EXTENT := 0.74
-const WATCH_FORWARD := Vector3(1.0, 0.1, 0.05)
+## Camera-space slope from the eye down to the wrist. The elbow and wrist sit at the same
+## height and depth, so the forearm runs horizontally across the bottom of the view.
+const WATCH_SLOPE := 0.66
+const WATCH_PUSHBACK := 0.14
 const WATCH_PALM := Vector3(0.0, -1.0, -0.35)
-const WATCH_POLE := Vector3(-0.7, -0.45, -0.25)
 ## Where the right wrist goes while the wrist computer is up: down by the hip, out of view.
 const RIGHT_AWAY := Vector3(0.36, -0.95, 0.02)
 ## How the arms move. Each *_FOLLOW is a spring (spring_follow.gd): frequency in Hz, damping
@@ -47,6 +44,11 @@ var _watch := false
 var _watch_blend := 0.0
 var _left_elbow := -1
 var _left_hand := -1
+var _right_knuckle := -1
+var _watch_point := Vector3.ZERO
+var _palm_point := Vector3(0.25, -0.24, -0.49)
+var _watch_elbow := Vector3.ZERO
+var _watch_wrist := Vector3.ZERO
 var _finger_rotations := {}
 var _breath_phase := 0.0
 var _stride_phase := 0.0
@@ -95,6 +97,8 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 		if index == 0:
 			_left_elbow = elbow
 			_left_hand = wrist
+		else:
+			_right_knuckle = _rig.find_bone("middle_01_r")
 		ik.set_root_bone(index, upper)
 		ik.set_middle_bone(index, elbow)
 		ik.set_end_bone(index, wrist)
@@ -103,10 +107,16 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 		var rest := _rig.get_bone_global_rest(wrist)
 		var finger_forward := _rig.get_bone_global_rest(_rig.find_bone("middle_01_" + side)).origin - rest.origin
 		var to_local := rest.basis.inverse()
+		var upper_rest := _rig.get_bone_global_rest(upper).origin
+		var elbow_rest := _rig.get_bone_global_rest(elbow).origin
+		var shoulder := to_local(_rig.to_global(upper_rest))
+		var upper_length := elbow_rest.distance_to(upper_rest)
+		var lower_length := rest.origin.distance_to(elbow_rest)
+		if index == 0:
+			_set_watch_targets(shoulder, upper_length, lower_length)
 		_chains.append({
-			"shoulder": to_local(_rig.to_global(_rig.get_bone_global_rest(upper).origin)),
-			"reach": (_rig.get_bone_global_rest(elbow).origin - _rig.get_bone_global_rest(upper).origin).length() +
-				(rest.origin - _rig.get_bone_global_rest(elbow).origin).length(),
+			"shoulder": shoulder,
+			"reach": upper_length + lower_length,
 			"target": target,
 			"pole": pole,
 			"pole_rest": pole.position,
@@ -117,8 +127,20 @@ func mount(camera: Camera3D) -> MeshInstance3D:
 		_wrist.orientations.append(rest.basis)
 		_wrist.finger_axes.append((to_local * finger_forward).normalized())
 	_rig.add_child(_wrist)
+	_wrist.modification_processed.connect(_cache_hand_points)
 	tick(1.0, Poses.Pose.REST, Vector3.INF)
 	return mesh
+
+func _set_watch_targets(shoulder: Vector3, upper_length: float, lower_length: float) -> void:
+	# Intersect the upper arm's reach with a ray at the desired screen height. Use
+	# the farther intersection to put the forearm at a comfortable viewing distance.
+	var ray := Vector2(-WATCH_SLOPE, -1.0).normalized()
+	var origin := Vector2(shoulder.y, shoulder.z)
+	var distance := origin.dot(ray)
+	var offset := origin - ray * distance
+	var yz := ray * (distance + sqrt(maxf(upper_length * upper_length - offset.length_squared(), 0.0)))
+	_watch_elbow = Vector3(shoulder.x, yz.x, yz.y)
+	_watch_wrist = _watch_elbow + Vector3.RIGHT * lower_length
 
 ## Brings the left forearm up for the wrist computer, or lets it fall back.
 func set_wrist_raised(up: bool) -> void:
@@ -162,9 +184,20 @@ func authored_time() -> float:
 func wrist_emitter() -> Dictionary:
 	if _rig == null or _left_elbow < 0:
 		return {}
-	var elbow := to_local(_rig.to_global(_rig.get_bone_global_pose(_left_elbow).origin))
-	var hand := to_local(_rig.to_global(_rig.get_bone_global_pose(_left_hand).origin))
-	return {"point": elbow.lerp(hand, EMITTER_ALONG), "raised": smoothstep(0.0, 1.0, _watch_blend)}
+	return {"point": position + _watch_point, "raised": smoothstep(0.0, 1.0, _watch_blend)}
+
+func palm_position() -> Vector3:
+	return to_global(_palm_point)
+
+func _cache_hand_points() -> void:
+	# The skeleton restores its pre-modifier pose after it updates the skin.
+	var in_view := global_transform.affine_inverse() * _rig.global_transform
+	var elbow := _rig.get_bone_global_pose(_left_elbow).origin
+	var left := _rig.get_bone_global_pose(_left_hand).origin
+	var right := _rig.get_bone_global_pose(_wrist.wrists[1]).origin
+	var knuckle := _rig.get_bone_global_pose(_right_knuckle).origin
+	_watch_point = in_view * elbow.lerp(left, EMITTER_ALONG)
+	_palm_point = in_view * right.lerp(knuckle, 0.58)
 
 ## The target is in world space. INF uses the crosshair direction for an unbound gesture.
 func pulse(pose: Poses.Pose, target: Vector3) -> void:
@@ -207,6 +240,8 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 	if absf(_watch_blend - (1.0 if _watch else 0.0)) < 0.004:
 		_watch_blend = 1.0 if _watch else 0.0
 	var watch := smoothstep(0.0, 1.0, _watch_blend)
+	# Move the viewmodel back along the same screen line as the level forearm.
+	position = Vector3(0.0, -WATCH_SLOPE, -1.0) * WATCH_PUSHBACK * watch
 	_movement = lerpf(_movement, clampf(speed / 4.5, 0.0, 1.0), 1.0 - exp(-delta * 7.0))
 	_breath_phase = fposmod(_breath_phase + delta * 1.9, TAU)
 	# Advance a stride by distance so a slow walk also slows the swing.
@@ -216,7 +251,7 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 	var palm_target := Vector3(-0.42, -0.91, 0)
 	var finger_lift := 0.0
 	match _pose:
-		Poses.Pose.GRAB: palm_target = Vector3(-0.82, -0.57, 0)
+		Poses.Pose.GRAB, Poses.Pose.FIST: palm_target = Vector3(-0.82, -0.57, 0)
 		Poses.Pose.PINCH:
 			palm_target = Vector3(-1.0, 0.10, 0)
 			finger_lift = 0.43
@@ -259,12 +294,11 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 		var finger_weight := smoothstep(0.05, 0.83, weight)
 		var still := at_rest and bindings.is_empty()
 		if index == 0:
-			var watch_wrist := shoulder + WATCH_DIRECTION.normalized() * reach * WATCH_EXTENT
-			goal.position = goal.position.lerp(watch_wrist, watch) + sin(watch * PI) * Vector3(0.02, 0.03, -0.04)
-			hand_forward = hand_forward.lerp(WATCH_FORWARD, watch)
+			goal.position = goal.position.lerp(_watch_wrist, watch) + sin(watch * PI) * Vector3(0.02, 0.03, -0.04)
+			hand_forward = hand_forward.lerp(Vector3.RIGHT, watch)
 			palm = palm.lerp(WATCH_PALM, watch)
 			var pole: Node3D = chain.pole
-			pole.position = (chain.pole_rest as Vector3).lerp(WATCH_POLE, watch)
+			pole.position = (chain.pole_rest as Vector3).lerp(_watch_elbow, watch)
 			finger_pose = Poses.Pose.GRAB
 			finger_weight = watch * 0.85
 			still = watch == 0.0 and bindings.is_empty()
@@ -284,7 +318,7 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 			palm = rotation * palm
 		# Ease toward the pose, then add the sway and stride on top. A hand that is reaching, or
 		# holding up the wrist computer, stays steadier.
-		var steady := 1.0 - 0.6 * maxf(weight, watch if index == 0 else 0.0)
+		var steady := (1.0 - watch) if index == 0 else 1.0 - 0.6 * weight
 		var motion := (sway + Vector3(step_side, step_dip, side * cos(_stride_phase) * BOB.z * stride)) * steady
 		var settled := _follow(chain, "spring_reach", goal.position, delta, REACH_FOLLOW)
 		goal.position = shoulder + (settled + motion - shoulder).limit_length(reach * 0.97)

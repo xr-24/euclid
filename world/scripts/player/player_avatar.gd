@@ -59,19 +59,14 @@ func interact() -> void:
 	if _grounded and _current == &"Idle":
 		_play(&"Interact")
 
-func tick(player: CharacterBody3D, delta: float, swimming: bool, controls: bool) -> void:
+func tick(player: CharacterBody3D, delta: float, swimming: bool, gesture := {}) -> void:
 	var velocity := player.get_real_velocity()
 	var speed := Vector2(velocity.x, velocity.z).length()
 	var grounded := player.is_on_floor()
 	_animate(grounded, velocity.y, speed, swimming)
-	var pose := Poses.Pose.REST
-	if controls:
-		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-			pose = Poses.Pose.PINCH if Input.is_physical_key_pressed(KEY_SHIFT) else Poses.Pose.GRAB
-		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-			pose = Poses.Pose.POINT
-	var target := Vector3.INF
-	if _reaching or pose != Poses.Pose.REST:
+	var pose: Poses.Pose = gesture.get("pose", Poses.Pose.REST)
+	var target: Vector3 = gesture.get("point", Vector3.INF)
+	if _reaching:
 		var ray := PhysicsRayQueryParameters3D.create(_camera.global_position, _camera.to_global(Vector3(0, 0, -3.0)))
 		ray.exclude = [player.get_rid()]
 		var hit := player.get_world_3d().direct_space_state.intersect_ray(ray)

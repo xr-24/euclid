@@ -19,18 +19,20 @@ Allow about 2.25 GiB for the temporary art copy. Startup logs are under
 | WASD and mouse | Move and look |
 | Space | Jump; swim up in deep water |
 | C | Dive while swimming |
-| Hold right mouse | Point |
-| Hold left mouse | Grab pose |
-| Hold Shift + left mouse | Pinch pose |
+| Hold left mouse | Aim the palm beam and drag the prop under the crosshair |
+| Wheel while dragging | Rotate, resize, or change distance |
+| Middle click while dragging | Cycle the wheel mode |
+| Right click while dragging / aiming at a locked prop | Lock in place / unlock |
 | 1, 2, 3 | Shift the world around you to The Grid, the villa or the shore |
 | E while near and facing an object | Open an application preview, inspect an agent |
-| E while near and facing the Codex avatar | Open the Codex uplink |
+| E while near and facing an agent avatar | Open that agent’s conversation |
 | Tab | Raise or lower the wrist computer |
 | Q / E, or ← → (wrist up) | Previous / next wrist page |
-| ↑ ↓ or mouse wheel, then Enter (wrist up) | Select and choose |
+| ↑ ↓ or mouse wheel, then Enter or left click (wrist up) | Select and confirm |
+| Right click in a menu | Back |
 | Escape | Lower the wrist or return from a panel; with neither up, raise the wrist on System |
 | B | Open Grid or Scene tools at the crosshair |
-| F2 | Open or minimize the Codex uplink |
+| F2 | Open or minimize Agent Chat |
 | F11 | Toggle fullscreen |
 | F3 | Toggle live performance statistics |
 | F4 | Open or close Workbench |
@@ -38,10 +40,25 @@ Allow about 2.25 GiB for the temporary art copy. Startup logs are under
 There is no menu screen. Press **Tab** and your left forearm comes up the way you would check a
 watch, and the wrist computer projects a hologram above it. Its pages are **Areas** (shift to
 any space, custom ones included), **Build** (open Grid or Scene tools, or describe what you want
-and let Codex build it), **Codex** (message it and read replies without leaving the world),
+and let Codex build it), **Agents** (choose an agent and send a quick command from your wrist),
 **Workbench** (source, terminal, agents and history) and **System** (fullscreen, graphics, and
-save and quit, which asks for a second Enter). You can keep walking and looking while it is up;
-only typing a message holds you still. Opening any panel lowers it.
+save and quit, which asks you to confirm twice). You can keep walking and looking while it is up;
+only typing holds you still. Opening any panel lowers it.
+
+Drag the three-dot handle to move a desktop panel, or drag its edges and corners to resize it.
+In Grid or Scene tools, click the color swatch and choose **Apply** to save the change.
+
+**Build → Scan Object** opens a live inspector. Frame a prop or water surface
+in the left pane while walking. The wrist renders the selected prop and shows
+its editable properties. Scroll to a property, left-click, type a value, and
+left-click or press Enter to apply. Water uses a material preview and saves
+per-surface color, reflectivity, roughness, ripple and foam settings where supported.
+Right-click returns to Build.
+
+Let go of the palm beam to release an unlocked prop. Right-click while holding
+it to save the placement and lock its physics. Right-click a locked prop to
+make it movable again. Unlocked props respond to gravity and can be pushed by
+walking into them. Scripted props and structural surfaces retain their own motion rules.
 
 The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone on the wrist computer's Areas page) and the world is rewritten around you in place. A sphere expands from your eyes, the old zone unravels into a blue lattice with streams of 1s and 0s pouring down it, and the new zone climbs up out of the same lattice while the sky, sun and atmosphere blend across. There are no portals. Zones are built on a worker thread and global illumination re-settles while the effect still covers the change, so a shift neither freezes the game nor flashes at the end. If the spot you are standing on would leave you inside a hill or out in deep water in the new zone, you arrive at its usual starting point instead. The villa, Villa Aurelia, is modelled on the Getty Villa and stands on a sandstone bluff about 80 m above a sandy cove on a Laguna Beach-style coast, with rocky headlands either side, coastal sage scrub and ice plant on the bluffs and rolling hills behind. You arrive in the outer peristyle: a long garden court with fluted limestone colonnades under coffered ceilings, Pompeian red frescoes, clipped box hedges (built leaf by leaf), olive trees, a reflecting pool fed by bronze lion-head fountains and an open south end looking out over the sea. North of it is the house: an entrance hall between two sculpture galleries, an inner peristyle with a long narrow pool and bronzes, an atrium open to the sky over its rain pool, the hall of Herakles, and the library, where the study terminal and the example worker now sit. Doors lead on to a walled east garden with a round fountain and a lion-head wall fountain, terraced herb and fruit gardens stepping down toward the bluff, and an outdoor theatre facing the house's west door. The reflecting pool runs its own shallow-water simulation, so the fountains keep a ripple moving down it and you can wade in from the ramp at its south end. The shore is a sheltered cove at golden hour, with wind-rippled sand that darkens and turns glossy toward the waterline, real simulated surf (a GPU shallow-water solver: waves shoal over the seabed, break, run up the sand and drain back, leaving wet sand and foam lines that dry over time) that you can walk and swim out into; you leave a wake and splash, and barrels, a crate and a buoy float and drift on it, rocky headlands, windswept trees and a weathered pier. Materials and most models are CC0 scans from [Poly Haven](https://polyhaven.com) (see `world/assets/thirdparty/polyhaven/CREDITS.md`). The villa's statues, busts and sarcophagi are museum and artist scans from Sketchfab under Creative Commons licences; they live in a licence-sorted asset library with generated credits (`world/assets/library/`, credits in `world/assets/library/CREDITS.md`), and where they stand is plain data in `world/data/dressing/villa.json`. Some of them are non-commercial only; see `world/assets/library/README.md` before selling or open-sourcing Euclid. Each zone has its own HDRI sky with a matched sun, and Forward+ adds SDFGI bounce light, SSR, SSAO/SSIL, volumetric fog and AgX tonemapping. The surf uses the MIT-licensed [Realistic Shoreline Waves](https://reboot16.itch.io/godot-rsw) solver by Reboot16, vendored in `world/thirdparty/shorewaves`. It needs Forward+ with a GPU; otherwise the shore falls back to the shader ocean. The Grid is a dark digital workshop. Other zones fall back to blockout geometry if their art is missing. Location, zone and viewing direction save automatically and restore on restart. Application identities and anchor assignments live in `world/data/world.json` independently of scene geometry.
 
@@ -67,15 +84,15 @@ To try the local agent, launch Euclid normally, open Grid tools and enter **Make
 
 Codex can propose one cone with a color and scale. Euclid places it at the crosshair location captured when the palette opened and selects it in the inspector after saving. The same **Undo** button reverses a player or Codex edit.
 
-## Codex uplink
+## Agent Chat
 
-Press **F2** in any environment. Type at the prompt and press **Enter**. Use the square and dash to expand and minimize the dock. Press **↑** and **↓** to recall up to 100 submitted prompts. With the standard launcher, Euclid keeps that recall history and up to 300 scrollback entries across restarts. The arrow opens the interactive Codex CLI in a native Windows terminal. Use **Alt+Tab** to switch between Euclid and that window. See the [embedded terminal proposal](docs/terminal-blueprint.md).
+Press **F2**, or choose **Message** on the wrist’s Agents page. Select Codex, Claude, or a cloud agent registered in Workbench. Each agent has its own tab and recent conversation history. Codex and Claude take requests through their local CLI workers. Cloud messages go to the selected agent’s inbox. The arrow on the Codex tab opens the interactive Codex CLI in a native Windows terminal.
 
-When the Codex avatar is close and in view, **E: Command agent** opens the same uplink. The avatar uses a higher-contrast projection in the villa and on the beach.
+An avatar appears when you first contact its agent in a running session. Codex is red, Claude is orange, and cloud agents have a blue gradient. Aim at a nearby avatar and press **E** to open its conversation.
 
-Try **Where can we go?**, **Take me to the Roman villa**, **Take me to the beach**, **Create a Grid space called Signal Lab**, **Follow me**, or **Stay here**. The uplink sends the live environment list to Codex. The native CLI discovers the same world operations through a session-scoped MCP connection and prompts before changing the world. Both report travel once Euclid finishes the shift.
+Local agents can use Euclid’s world tools to find or change environments. Try **Take me to the Roman villa**, **Follow me**, or **Stay here**. **Quick Command** on the wrist also supports the direct world planner for short Codex requests.
 
-Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. You can also ask **Create a new environment called Garden Annex using Villa Aurelia as its template**. The hovering avatar follows your position across environments and keeps its distance when you turn to look around. **Stay here** parks it in the current environment for the session. The musical note toggles spoken tool results through an installed English system voice.
+Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. The hovering avatars follow across environments and space themselves apart. **Stay here** parks the addressed local agent in its current environment for the session. The musical note toggles spoken world-tool results through an installed English system voice.
 
 ## Choose the agent
 

@@ -1,6 +1,7 @@
 extends Node
 
 signal notice(text: String)
+signal addressed(peer: String)
 
 var _url := ""
 var _headers := PackedStringArray()
@@ -9,7 +10,7 @@ var _status := {}
 var _polling := false
 
 func configure(url: String, token: String, capability: String) -> void:
-	_url = url + "/v1/tasks/"
+	_url = url
 	_headers = ["Authorization: Bearer " + token, "X-Euclid-Workbench: " + capability, "Content-Type: application/json"]
 
 func share_view(to: String, zone: String, image: PackedByteArray) -> void:
@@ -17,11 +18,26 @@ func share_view(to: String, zone: String, image: PackedByteArray) -> void:
 	notice.emit(str(result.get("error", "Shared the view with @" + to + ".")))
 
 func _request(action: String, body: Dictionary) -> Dictionary:
+	return await _post("/v1/tasks/" + action, body)
+
+func directory() -> Dictionary:
+	return await _post("/v1/agents/list", {})
+
+func send_chat(peer: String, text: String, session: String, local: bool) -> Dictionary:
+	var body := {"to": peer, "text": text}
+	if local:
+		body["session"] = session
+	return await _request("assign" if local else "send_message", body)
+
+func conversations(peers: Array[String]) -> Dictionary:
+	return await _request("inbox", {"peers": peers})
+
+func _post(route: String, body: Dictionary) -> Dictionary:
 	var http := HTTPRequest.new()
 	http.timeout = 8
-	http.body_size_limit = 196608
+	http.body_size_limit = 12 * 1024 * 1024 if body.has("peers") else 196608
 	add_child(http)
-	if http.request(_url + action, _headers, HTTPClient.METHOD_POST, JSON.stringify(body)) != OK:
+	if http.request(_url + route, _headers, HTTPClient.METHOD_POST, JSON.stringify(body)) != OK:
 		http.queue_free()
 		return {"error": "Could not reach the task gateway."}
 	var reply: Array = await http.request_completed
@@ -65,8 +81,11 @@ func submit(prompt: String, session: String) -> void:
 	if result.has("error"):
 		notice.emit(str(result.error))
 	elif result.has("task"):
+		if action == "assign":
+			addressed.emit(result.task.to)
 		_show_task(result.task, true)
 	elif result.has("message"):
+		addressed.emit(result.message.to)
 		notice.emit("To @%s  %s" % [result.message.to, result.message.text])
 		_seen[result.message.id] = true
 

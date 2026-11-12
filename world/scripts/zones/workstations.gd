@@ -24,7 +24,7 @@ static func build(root: Node3D, at: Vector3, anchor: Dictionary) -> Node3D:
 				Vector3(1.0, 0.76, 1.0) if villa else Vector3(1.7, 0.8, 0.8))
 		else:
 			_fallback(station)
-	Props.register(root, Props.stable_id("anchor", anchor.id), station, asset, 0.0, {"label": anchor.label})
+	Props.register(root, Props.stable_id("anchor", anchor.id), station, asset, 0.0, {"label": anchor.label, "placement_surface": true})
 	return station
 
 static func _laptop(root: Node3D, at: Vector3) -> void:

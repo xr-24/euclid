@@ -3,6 +3,7 @@ extends RefCounted
 const Assets = preload("res://scripts/assets/asset_library.gd")
 const Water = preload("res://scripts/simulation/water_system.gd")
 const Props = preload("res://scripts/zones/authored_props.gd")
+const WaterEdits = preload("res://scripts/workshop/water_edits.gd")
 const SEA_LEVEL := Water.SEA_LEVEL
 const SCOPE := "beach"
 
@@ -57,6 +58,8 @@ static func build(context: RefCounted) -> bool:
 		root.add_child(sea)
 	# Simulated surf: the shoreline solver takes over the cove's shallows.
 	var surf := Water.build_surf(root, mat, ocean_materials) if "surf" in context.package.water else {}
+	WaterEdits.register(root, "ocean", "Coastal water", Rect2(-130, -170, 260, 200), SEA_LEVEL,
+		surf.get("surfaces", ocean_materials), 0.0, [] if surf.is_empty() else ocean_materials)
 	# The cove is open to walk and swim in; far-off invisible walls keep you in the world.
 	for wall in [[Vector3(0, 10, -95), Vector3(160, 40, 2)], [Vector3(0, 10, 50), Vector3(160, 40, 2)],
 			[Vector3(-75, 10, -20), Vector3(2, 40, 150)], [Vector3(75, 10, -20), Vector3(2, 40, 150)]]:

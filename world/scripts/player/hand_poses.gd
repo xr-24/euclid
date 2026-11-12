@@ -1,7 +1,7 @@
 extends RefCounted
 ## Joint curl in degrees, from knuckle to fingertip. The wrist and elbow are solved separately.
 
-enum Pose { REST, POINT, GRAB, PINCH, OPEN_PALM }
+enum Pose { REST, POINT, GRAB, PINCH, OPEN_PALM, FIST }
 
 const FINGERS := ["thumb", "index", "middle", "ring", "pinky"]
 const CURL := {
@@ -10,6 +10,7 @@ const CURL := {
 	Pose.GRAB: [[10, 18, 9], [31, 42, 20], [35, 48, 23], [40, 52, 25], [46, 55, 29]],
 	Pose.PINCH: [[9.5, 16.3, 7.6], [36, 48, 24], [8, 12, 6], [13, 18, 10], [18, 23, 13]],
 	Pose.OPEN_PALM: [[3, 6, 3], [3, 6, 3], [4, 7, 4], [6, 9, 4], [9, 11, 6]],
+	Pose.FIST: [[22, 26, 12], [62, 70, 28], [66, 74, 31], [69, 76, 35], [73, 78, 38]],
 }
 const SPREAD := {
 	Pose.REST: [0, 5, 1, -4, -9],
@@ -17,6 +18,7 @@ const SPREAD := {
 	Pose.GRAB: [0, 3, 0, -3, -5],
 	Pose.PINCH: [0, 0, -4, -10, -15],
 	Pose.OPEN_PALM: [0, 6, 1, -4, -9],
+	Pose.FIST: [0, 1, 0, -2, -4],
 }
 const THUMB_OPPOSITION := {
 	Pose.REST: 12.0,
@@ -24,6 +26,7 @@ const THUMB_OPPOSITION := {
 	Pose.GRAB: 24.0,
 	Pose.PINCH: 13.8,
 	Pose.OPEN_PALM: -6.0,
+	Pose.FIST: 31.0,
 }
 
 ## Wrist placement for a distant target, relative to the shoulder and aim.
@@ -32,4 +35,5 @@ const REACH := {
 	Pose.GRAB: Vector3(0.045, -0.042, -0.38),
 	Pose.PINCH: Vector3(0.045, -0.009, -0.37),
 	Pose.OPEN_PALM: Vector3(0.035, -0.025, -0.42),
+	Pose.FIST: Vector3(0.045, -0.042, -0.38),
 }

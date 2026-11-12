@@ -3,6 +3,7 @@ extends RefCounted
 const Assets = preload("res://scripts/assets/asset_library.gd")
 const Interactions = preload("res://scripts/simulation/water_interactions.gd")
 const PoolReflection = preload("res://scripts/rendering/pool_reflection.gd")
+const WaterEdits = preload("res://scripts/workshop/water_edits.gd")
 const SEA_LEVEL := -0.55
 const SIM_DIR := "res://thirdparty/shorewaves/"
 const SIM_META := "res://assets/generated/shore_sim.json"
@@ -29,6 +30,7 @@ static func water_material(sea: bool) -> ShaderMaterial:
 static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
 	var p: Array = layout.pool
 	var water_y := float(layout.water_y)
+	var rect := Rect2(float(p[0]), float(p[2]), float(p[1]) - float(p[0]), float(p[3]) - float(p[2]))
 	var meta_path := "res://assets/generated/villa_pool.json"
 	var body := {}
 	if Assets.has_rd and FileAccess.file_exists(meta_path) and ResourceLoader.exists(SIM_DIR + "sim_controller.gd"):
@@ -82,6 +84,7 @@ static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
 		reflection.name = "PoolReflection"
 		reflection.configure(wmat,water,water_y)
 		root.add_child(reflection)
+		WaterEdits.register(root, "reflecting_pool", "Reflecting pool", rect, water_y, [wmat])
 		body = {"sim": sim, "origin": origin, "dx": dx, "n": n, "sea_level": water_y, "profile":"pool", "player_wet":false}
 	else:
 		var still := MeshInstance3D.new()
@@ -91,6 +94,7 @@ static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
 		still.position = Vector3(0, water_y, (float(p[2]) + float(p[3])) * 0.5)
 		still.material_override = water_material(false)
 		root.add_child(still)
+		WaterEdits.register(root, "reflecting_pool", "Reflecting pool", rect, water_y, [still.material_override])
 	return body
 
 

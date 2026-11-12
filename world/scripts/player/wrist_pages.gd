@@ -17,7 +17,7 @@ func status_line() -> String:
 	return "%s  ·  %02d:%02d" % [_zone_name(_world.zone_id).to_upper(), clock.hour, clock.minute]
 
 func pages() -> Array:
-	return [_areas(), _build(), _codex(), _workbench(), _system()]
+	return [_areas(), _build(), _agents(), _workbench(), _system(), _world.scanner.page()]
 
 func _areas() -> Dictionary:
 	var rows := []
@@ -38,16 +38,20 @@ func _build() -> Dictionary:
 			"enabled": _world._scene_ready(), "why": "LOADING", "run": Callable(_world, "_request_grid_palette"), "close": true},
 		{"label": "PLAYER RIG", "enabled": not _world.shifting, "why": "SHIFTING",
 			"run": Callable(_world, "_open_player_rig"), "close": true},
-		{"label": "DESCRIBE", "input": true, "then": "codex", "value": codex, "tone": "warn" if not codex.is_empty() else "",
+		{"label": "SCAN OBJECT", "enabled": _world._scene_ready(), "why": "LOADING",
+			"run": Callable(_world.wrist, "raise_wrist").bind("scan")},
+		{"label": "DESCRIBE", "input": true, "then": "agents", "value": codex, "tone": "warn" if not codex.is_empty() else "",
 			"enabled": codex.is_empty(), "why": codex, "run": Callable(_world, "_submit_codex_command")},
 	]}
 
-func _codex() -> Dictionary:
-	var codex := _codex_state()
-	return {"id": "codex", "title": "CODEX", "log": _world._dev.console_lines, "rows": [
-		{"label": "MESSAGE", "input": true, "value": codex, "tone": "warn" if not codex.is_empty() else "",
-			"enabled": codex.is_empty(), "why": codex, "run": Callable(_world, "_submit_codex_command")},
-		{"label": "UPLINK", "value": "F2", "run": Callable(_world._dev, "open_console"), "close": true},
+func _agents() -> Dictionary:
+	var dev = _world._dev
+	var status: String = _codex_state() if dev.chat_peer == "local-codex" else ("" if dev.can_message() else "OFFLINE")
+	return {"id": "agents", "title": "AGENTS", "log": dev.chat_log(dev.chat_peer, 12), "rows": [
+		{"label": "AGENT", "value": dev.chat_label(), "run": Callable(dev, "cycle_agent")},
+		{"label": "QUICK COMMAND", "input": true, "value": status, "tone": "warn" if not status.is_empty() else "",
+			"enabled": status.is_empty(), "why": status, "run": Callable(dev, "quick_command")},
+		{"label": "MESSAGE", "value": "F2", "run": Callable(dev, "open_console"), "close": true},
 	]}
 
 func _workbench() -> Dictionary:

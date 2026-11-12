@@ -33,6 +33,19 @@ static func pick(player: CharacterBody3D, camera: Camera3D, bounds: AABB, grid: 
 		hit = _ray(state, player, ahead + Vector3.UP * 2.0, ahead + Vector3.DOWN * 8.0)
 	return {"selected": selected, "point": hit.position if _floor(hit, bounds) else Vector3.INF}
 
+static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, reach: float) -> Dictionary:
+	var from := camera.project_ray_origin(pixel)
+	var direction := camera.project_ray_normal(pixel)
+	var to := from + direction * reach
+	var state := camera.get_world_3d().direct_space_state
+	var hit := _ray(state, player, from, to)
+	var point: Vector3 = hit.get("position", to)
+	var picker := _ray(state, player, from, point, true)
+	if not picker.is_empty() and not _entity(picker).is_empty():
+		hit = picker
+		point = picker.position
+	return {"id": _entity(hit), "point": point, "from": from, "direction": direction}
+
 static func coordinates(point: Vector3) -> Array:
 	return [point.x, point.y, point.z] if point.is_finite() else []
 

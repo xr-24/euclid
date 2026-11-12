@@ -3,16 +3,23 @@ extends RefCounted
 ## location round-trips, and an in-place shift replaces the zone around the player.
 ## Run with `-- --smoke`. Uses a throwaway save and never the user's world state.
 
+const Packages = preload("res://scripts/zones/zone_packages.gd")
+
 static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
 	await _check_prop_lock(world, tree)
 	for zone in world.manifest.zones:
 		world._load_zone(zone.id)
+		var package := Packages.definition(zone.id)
 		if zone.id == "construct":
 			assert(world.zone_root.get_node_or_null("GridFloor") is StaticBody3D)
-		else:
+		elif package.has("builder"):
 			assert(world.zone_root.get_child_count() > 5)
-		assert(not world.interactables.is_empty())
+		for piece: Dictionary in package.get("pieces", []):
+			var node: Node = world.zone_root.get_node_or_null("Piece_" + str(piece.id))
+			assert(node != null and node.get_meta("piece_type") == piece.type)
+		var anchors: Array = world.manifest.anchors.filter(func(anchor: Dictionary) -> bool: return anchor.zone == zone.id)
+		assert(world.interactables.size() == anchors.size())
 		await tree.process_frame
 	# The wrist computer is the menu: it rises with the arm, and any panel lowers it.
 	var wrist = world.wrist
@@ -53,7 +60,7 @@ static func run(world: Node3D) -> void:
 			await world.request.request_completed
 		assert(world.gateway_connected, "Configured gateway must return a valid authenticated snapshot")
 		print("CONSTRUCT_GATEWAY_OK: authenticated snapshot received in Godot")
-	print("CONSTRUCT_SMOKE_OK: three zones, anchors, collision, application return, saved location round trip, in-place shift")
+	print("CONSTRUCT_SMOKE_OK: installed zones, anchors, collision, application return, saved location round trip, in-place shift")
 	tree.quit()
 
 static func _check_prop_lock(world: Node3D, tree: SceneTree) -> void:

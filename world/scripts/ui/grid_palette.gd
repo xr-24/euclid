@@ -27,6 +27,7 @@ var _delete: Button
 var _restore_authored: Button
 var _duplicate: Button
 var _undo: Button
+var _reset_shape: Button
 var _behaviors: BehaviorInspector
 var _prefabs: OptionButton
 var _prefab_name: LineEdit
@@ -122,6 +123,8 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_delete = action_buttons["delete"]
 	_restore_authored = action_buttons["restore_authored"]
 	_undo = action_buttons["undo"]
+	_reset_shape = _button(actions, "Reset shape", func() -> void: _run("edit", {"changes": {"stretch": [1.0, 1.0, 1.0]}}))
+	_reset_shape.visible = false
 	_registered_actions = MenuButton.new()
 	_registered_actions.text = "Workshop actions"
 	actions.add_child(_registered_actions)
@@ -370,6 +373,8 @@ func _select(index: int) -> void:
 	_delete.disabled = not editable
 	_delete.text = "Hide" if authored else "Delete"
 	_restore_authored.visible = authored and record.get("overridden", false)
+	var stretch: Variant = record.get("stretch", [1.0, 1.0, 1.0])
+	_reset_shape.visible = editable and stretch is Array and stretch != [1.0, 1.0, 1.0] and stretch != [1, 1, 1]
 	_save_prefab.disabled = not editable or authored
 	var supports_color := "color" in Commands.prop_fields(authored)
 	_color.disabled = not editable or not supports_color

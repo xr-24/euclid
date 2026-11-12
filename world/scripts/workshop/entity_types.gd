@@ -21,6 +21,8 @@ static func valid_properties(record: Dictionary) -> bool:
 		and record.get("locked", false) is bool \
 		and Commands.valid_field("yaw", record.get("yaw")) \
 		and Commands.valid_field("scale", record.get("scale")) \
+		and (not record.has("stretch") or (Commands.valid_field("stretch", record.stretch) \
+			and TYPES[type].get("factory") != "door")) \
 		and Commands.valid_field("color", record.get("color"))
 
 static func number_between(value: Variant, minimum: float, maximum: float) -> bool:
@@ -97,7 +99,15 @@ static func create(record: Dictionary) -> PhysicsBody3D:
 				_place_model(body, model, size, record.color)
 			else:
 				body.set_meta("asset_unavailable", true)
+	var stretch := stretch_of(record)
+	if stretch != Vector3.ONE:
+		_resize_parts(body, stretch)
 	return body
+
+## Stretch along the prop's own axes (X, Y and Z after its yaw), on top of its scale.
+static func stretch_of(record: Dictionary) -> Vector3:
+	var value: Variant = record.get("stretch")
+	return Vector3(float(value[0]), float(value[1]), float(value[2])) if value is Array and value.size() == 3 else Vector3.ONE
 
 static func movable(record: Dictionary) -> bool:
 	return TYPES.get(record.get("type"), {}).get("factory") != "door" and not record.has("animation") and not record.has("behavior")
@@ -107,20 +117,10 @@ static func update_placement(body: RigidBody3D, previous: Dictionary, record: Di
 		body.position = Vector3(record.position[0], record.position[1], record.position[2])
 	if previous.yaw != record.yaw:
 		body.rotation.y = deg_to_rad(record.yaw)
-	if previous.scale != record.scale:
-		var factor: float = float(record.scale) / float(previous.scale)
-		for part in body.get_children():
-			if part is CollisionShape3D:
-				part.position *= factor
-				if part.shape is BoxShape3D:
-					part.shape.size *= factor
-				elif part.shape is ConvexPolygonShape3D:
-					var points: PackedVector3Array = part.shape.points
-					for index in points.size():
-						points[index] *= factor
-					part.shape.points = points
-			elif part is Node3D:
-				part.transform = part.transform.scaled(Vector3.ONE * factor)
+	var before := float(previous.scale) * stretch_of(previous)
+	var after := float(record.scale) * stretch_of(record)
+	if before != after:
+		_resize_parts(body, after / before)
 		body.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
 	var locked: bool = record.get("locked", false)
 	if body.freeze != locked:
@@ -129,6 +129,24 @@ static func update_placement(body: RigidBody3D, previous: Dictionary, record: Di
 		body.angular_velocity = Vector3.ZERO
 		if not locked:
 			body.sleeping = false
+
+## Scales a body's parts and colliders along its own axes. Shapes are copied first, since a model's
+## collision shapes can be shared with other copies of it.
+static func _resize_parts(body: Node3D, factor: Vector3) -> void:
+	for part in body.get_children():
+		if part is CollisionShape3D:
+			part.position *= factor
+			if part.shape is BoxShape3D:
+				part.shape = part.shape.duplicate()
+				part.shape.size *= factor
+			elif part.shape is ConvexPolygonShape3D:
+				part.shape = part.shape.duplicate()
+				var points: PackedVector3Array = part.shape.points
+				for index in points.size():
+					points[index] *= factor
+				part.shape.points = points
+		elif part is Node3D:
+			part.transform = part.transform.scaled(factor)
 
 static func _size(definition: Dictionary) -> Vector3:
 	var size: Array = definition.size

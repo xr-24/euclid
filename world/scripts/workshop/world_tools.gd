@@ -132,6 +132,8 @@ func _spawn(args: Dictionary) -> Dictionary:
 		proposed["asset_id"] = asset_id
 	if args.has("name") and args.name != "":
 		proposed["name"] = args.name.strip_edges() if args.name is String else args.name
+	if args.has("stretch"):
+		proposed["stretch"] = args.stretch
 	if args.has("animation"):
 		proposed["animation"] = args.animation
 	if args.has("behavior"):
@@ -449,7 +451,7 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary) -> void:
 		_show(record)
 
 static func _same_placement(a: Dictionary, b: Dictionary) -> bool:
-	for key in ["type", "asset_id", "position", "yaw", "scale", "color", "locked"]:
+	for key in ["type", "asset_id", "position", "yaw", "scale", "stretch", "color", "locked"]:
 		if a.get(key) != b.get(key):
 			return false
 	return true
@@ -519,6 +521,17 @@ func _valid_record(record: Dictionary) -> bool:
 
 func scene_node(id: String) -> Node3D:
 	return _dressing.scene_node(id) if _dressing.has(id) else _nodes.get(id) as Node3D
+
+## A prop's absolute yaw as it stands now, for tools that turn it from where it is.
+func live_yaw(id: String) -> float:
+	var record := _record(id)
+	var recorded := float(record.get("yaw", 0.0))
+	if _dressing.has(id):
+		return _dressing.live_yaw(id, recorded)
+	var node := scene_node(id)
+	if node is RigidBody3D:
+		return wrapf(rad_to_deg(node.basis.orthonormalized().get_euler().y), -180.0, 180.0)
+	return recorded
 
 func can_toggle_lock(id: String) -> bool:
 	if _dressing.has(id):

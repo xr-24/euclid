@@ -1,12 +1,17 @@
 extends Node3D
-## Move, turn and resize a selected prop by dragging handles in the world, while the build
-## palette is open. Arrows move along X (red), Y (green) and Z (blue); the white ball slides it
-## over the ground; the yellow ring turns it; the white cube resizes it. Hold Ctrl to snap. Click
-## a prop in the world to select it, and hold the middle mouse button to look around. A drag is
-## one edit and one undo step, through the same path as the grab beam.
+## Handles for the selected prop while the build palette is open, in two modes (Q or the
+## Handles button switches them):
+##   Move   arrows move it along X (red), Y (green) and Z (blue), the ball slides it over the
+##          ground and the yellow ring turns it.
+##   Shape  a handle on each face stretches the prop from that side, keeping the opposite face
+##          where it is, along the prop's own axes; the white cube resizes it evenly.
+## Hold Ctrl to snap and press Escape mid-drag to put it back. Click a prop in the world to
+## select it, and hold the middle mouse button to look around. A drag is one edit and one undo
+## step, through the same path as the grab beam.
 
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
+const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
 
 signal picked(id: String)
@@ -15,25 +20,35 @@ signal edited(id: String)
 ## The handles' size as a share of the view's height, whatever the distance.
 const SCREEN_SIZE := 0.16
 const RING := 1.25
-const SCALE_CORNER := Vector3(0.72, 0.72, 0.0)
-const SNAP := {"move": 0.25, "turn": 15.0, "size": 0.1}
+const SCALE_CORNER := Vector3(0.72, 0.72, 0.72)
+const SNAP := {"move": 0.25, "turn": 15.0, "size": 0.1, "stretch": 0.1}
 const PICK_PIXELS := 11.0
-const COLORS := {"x": Color("ff4a5a"), "y": Color("6effa0"), "z": Color("4f9dff"),
-	"plane": Color("f2f2f2"), "turn": Color("ffd166"), "size": Color("f2f2f2")}
+const AXIS_COLORS := {"x": Color("ff4a5a"), "y": Color("6effa0"), "z": Color("4f9dff")}
+const COLORS := {"plane": Color("f2f2f2"), "turn": Color("ffd166"), "size": Color("f2f2f2")}
 const AXES := {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
+## Each handle's tip in the gizmo's own space, and which mode shows it.
+const TIPS := {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK,
+	"+x": Vector3.RIGHT, "-x": Vector3.LEFT, "+y": Vector3.UP, "-y": Vector3.DOWN, "+z": Vector3.BACK, "-z": Vector3.FORWARD}
+const MOVE := ["plane", "x", "y", "z", "turn"]
+const SHAPE := ["size", "+x", "-x", "+y", "-y", "+z", "-z"]
 
 var world # world.gd
 var selected := ""
+var mode := "move"
+## The palette's Handles button, kept in step with the mode.
+var mode_button: Button
 var _handles := {}
 var _materials := {}
 var _hover := ""
 var _drag := {}
 var _looking := false
+var _info := {}
 
 func _ready() -> void:
-	top_level = true
 	for key in AXES:
-		_handles[key] = _arrow(key)
+		_handles[key] = _arrow(key, false)
+		for sign_text in ["+", "-"]:
+			_handles[sign_text + key] = _arrow(sign_text + key, true)
 	_handles["plane"] = _part("plane", _sphere(0.09), Transform3D.IDENTITY)
 	var torus := TorusMesh.new()
 	torus.inner_radius = RING - 0.03
@@ -44,7 +59,21 @@ func _ready() -> void:
 	var cube := BoxMesh.new()
 	cube.size = Vector3.ONE * 0.15
 	_handles["size"] = _part("size", cube, Transform3D(Basis.IDENTITY, SCALE_CORNER))
+	_show_mode()
 	visible = false
+
+func toggle_mode() -> void:
+	mode = "shape" if mode == "move" else "move"
+	_show_mode()
+
+func mode_label() -> String:
+	return "Handles: %s  [Q]" % ("Move" if mode == "move" else "Shape")
+
+func _show_mode() -> void:
+	for key in _handles:
+		(_handles[key] as Node3D).visible = key in (MOVE if mode == "move" else SHAPE)
+	if is_instance_valid(mode_button):
+		mode_button.text = mode_label()
 
 func active() -> bool:
 	return world != null and world.overlay.visible and is_instance_valid(world._palette_host.panel) \
@@ -60,27 +89,45 @@ func _process(_delta: float) -> void:
 		visible = false
 		_looking = false
 		return
-	selected = _palette_selection()
+	var id := _palette_selection()
+	if id != selected or _info.get("id") != id:
+		selected = id
+		_refresh_info()
 	var node := target()
 	visible = node != null and is_instance_valid(node)
 	if not visible:
 		return
+	for key in ["+x", "-x", "+y", "-y", "+z", "-z"]:
+		(_handles[key] as Node3D).visible = mode == "shape" and _info.get("stretchable", false)
 	var camera: Camera3D = world.camera
 	var center := node.global_position
 	var distance := maxf(0.5, camera.global_position.distance_to(center))
 	var size := distance * tan(deg_to_rad(camera.fov) * 0.5) * SCREEN_SIZE * 2.0
-	global_transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * size), center)
+	# Move works in the world's axes; Shape in the prop's own, turned by its yaw.
+	var facing := Basis.IDENTITY if mode == "move" else Basis(Vector3.UP, deg_to_rad(float(_info.get("yaw", 0.0))))
+	global_transform = Transform3D(facing.scaled(Vector3.ONE * size), center)
 	for key in _materials:
 		var lit: bool = key == _hover or key == _drag.get("handle", "")
-		(_materials[key] as StandardMaterial3D).albedo_color = (COLORS[key] as Color).lerp(Color.WHITE, 0.55) if lit else COLORS[key]
+		var base := _color(key)
+		(_materials[key] as StandardMaterial3D).albedo_color = base.lerp(Color.WHITE, 0.55) if lit else base
 
-## Presses that start a drag or a pick, hover and middle-button looking. Drags in progress run in
-## _input, so they keep going over the palette.
+func _refresh_info() -> void:
+	var inspected: Dictionary = world.world_tools.execute("inspect", {"id": selected}) if not selected.is_empty() else {}
+	var record: Dictionary = inspected.get("entity", {})
+	_info = {"id": selected, "yaw": world.world_tools.live_yaw(selected) if not record.is_empty() else 0.0,
+		"stretch": EntityTypes.stretch_of(record), "scale": float(record.get("scale", 1.0)), "record": record,
+		"stretchable": not record.is_empty() and EntityTypes.TYPES.get(record.get("type"), {}).get("factory") != "door"}
+
+## Presses that start a drag or a pick, Q, hover and middle-button looking. Drags in progress
+## run in _input, so they keep going over the palette.
 func _unhandled_input(event: InputEvent) -> void:
 	if not active() or not _drag.is_empty():
 		return
 	var camera: Camera3D = world.camera
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q:
+		toggle_mode()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
 		_looking = event.pressed
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
@@ -118,35 +165,40 @@ func _palette_selection() -> String:
 		return panel.selected_entity()
 	return str(panel.capture_view().get("selected", ""))
 
+func _color(key: String) -> Color:
+	return AXIS_COLORS[key.right(1)] if key.length() <= 2 and AXIS_COLORS.has(key.right(1)) else COLORS[key]
+
 # ---------------------------------------------------------------- picking
 
 func _handle_at(pixel: Vector2, camera: Camera3D) -> String:
 	var center := global_position
 	if camera.is_position_behind(center):
 		return ""
-	var size := global_basis.x.length()
 	var middle := camera.unproject_position(center)
-	if pixel.distance_to(middle) < PICK_PIXELS * 1.4:
+	var shown := func(key: String) -> bool: return (_handles[key] as Node3D).visible
+	if shown.call("plane") and pixel.distance_to(middle) < PICK_PIXELS * 1.4:
 		return "plane"
-	var corner := center + SCALE_CORNER * size
-	if not camera.is_position_behind(corner) and pixel.distance_to(camera.unproject_position(corner)) < PICK_PIXELS * 1.3:
+	var corner := global_transform * SCALE_CORNER
+	if shown.call("size") and not camera.is_position_behind(corner) and pixel.distance_to(camera.unproject_position(corner)) < PICK_PIXELS * 1.3:
 		return "size"
 	var best := ""
 	var nearest := PICK_PIXELS
-	for key in AXES:
-		var tip: Vector3 = center + AXES[key] * size
+	for key in TIPS:
+		if not shown.call(key):
+			continue
+		var tip := global_transform * (TIPS[key] as Vector3)
 		if camera.is_position_behind(tip):
 			continue
 		var gap := _segment_distance(pixel, middle, camera.unproject_position(tip))
 		if gap < nearest:
 			nearest = gap
 			best = key
-	if not best.is_empty():
+	if not best.is_empty() or not shown.call("turn"):
 		return best
 	var previous := Vector2.INF
 	for step in 49:
 		var angle := TAU * step / 48.0
-		var point := center + Vector3(sin(angle), 0.0, cos(angle)) * RING * size
+		var point := global_transform * (Vector3(sin(angle), 0.0, cos(angle)) * RING)
 		if camera.is_position_behind(point):
 			previous = Vector2.INF
 			continue
@@ -165,18 +217,26 @@ static func _segment_distance(point: Vector2, a: Vector2, b: Vector2) -> float:
 
 func _begin(handle: String, pixel: Vector2, camera: Camera3D) -> void:
 	var node := target()
-	var inspected: Dictionary = world.world_tools.execute("inspect", {"id": selected})
-	if node == null or not inspected.get("ok", false):
-		return
-	var record: Dictionary = inspected.entity
-	if record.get("hidden", false):
+	_refresh_info()
+	var record: Dictionary = _info.record
+	if node == null or record.is_empty() or record.get("hidden", false):
 		return
 	var parent := node.get_parent() as Node3D
+	var facing := Basis(Vector3.UP, deg_to_rad(float(_info.yaw)))
 	_drag = {"handle": handle, "id": selected, "node": node, "parent": parent, "camera": camera,
-		"transform": node.transform, "start": node.position, "basis": node.global_basis,
-		"yaw": rad_to_deg(node.transform.basis.get_euler().y) if node is RigidBody3D else float(record.get("yaw", 0.0)),
-		"scale": float(record.get("scale", 1.0)), "pixel": pixel,
+		"transform": node.transform, "start": node.position, "basis": node.global_basis, "facing": facing,
+		"yaw": float(_info.yaw), "scale": float(_info.scale), "stretch": _info.stretch, "pixel": pixel,
 		"center": camera.unproject_position(node.global_position), "parts": {}}
+	if handle.length() == 2:
+		# Stretch: the handle's direction in the parent's space, the prop's extent along it and
+		# where its opposite face sits, all measured in the prop's own frame.
+		var along: Vector3 = facing * (TIPS[handle] as Vector3)
+		_drag["axis"] = (parent.global_basis.inverse() * along).normalized()
+		_drag["index"] = "xyz".find(handle.right(1))
+		var bounds := _frame_bounds(node, Transform3D(facing, node.global_position))
+		var outward: float = TIPS[handle][_drag.index]
+		_drag["extent"] = maxf(bounds.size[_drag.index], 0.01)
+		_drag["far_face"] = bounds.position[_drag.index] if outward > 0.0 else -bounds.end[_drag.index]
 	_drag["anchor"] = _measure(pixel)
 	if node is RigidBody3D:
 		_drag["frozen"] = node.freeze
@@ -185,7 +245,23 @@ func _begin(handle: String, pixel: Vector2, camera: Camera3D) -> void:
 			if part is Node3D and part is not CollisionShape3D:
 				_drag.parts[part] = part.transform
 
-## The quantity a drag changes, measured at a pixel: distance along the axis, a point on the
+## The prop's visual bounds in a frame (its position, turned by its yaw).
+static func _frame_bounds(node: Node3D, frame: Transform3D) -> AABB:
+	var bounds := AABB()
+	var first := true
+	var meshes := node.find_children("*", "MeshInstance3D", true, false)
+	if node is MeshInstance3D:
+		meshes.push_front(node)
+	for child in meshes:
+		var mesh := child as MeshInstance3D
+		if not mesh.is_visible_in_tree():
+			continue
+		var local := (frame.affine_inverse() * mesh.global_transform) * mesh.get_aabb()
+		bounds = local if first else bounds.merge(local)
+		first = false
+	return bounds
+
+## The quantity a drag changes, measured at a pixel: distance along an axis, a point on the
 ## ground plane, an angle round the ring, or a distance on screen from the prop.
 func _measure(pixel: Vector2) -> Variant:
 	var camera: Camera3D = _drag.camera
@@ -193,24 +269,24 @@ func _measure(pixel: Vector2) -> Variant:
 	var origin := parent.to_local(camera.project_ray_origin(pixel))
 	var direction := (parent.global_basis.inverse() * camera.project_ray_normal(pixel)).normalized()
 	var start: Vector3 = _drag.start
-	match _drag.handle:
-		"x", "y", "z":
-			var axis: Vector3 = AXES[_drag.handle]
-			var b := axis.dot(direction)
-			var denominator := 1.0 - b * b
-			if denominator < 0.0004:
-				return null
-			var w := start - origin
-			return (b * direction.dot(w) - axis.dot(w)) / denominator
-		"plane", "turn":
-			if absf(direction.y) < 0.001:
-				return null
-			var hit := origin + direction * ((start.y - origin.y) / direction.y)
-			if _drag.handle == "plane":
-				return hit
-			return atan2(hit.x - start.x, hit.z - start.z)
-		"size":
-			return maxf(4.0, pixel.distance_to(_drag.center))
+	var handle: String = _drag.handle
+	if handle in AXES or handle.length() == 2:
+		var axis: Vector3 = AXES[handle] if handle in AXES else _drag.axis
+		var b := axis.dot(direction)
+		var denominator := 1.0 - b * b
+		if denominator < 0.0004:
+			return null
+		var w := start - origin
+		return (b * direction.dot(w) - axis.dot(w)) / denominator
+	if handle in ["plane", "turn"]:
+		if absf(direction.y) < 0.001:
+			return null
+		var hit := origin + direction * ((start.y - origin.y) / direction.y)
+		if handle == "plane":
+			return hit
+		return atan2(hit.x - start.x, hit.z - start.z)
+	if handle == "size":
+		return maxf(4.0, pixel.distance_to(_drag.center))
 	return null
 
 func _update(pixel: Vector2, snap: bool) -> void:
@@ -219,44 +295,60 @@ func _update(pixel: Vector2, snap: bool) -> void:
 	if now == null or anchor == null:
 		return
 	var node: Node3D = _drag.node
+	var handle: String = _drag.handle
 	var moved := _drag.start as Vector3
 	var yaw: float = _drag.yaw
 	var scale_value: float = _drag.scale
-	match _drag.handle:
-		"x", "y", "z":
-			var step := float(now) - float(anchor)
-			if snap:
-				step = snappedf(step, SNAP.move)
-			moved += (AXES[_drag.handle] as Vector3) * step
-		"plane":
-			var shift: Vector3 = now - anchor
-			if snap:
-				shift = Vector3(snappedf(shift.x, SNAP.move), 0.0, snappedf(shift.z, SNAP.move))
-			moved += Vector3(shift.x, 0.0, shift.z)
-		"turn":
-			var turn := rad_to_deg(wrapf(float(now) - float(anchor), -PI, PI))
-			yaw = wrapf(yaw + turn, -180.0, 180.0)
-			if snap:
-				yaw = snappedf(yaw, SNAP.turn)
-		"size":
-			var rule := Commands.field("scale")
-			scale_value = clampf(scale_value * float(now) / float(anchor), float(rule.minimum), float(rule.maximum))
-			if snap:
-				scale_value = snappedf(scale_value, SNAP.size)
+	var stretch: Vector3 = _drag.stretch
+	if handle in AXES:
+		var step := float(now) - float(anchor)
+		if snap:
+			step = snappedf(step, SNAP.move)
+		moved += (AXES[handle] as Vector3) * step
+	elif handle == "plane":
+		var shift: Vector3 = now - anchor
+		if snap:
+			shift = Vector3(snappedf(shift.x, SNAP.move), 0.0, snappedf(shift.z, SNAP.move))
+		moved += Vector3(shift.x, 0.0, shift.z)
+	elif handle == "turn":
+		yaw = wrapf(yaw + rad_to_deg(wrapf(float(now) - float(anchor), -PI, PI)), -180.0, 180.0)
+		if snap:
+			yaw = snappedf(yaw, SNAP.turn)
+	elif handle == "size":
+		var rule := Commands.field("scale")
+		scale_value = clampf(scale_value * float(now) / float(anchor), float(rule.minimum), float(rule.maximum))
+		if snap:
+			scale_value = snappedf(scale_value, SNAP.size)
+	else:
+		# Pull this face out or in; the prop scales about its pivot, so shift the pivot by just
+		# enough to keep the opposite face still.
+		var index: int = _drag.index
+		var rule := Commands.field("stretch").get("items", {})
+		var extent: float = _drag.extent
+		var amount := clampf(stretch[index] * (extent + float(now) - float(anchor)) / extent,
+			float(rule.get("minimum", 0.2)), float(rule.get("maximum", 5.0)))
+		if snap:
+			amount = maxf(snappedf(amount, SNAP.stretch), float(rule.get("minimum", 0.2)))
+		var ratio := amount / stretch[index]
+		stretch[index] = amount
+		moved += (_drag.axis as Vector3) * float(_drag.far_face) * (1.0 - ratio)
 	var bounds: AABB = world.world_tools.bounds
 	moved = moved.clamp(bounds.position, bounds.end)
 	_drag["position"] = moved
 	_drag["new_yaw"] = yaw
 	_drag["new_scale"] = scale_value
+	_drag["new_stretch"] = stretch
 	# Live preview; the edit itself is made on release.
 	var turn_by := Basis(Vector3.UP, deg_to_rad(yaw - float(_drag.yaw)))
-	var factor := scale_value / float(_drag.scale)
+	var factor := Vector3.ONE * (scale_value / float(_drag.scale)) * (stretch / (_drag.stretch as Vector3))
+	var facing: Basis = _drag.facing
 	if node is RigidBody3D:
+		# A physics body cannot be scaled itself; its parts sit in its own (the prop's) frame.
 		node.global_basis = turn_by * (_drag.basis as Basis)
 		for part: Node3D in _drag.parts:
-			part.transform = (_drag.parts[part] as Transform3D).scaled(Vector3.ONE * factor)
+			part.transform = (_drag.parts[part] as Transform3D).scaled(factor)
 	else:
-		node.global_basis = (turn_by * (_drag.basis as Basis)).scaled(Vector3.ONE * factor)
+		node.global_basis = turn_by * facing * Basis.from_scale(factor) * facing.inverse() * (_drag.basis as Basis)
 	node.position = moved
 
 func _commit() -> void:
@@ -265,6 +357,9 @@ func _commit() -> void:
 		_cancel()
 		return
 	var changes := {"position": Placement.coordinates(_drag.position), "yaw": _drag.new_yaw, "scale": _drag.new_scale}
+	if _drag.new_stretch != _drag.stretch:
+		var stretch: Vector3 = _drag.new_stretch
+		changes["stretch"] = [stretch.x, stretch.y, stretch.z]
 	for part: Node3D in _drag.parts:
 		if is_instance_valid(part):
 			part.transform = _drag.parts[part]
@@ -277,6 +372,7 @@ func _commit() -> void:
 	if node is RigidBody3D and is_instance_valid(node):
 		node.freeze = _drag.frozen
 	_drag.clear()
+	_info.clear()
 	edited.emit(id)
 
 func _cancel() -> void:
@@ -294,24 +390,41 @@ func _cancel() -> void:
 
 # ---------------------------------------------------------------- handles
 
-func _arrow(key: String) -> MeshInstance3D:
+## An arrow from the centre: a cone tip moves (Move mode), a cube tip stretches (Shape mode).
+func _arrow(key: String, stretch: bool) -> MeshInstance3D:
+	var direction: Vector3 = TIPS[key]
+	var length := 0.8 if not stretch else 0.85
 	var shaft := CylinderMesh.new()
 	shaft.top_radius = 0.022
 	shaft.bottom_radius = 0.022
-	shaft.height = 0.8
+	shaft.height = length
 	shaft.radial_segments = 8
-	var tip := CylinderMesh.new()
-	tip.top_radius = 0.0
-	tip.bottom_radius = 0.07
-	tip.height = 0.2
-	tip.radial_segments = 12
-	var axis: Vector3 = AXES[key]
-	# Cylinders stand along +Y; turn each onto its axis.
-	var turn := Basis.IDENTITY if key == "y" else Basis(Vector3.BACK, -PI * 0.5) if key == "x" else Basis(Vector3.RIGHT, PI * 0.5)
-	var handle := _part(key, shaft, Transform3D(turn, axis * 0.4))
-	var head := _part(key, tip, Transform3D(turn, axis * 0.9))
+	var tip_mesh: Mesh
+	if stretch:
+		var cube := BoxMesh.new()
+		cube.size = Vector3.ONE * 0.11
+		tip_mesh = cube
+	else:
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.0
+		cone.bottom_radius = 0.07
+		cone.height = 0.2
+		cone.radial_segments = 12
+		tip_mesh = cone
+	# Cylinders stand along +Y; turn each onto its direction.
+	var turn := _turn_onto(direction)
+	var handle := _part(key, shaft, Transform3D(turn, direction * length * 0.5))
+	var head := _part(key, tip_mesh, Transform3D(turn, direction * (0.9 if not stretch else 0.92)))
 	head.reparent(handle)
 	return handle
+
+static func _turn_onto(direction: Vector3) -> Basis:
+	if direction.is_equal_approx(Vector3.UP):
+		return Basis.IDENTITY
+	if direction.is_equal_approx(Vector3.DOWN):
+		return Basis(Vector3.RIGHT, PI)
+	var axis := Vector3.UP.cross(direction).normalized()
+	return Basis(axis, Vector3.UP.angle_to(direction))
 
 func _sphere(radius: float) -> SphereMesh:
 	var sphere := SphereMesh.new()
@@ -327,7 +440,7 @@ func _part(key: String, mesh: Mesh, at: Transform3D) -> MeshInstance3D:
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		material.no_depth_test = true
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material.albedo_color = COLORS[key]
+		material.albedo_color = _color(key)
 		material.render_priority = 12
 		_materials[key] = material
 	var part := MeshInstance3D.new()

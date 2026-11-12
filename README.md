@@ -55,9 +55,9 @@ left-click or press Enter to apply. Water uses a material preview and saves
 per-surface color, reflectivity, roughness, ripple and foam settings where supported.
 Right-click returns to Build.
 
-Let go of the palm beam to release an unlocked prop. Right-click while holding
-it to save the placement and lock its physics. Right-click a locked prop to
-make it movable again. Unlocked props respond to gravity and can be pushed by
+Let go of the palm beam to drop the prop where it is; it keeps the turn you gave it.
+Right-click while holding it to place it and lock its physics there instead. Right-click a
+locked prop to make it movable again. Unlocked props respond to gravity and can be pushed by
 walking into them. Scripted props and structural surfaces retain their own motion rules.
 
 The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone on the wrist computer's Areas page) and the world is rewritten around you in place. A sphere expands from your eyes, the old zone unravels into a blue lattice with streams of 1s and 0s pouring down it, and the new zone climbs up out of the same lattice while the sky, sun and atmosphere blend across. There are no portals. Zones are built on a worker thread and global illumination re-settles while the effect still covers the change, so a shift neither freezes the game nor flashes at the end. If the spot you are standing on would leave you inside a hill or out in deep water in the new zone, you arrive at its usual starting point instead. The villa, Villa Aurelia, is modelled on the Getty Villa and stands on a sandstone bluff about 80 m above a sandy cove on a Laguna Beach-style coast, with rocky headlands either side, coastal sage scrub and ice plant on the bluffs and rolling hills behind. You arrive in the outer peristyle: a long garden court with fluted limestone colonnades under coffered ceilings, Pompeian red frescoes, clipped box hedges (built leaf by leaf), olive trees, a reflecting pool fed by bronze lion-head fountains and an open south end looking out over the sea. North of it is the house: an entrance hall between two sculpture galleries, an inner peristyle with a long narrow pool and bronzes, an atrium open to the sky over its rain pool, the hall of Herakles, and the library, where the study terminal and the example worker now sit. Doors lead on to a walled east garden with a round fountain and a lion-head wall fountain, terraced herb and fruit gardens stepping down toward the bluff, and an outdoor theatre facing the house's west door. The reflecting pool runs its own shallow-water simulation, so the fountains keep a ripple moving down it and you can wade in from the ramp at its south end. The shore is a sheltered cove at golden hour, with wind-rippled sand that darkens and turns glossy toward the waterline, real simulated surf (a GPU shallow-water solver: waves shoal over the seabed, break, run up the sand and drain back, leaving wet sand and foam lines that dry over time) that you can walk and swim out into; you leave a wake and splash, and barrels, a crate and a buoy float and drift on it, rocky headlands, windswept trees and a weathered pier. Materials and most models are CC0 scans from [Poly Haven](https://polyhaven.com) (see `world/assets/thirdparty/polyhaven/CREDITS.md`). The villa's statues, busts and sarcophagi are museum and artist scans from Sketchfab under Creative Commons licences; they live in a licence-sorted asset library with generated credits (`world/assets/library/`, credits in `world/assets/library/CREDITS.md`), and where they stand is plain data in `world/data/dressing/villa.json`. Some of them are non-commercial only; see `world/assets/library/README.md` before selling or open-sourcing Euclid. Each zone has its own HDRI sky with a matched sun, and Forward+ adds SDFGI bounce light, SSR, SSAO/SSIL, volumetric fog and AgX tonemapping. The surf uses the MIT-licensed [Realistic Shoreline Waves](https://reboot16.itch.io/godot-rsw) solver by Reboot16, vendored in `world/thirdparty/shorewaves`. It needs Forward+ with a GPU; otherwise the shore falls back to the shader ocean. The Grid is a dark digital workshop. Other zones fall back to blockout geometry if their art is missing. Location, zone and viewing direction save automatically and restore on restart. Application identities and anchor assignments live in `world/data/world.json` independently of scene geometry.
@@ -66,12 +66,19 @@ The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone 
 
 Press **1** to enter The Grid. Aim at the floor and press **B**, then choose **Spawn orange cone**. If you're aiming into the distance, the palette places it a few metres ahead. Aim at an existing cone before pressing **B** to select it, or pick it from the entity list. Change its position, yaw, scale or color, then press **Apply**. Duplicate, delete and undo are in the same palette.
 
-While the palette is open, the selected prop has handles you can drag in the world: the red,
-green and blue arrows move it along X, Y and Z, the white ball slides it over the ground, the
-yellow ring turns it and the white cube resizes it. Hold **Ctrl** while dragging to snap (25 cm,
-15° or 0.1×), and press **Escape** mid-drag to put it back. Click another prop in the world to
-select it, and hold the middle mouse button to look around. Each drag is one undo step, and the
-fields update to match.
+While the palette is open, the selected prop has handles you can drag in the world. Press
+**Q** (or **Handles** in the panel) to switch between two sets:
+
+- **Move**: the red, green and blue arrows move it along X, Y and Z, the white ball slides it
+  over the ground and the yellow ring turns it.
+- **Shape**: a cube-tipped handle on each face stretches the prop from that side along its own
+  axes, keeping the opposite face where it is; the white cube resizes it evenly. **Reset shape**
+  in the palette undoes the stretch.
+
+Hold **Ctrl** while dragging to snap (25 cm, 15°, 0.1× or a tenth of the stretch), and press
+**Escape** mid-drag to put it back. Click another prop in the world to select it, and hold the
+middle mouse button to look around. Each drag is one undo step, and the fields update to match.
+Agents can stretch props too, with the `stretch` property.
 
 Entity edits save to `grid-entities.json` alongside the existing location save. Each scene keeps up to 64 undo steps across restarts.
 

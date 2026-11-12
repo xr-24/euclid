@@ -239,6 +239,18 @@
       "title": "Scale",
       "multipleOfHint": 0.05
     },
+    "stretch": {
+      "type": "array",
+      "description": "Stretch along the prop's own width, height and depth (X, Y and Z after its yaw), multiplying its scale",
+      "items": {
+        "type": "number",
+        "minimum": 0.2,
+        "maximum": 5
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "multipleOfHint": 0.05
+    },
     "color": {
       "type": "string",
       "description": "Six RGB hex digits",
@@ -282,6 +294,9 @@
         "scale": {
           "$ref": "#/$defs/scale"
         },
+        "stretch": {
+          "$ref": "#/$defs/stretch"
+        },
         "color": {
           "$ref": "#/$defs/color"
         },
@@ -303,6 +318,9 @@
         },
         "scale": {
           "$ref": "#/$defs/scale"
+        },
+        "stretch": {
+          "$ref": "#/$defs/stretch"
         },
         "color": {
           "$ref": "#/$defs/color"
@@ -340,6 +358,7 @@
     "position",
     "yaw",
     "scale",
+    "stretch",
     "name",
     "color"
   ],
@@ -417,6 +436,7 @@
     "type",
     "yaw",
     "scale",
+    "stretch",
     "color",
     "asset_id",
     "animation",

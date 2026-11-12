@@ -206,6 +206,7 @@ func _run() -> void:
 	var ramp_y := pool_bottom[(ramp_j*int(pool.n)+ramp_i)*4]+float(pool.water_y)
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
 	_check_world_tools(path)
+	_check_stretch(path + ".stretch")
 	_check_scene_edits(path)
 	_check_authored_dressing(path + ".dressing")
 	_check_registered_props()
@@ -479,6 +480,33 @@ func _check_world_tools(path: String) -> void:
 	var unwritable := WorldTools.new(path.path_join("entities.json"))
 	unwritable.attach(zone)
 	_check(not unwritable.execute("spawn", spawn).ok and unwritable.execute("list").entities.is_empty(), "failed save does not apply an edit")
+	zone.free()
+	DirAccess.remove_absolute(path)
+
+func _check_stretch(path: String) -> void:
+	var zone := Node3D.new()
+	var tools := WorldTools.new(path)
+	tools.attach(zone)
+	var id: String = tools.execute("spawn", {"type": "traffic_cone", "position": [0.0, 0.0, 0.0]}).get("id", "")
+	var collider_width := func() -> float:
+		var shape := tools.scene_node(id).find_children("*", "CollisionShape3D", false, false)[0] as CollisionShape3D
+		var widest := 0.0
+		for point in (shape.shape as ConvexPolygonShape3D).points:
+			widest = maxf(widest, point.x)
+		return widest
+	var mesh_width := func() -> float:
+		var mesh := tools.scene_node(id).find_children("*", "MeshInstance3D", false, false)[0] as MeshInstance3D
+		return mesh.transform.basis.x.length() / mesh.transform.basis.y.length()
+	var width: float = collider_width.call()
+	var stretched := tools.execute("edit", {"id": id, "changes": {"stretch": [2.0, 1.0, 1.0]}})
+	_check(stretched.ok and stretched.entity.get("stretch") == [2.0, 1.0, 1.0], "save a prop's stretch")
+	_check(is_equal_approx(collider_width.call(), width * 2.0) and is_equal_approx(mesh_width.call(), 2.0),
+		"stretch a prop's model and collider along its own X")
+	_check(tools.execute("undo").ok and is_equal_approx(collider_width.call(), width) and is_equal_approx(mesh_width.call(), 1.0),
+		"undo a stretch")
+	_check(not tools.execute("edit", {"id": id, "changes": {"stretch": [9.0, 1.0, 1.0]}}).ok, "reject a stretch past five times")
+	var door: String = tools.execute("spawn", {"type": "sliding_door", "position": [2.0, 0.0, 0.0]}).get("id", "")
+	_check(not tools.execute("edit", {"id": door, "changes": {"stretch": [1.0, 2.0, 1.0]}}).ok, "keep doors unstretched")
 	zone.free()
 	DirAccess.remove_absolute(path)
 

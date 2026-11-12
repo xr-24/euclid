@@ -449,6 +449,8 @@ func _show_grid_palette() -> void:
 	overlay.offset_right = -30
 	overlay.offset_bottom = -overlay.offset_top
 	_palette_host.mount(overlay_content, zone_id, placement.point, placement.selected, world_tools, _workshop_action_catalog, _run_palette_action)
+	_button(gizmo.mode_label(), gizmo.toggle_mode)
+	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
 	_button("Back  [Esc]", _close_panel)
 
 func _select_in_palette(id: String) -> void:

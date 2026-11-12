@@ -1,5 +1,6 @@
 extends Node3D
-## Temporary physics pose while held. Release and lock commit one scene undo step.
+## Temporary physics pose while held. Release and lock commit one scene undo step. Letting go
+## drops a prop that can move freely; M2 while holding places it and locks it there.
 
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const Pose = preload("res://scripts/player/hand_poses.gd").Pose
@@ -97,7 +98,7 @@ func hint() -> String:
 		var action := "place"
 		if _hold.lockable:
 			action = "unlock" if _hold.record.get("locked", false) else "lock"
-		return "%s · Wheel · M3 mode · M2 %s" % [MODES[_mode], action]
+		return "%s · Wheel · M3 mode · M2 %s" % [MODES[_mode], "place" if _hold.lockable else action]
 	return _notice if _notice_time > 0 else ""
 
 func cancel() -> void:
@@ -122,7 +123,7 @@ func _begin(tools, aim: Dictionary) -> void:
 	_hold = {"id": aim.id, "node": node, "transform": node.transform, "world_basis": node.global_basis,
 		"hit_offset": node.global_position - aim.point, "depth": aim.from.distance_to(aim.point),
 		"yaw": 0.0, "scale": float(record.scale), "initial_scale": float(record.scale), "record": record,
-		"lockable": tools.can_toggle_lock(aim.id), "parts": {}}
+		"lockable": tools.can_toggle_lock(aim.id), "parts": {}, "yaw_from": tools.live_yaw(aim.id)}
 	if node is RigidBody3D:
 		_hold["frozen"] = node.freeze
 		_hold["linear"] = node.linear_velocity
@@ -173,12 +174,12 @@ func _finish(tools, toggle_lock: bool) -> void:
 		return
 	var node: Node3D = _hold.node
 	if is_instance_valid(node):
-		var initial_yaw: float = rad_to_deg((_hold.transform as Transform3D).basis.get_euler().y) if node is RigidBody3D else _hold.record.yaw
+		var initial_yaw: float = _hold.yaw_from
 		var changes := {"position": Placement.coordinates(node.position), "yaw": wrapf(initial_yaw + _hold.yaw, -180.0, 180.0), "scale": _hold.scale}
-		var was_locked: bool = _hold.record.get("locked", false)
 		if tools.can_toggle_lock(_hold.id):
-			# Holding temporarily freezes physics. M2 acts on the lock saved before the grab.
-			changes["locked"] = not was_locked if toggle_lock else was_locked
+			# Holding freezes physics for the drag. Letting go drops the prop; M2 places and
+			# locks it where it is.
+			changes["locked"] = toggle_lock
 		# Keep the live pose on screen. The scene edit applies scale to the real colliders.
 		if node is RigidBody3D and _hold.scale != _hold.initial_scale:
 			_restore_parts()

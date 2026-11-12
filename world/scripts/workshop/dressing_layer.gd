@@ -20,6 +20,16 @@ func has(id: Variant) -> bool:
 func scene_node(id: String) -> Node3D:
 	return _entries.get(id, {}).get("node") as Node3D
 
+## The prop's absolute yaw in degrees as it stands now. A physics prop may have turned since its
+## record was saved; its body is rotated relative to its authored basis, so add the authored yaw.
+func live_yaw(id: String, recorded: float) -> float:
+	var entry: Dictionary = _entries.get(id, {})
+	if not entry.has("rigid"):
+		return recorded
+	var body: Node3D = entry.node
+	var relative := (body.basis.orthonormalized() * (entry.basis as Basis).orthonormalized().inverse()).get_euler().y
+	return wrapf(rad_to_deg(relative) + float(entry.record.yaw), -180.0, 180.0)
+
 func can_unlock(id: String) -> bool:
 	var entry: Dictionary = _entries.get(id, {})
 	return entry.has("rigid") or (entry.get("physics_bounds", AABB()) as AABB).has_volume()
@@ -59,7 +69,7 @@ func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dicti
 	return result
 
 static func changes_geometry(before: Dictionary, after: Dictionary) -> bool:
-	for key in ["position", "yaw", "scale", "hidden"]:
+	for key in ["position", "yaw", "scale", "stretch", "hidden"]:
 		if before.get(key) != after.get(key):
 			return true
 	return false
@@ -77,7 +87,10 @@ func apply(id: String, override: Dictionary, previous := {}) -> void:
 		node.position = Vector3(value.position[0], value.position[1], value.position[2])
 		var yaw := deg_to_rad(float(value.yaw) - float(entry.record.yaw))
 		var authored_basis: Basis = entry.basis
-		node.basis = Basis(Vector3.UP, yaw) * authored_basis.scaled(Vector3.ONE * float(value.scale))
+		# Stretch runs along the prop's own axes: X and Z turned by its yaw, Y up.
+		var facing := Basis(Vector3.UP, deg_to_rad(float(value.yaw)))
+		var stretch := facing * Basis.from_scale(EntityTypes.stretch_of(value)) * facing.inverse()
+		node.basis = stretch * Basis(Vector3.UP, yaw) * authored_basis.scaled(Vector3.ONE * float(value.scale))
 	node.visible = not value.hidden
 	for shape in entry.shapes:
 		shape.disabled = value.hidden or entry.shapes[shape]
@@ -116,7 +129,11 @@ static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
 static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	var model: Node3D = entry.node
 	var parent := model.get_parent()
-	var box: AABB = Transform3D(entry.basis, Vector3.ZERO) * entry.physics_bounds
+	# The body takes the prop's authored yaw and the model keeps the rest of its basis, so the
+	# body's own axes are the prop's (the axes stretch runs along).
+	var facing := Basis(Vector3.UP, deg_to_rad(float(entry.record.yaw)))
+	var model_basis: Basis = facing.inverse() * (entry.basis as Basis)
+	var box: AABB = Transform3D(model_basis, Vector3.ZERO) * entry.physics_bounds
 	var body := RigidBody3D.new()
 	body.name = "Dressing_" + id
 	body.freeze = true
@@ -127,7 +144,7 @@ static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	parent.remove_child(model)
 	parent.add_child(body)
 	body.add_child(model)
-	model.transform = Transform3D(entry.basis, Vector3.ZERO)
+	model.transform = Transform3D(model_basis, Vector3.ZERO)
 	for old_shape in entry.shapes:
 		old_shape.disabled = true
 	var shape := CollisionShape3D.new()
@@ -137,7 +154,7 @@ static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	shape.position = box.get_center()
 	body.add_child(shape)
 	entry.node = body
-	entry.basis = Basis.IDENTITY
+	entry.basis = facing
 	entry.shapes = {shape: false}
 	entry.rigid = {"parts": {model: model.transform, shape: shape.transform}, "boxes": {shape: collider.size}, "freeze": true}
 	return body
@@ -157,8 +174,9 @@ static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary
 		body.position = Vector3(value.position[0], value.position[1], value.position[2])
 	if reset or value.yaw != previous.yaw:
 		body.basis = Basis(Vector3.UP, deg_to_rad(float(value.yaw) - float(entry.record.yaw))) * entry.basis
-	if reset or value.scale != previous.scale:
-		var multiplier := Vector3.ONE * float(value.scale)
+	if reset or value.scale != previous.scale or value.get("stretch") != previous.get("stretch"):
+		# The body faces the prop's yaw, so its own axes are the stretch axes.
+		var multiplier := Vector3.ONE * float(value.scale) * EntityTypes.stretch_of(value)
 		for part in rigid.parts:
 			var authored_transform: Transform3D = rigid.parts[part]
 			part.transform = authored_transform.scaled(multiplier) if not rigid.boxes.has(part) \
@@ -184,6 +202,8 @@ static func valid_override(override: Variant, bounds: AABB) -> bool:
 				if not Commands.valid_field("yaw", override.yaw): return false
 			"scale":
 				if not Commands.valid_field("scale", override.scale): return false
+			"stretch":
+				if not Commands.valid_field("stretch", override.stretch): return false
 			"name":
 				if not EntityTypes.valid_name(override.name): return false
 			"color":

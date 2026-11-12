@@ -4,6 +4,7 @@ extends RefCounted
 const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
+const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 
 var _world: Node3D
 
@@ -27,6 +28,22 @@ func _preview_player_rig(plan: Dictionary) -> Dictionary:
 
 func _finish_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.finish(Commands.command(plan.tool).mode == "save")
+
+func _inspect_atmosphere(_plan: Dictionary) -> Dictionary:
+	return _world.atmosphere.inspect(_world.zone_id)
+
+func _preview_atmosphere(plan: Dictionary) -> Dictionary:
+	if _world.shifting:
+		return {"ok": false, "message": "Wait for the environment to finish loading."}
+	# The planner fills every field it knows; take only atmosphere settings that were given.
+	var changes := {}
+	for key in plan:
+		if (key in Atmosphere.FIELDS or key == "reset") and plan[key] != null:
+			changes[key] = plan[key]
+	return _world.atmosphere.preview(_world.zone_id, changes)
+
+func _finish_atmosphere(plan: Dictionary) -> Dictionary:
+	return _world.atmosphere.finish(Commands.command(plan.tool).mode == "save")
 
 func _list_registered_actions(_plan: Dictionary) -> Dictionary:
 	var catalog: Array = _world._workshop_action_catalog()

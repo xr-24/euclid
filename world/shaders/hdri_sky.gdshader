@@ -20,10 +20,25 @@ uniform float blend : hint_range(0.0, 1.0) = 0.0;
 uniform float clamp_value = 24.0;
 uniform float sun_disk_scale = 1.0;
 uniform float sun_visibility = 1.0;
+// Where each panorama's photographed sun is (xyz) and how much to dim it (w), for when the
+// atmosphere moves the sun away from where the photo had it.
+uniform vec4 hide_sun_a = vec4(0.0);
+uniform vec4 hide_sun_b = vec4(0.0);
+// Star field brightness; it shows as the sun goes down.
+uniform float stars = 0.0;
 
-vec3 pano(sampler2D tex, float yaw, vec3 dir) {
+vec3 pano(sampler2D tex, float yaw, vec3 dir, vec4 hide) {
 	vec2 st = vec2(mod(atan(dir.x, dir.z) - yaw, 6.2831853), acos(clamp(dir.y, -1.0, 1.0)));
-	return min(textureLod(tex, st / vec2(6.2831853, 3.1415927), 0.0).rgb, vec3(clamp_value));
+	vec3 c = min(textureLod(tex, st / vec2(6.2831853, 3.1415927), 0.0).rgb, vec3(clamp_value));
+	if (hide.w > 0.0) {
+		float near_sun = smoothstep(0.9975, 0.9995, dot(dir, normalize(hide.xyz)));
+		c = mix(c, min(c, vec3(1.6)), near_sun * hide.w);
+	}
+	return c;
+}
+
+float hash3(vec3 p) {
+	return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
 float hash2(vec2 p) {
@@ -31,7 +46,18 @@ float hash2(vec2 p) {
 }
 
 void sky() {
-	vec3 c = mix(pano(panorama_a, yaw_a, EYEDIR) * energy_a, pano(panorama_b, yaw_b, EYEDIR) * energy_b, blend);
+	vec3 c = mix(pano(panorama_a, yaw_a, EYEDIR, hide_sun_a) * energy_a, pano(panorama_b, yaw_b, EYEDIR, hide_sun_b) * energy_b, blend);
+	if (stars > 0.0 && EYEDIR.y > -0.02) {
+		// Points on a fine grid of directions; a few are bright, and they fade in as the sun sets.
+		vec3 p = EYEDIR * 260.0;
+		vec3 cell = floor(p);
+		float h = hash3(cell);
+		float point = smoothstep(0.42, 0.0, length(fract(p) - 0.5)) * step(0.992, h);
+		float twinkle = 0.75 + 0.25 * sin(TIME * (1.0 + h * 3.0) + h * 40.0);
+		float night = LIGHT0_ENABLED ? 1.0 - smoothstep(-0.12, 0.08, LIGHT0_DIRECTION.y) : 1.0;
+		float horizon = smoothstep(-0.02, 0.12, EYEDIR.y);
+		c += vec3(0.85, 0.9, 1.0) * point * (0.5 + 3.0 * fract(h * 97.0)) * twinkle * stars * night * horizon;
+	}
 	if (!AT_CUBEMAP_PASS && LIGHT0_ENABLED) {
 		float size = max(LIGHT0_SIZE, 0.0093) * sun_disk_scale;
 		float d = dot(EYEDIR, LIGHT0_DIRECTION);

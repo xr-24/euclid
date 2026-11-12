@@ -154,31 +154,75 @@ static func water_material(sea: bool) -> ShaderMaterial:
 
 # ---------------------------------------------------------------- environment
 
-## Configure sky, sun and post-processing for a zone at once.
-static func apply_environment(world: Node3D, zone: String) -> void:
-	var state := zone_state(zone)
+## Configure sky, sun and post-processing for a zone at once. edits are the environment's saved
+## or previewed atmosphere edits (rendering/atmosphere.gd).
+static func apply_environment(world: Node3D, zone: String, edits := {}) -> void:
+	var state := zone_state(zone, edits)
 	_setup_features(world, state)
 	apply_state(world, state, state, 1.0)
 	Graphics.apply_zone(world, zone)
 
 ## Everything about a zone's look that can be blended during a shift.
-static func zone_state(zone: String) -> Dictionary:
+static func zone_state(zone: String, edits := {}) -> Dictionary:
 	var s := Packages.environment(zone)
+	_apply_edits(s, edits)
 	var hdri_path := PH + "hdri/" + str(s.get("hdri", ""))
 	var elevation: float = s.get("sun_elevation", 40.0)
+	var photo_elevation := elevation
 	s.yaw = 0.0
 	if s.has("hdri") and ResourceLoader.exists(hdri_path):
 		s.panorama = res(hdri_path)
 		# Rotate the panorama so its photographed sun sits at the authored azimuth.
 		var sun_data := _hdri_sun(str(s.hdri))
-		elevation = sun_data.get("elevation_deg", elevation)
+		photo_elevation = sun_data.get("elevation_deg", elevation)
+		elevation = photo_elevation
 		s.yaw = deg_to_rad(s.sun_azimuth - float(sun_data.get("u", 0.0)) * 360.0)
 	else:
 		s.panorama = _gradient_sky(s.get("sky_colors", Packages.environment("construct").sky_colors))
-	var az := deg_to_rad(s.sun_azimuth)
-	var el := deg_to_rad(elevation)
-	s.to_sun = Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el))
+	s.hide_photo_sun = Vector4.ZERO
+	if edits.has("sun_elevation"):
+		elevation = float(edits.sun_elevation)
+		# A sun moved off the photographed one: dim the photo's sun so only the drawn one shows.
+		if s.has("hdri") and absf(elevation - photo_elevation) > 1.0:
+			var hidden := _direction(s.sun_azimuth, photo_elevation)
+			hidden.w = 1.0
+			s.hide_photo_sun = hidden
+		# Below the horizon the sun stops lighting and the sky darkens to night.
+		var daylight := smoothstep(-10.0, 8.0, elevation)
+		s.sun_energy *= smoothstep(-4.0, 3.0, elevation)
+		s.sky_energy *= lerpf(0.03, 1.0, daylight)
+		s.ambient = float(s.get("ambient", 1.0)) * lerpf(0.25, 1.0, daylight)
+	var to_sun := _direction(s.sun_azimuth, elevation)
+	s.to_sun = Vector3(to_sun.x, to_sun.y, to_sun.z)
 	return s
+
+static func _direction(azimuth: float, elevation: float) -> Vector4:
+	var az := deg_to_rad(azimuth)
+	var el := deg_to_rad(elevation)
+	return Vector4(sin(az) * cos(el), sin(el), cos(az) * cos(el), 0.0)
+
+## Atmosphere edits (field names from rendering/atmosphere.gd) over a package's environment.
+static func _apply_edits(s: Dictionary, edits: Dictionary) -> void:
+	for key in edits:
+		var value: Variant = edits[key]
+		match key:
+			"sky":
+				if value == "gradient":
+					s.erase("hdri")
+				else:
+					s["hdri"] = value
+			"sun_color":
+				s["sun_color"] = Color(value)
+			"fog_color":
+				s["fog_albedo"] = Color(value)
+			"haze_color":
+				s["haze_color"] = Color(value)
+			"fog_direction":
+				s["fog_anisotropy"] = float(value)
+			"sun_elevation":
+				s["sun_elevation"] = float(value)
+			_:
+				s[key] = float(value)
 
 ## Blend between two zone states (t = 0 is a, 1 is b) for skies, sun, exposure and fog.
 static func apply_state(world: Node3D, a: Dictionary, b: Dictionary, t: float) -> void:
@@ -196,6 +240,10 @@ static func apply_state(world: Node3D, a: Dictionary, b: Dictionary, t: float) -
 	sky_mat.set_shader_parameter("energy_a", a.sky_energy)
 	sky_mat.set_shader_parameter("energy_b", b.sky_energy)
 	sky_mat.set_shader_parameter("sun_visibility", lerpf(a.get("sky_sun_visibility", 1.0), b.get("sky_sun_visibility", 1.0), t))
+	sky_mat.set_shader_parameter("hide_sun_a", a.get("hide_photo_sun", Vector4.ZERO))
+	sky_mat.set_shader_parameter("hide_sun_b", b.get("hide_photo_sun", Vector4.ZERO))
+	sky_mat.set_shader_parameter("stars", lerpf(a.get("stars", 0.0), b.get("stars", 0.0), t))
+	env.ambient_light_energy = lerpf(a.get("ambient", 1.0), b.get("ambient", 1.0), t)
 	sky_mat.set_shader_parameter("blend", t)
 	var to_sun: Vector3 = (a.to_sun as Vector3).slerp(b.to_sun, t).normalized()
 	sun.basis = Basis.looking_at(-to_sun, Vector3.UP if absf(to_sun.y) < 0.99 else Vector3.FORWARD)

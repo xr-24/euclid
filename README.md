@@ -266,6 +266,21 @@ corresponding hand pose is active.
 F2 and local world MCP agents can use `inspect_player_rig`, `preview_player_rig`,
 `save_player_rig`, and `discard_player_rig` to edit the same draft.
 
+## Atmosphere
+
+Open **Tab → Build → Atmosphere** to change the current environment's sun (direction, height,
+color, strength), sky (an installed HDRI or a painted gradient, its brightness and stars),
+light (exposure, fill, shadow reach) and fog (density, color, glow toward the sun, haze).
+Changes show live; **Save** keeps them for this environment, **Discard** returns to the saved
+look and **Reset** goes back to the environment's own settings. Put the sun below the horizon
+for night; stars come out as it sets.
+
+Agents use the same draft through `inspect_atmosphere`, `preview_atmosphere`,
+`save_atmosphere` and `discard_atmosphere`, for example **Make it dusk with a few stars and a
+light warm haze**. Edits are saved per environment in `atmosphere.json` beside the other saves,
+so an environment's package still supplies the defaults. The plan for authoring whole
+environments from inside Euclid is in [environment authoring](docs/environment-authoring.md).
+
 ## Develop from inside Euclid
 
 See the [in-Euclid development roadmap](docs/development-roadmap.md) for the current status and remaining milestones.

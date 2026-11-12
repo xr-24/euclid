@@ -61,6 +61,8 @@ const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const SpringFollow = preload("res://scripts/player/spring_follow.gd")
 const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
+const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
+const WorldArt = preload("res://scripts/world_art.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -228,6 +230,7 @@ func _run() -> void:
 	_check_agents_panel()
 	_check_wrist_computer()
 	_check_spring_follow()
+	_check_atmosphere()
 	_check(is_equal_approx(TransformGizmo._segment_distance(Vector2(5, 3), Vector2.ZERO, Vector2(10, 0)), 3.0)
 		and is_equal_approx(TransformGizmo._segment_distance(Vector2(14, 0), Vector2.ZERO, Vector2(10, 0)), 4.0),
 		"measure how far the pointer is from a gizmo handle on screen")
@@ -888,6 +891,25 @@ static func _press(code: Key, unicode := 0, ctrl := false, alt := false, shift :
 	key.shift_pressed = shift
 	key.pressed = true
 	return key
+
+func _check_atmosphere() -> void:
+	var refreshed := [0]
+	var atmosphere := Atmosphere.new("", func() -> void: refreshed[0] += 1)
+	var start: Dictionary = atmosphere.inspect("villa").values
+	_check(atmosphere.values_for("villa").is_empty() and start.sky != "" and start.has("sun_elevation"), "start from the package's atmosphere")
+	var previewed := atmosphere.preview("villa", {"sun_elevation": -10.0, "stars": 1.0, "fog_color": "203040", "sun_azimuth": null})
+	_check(previewed.ok and atmosphere.previewing("villa") and refreshed[0] == 1
+		and atmosphere.values_for("villa") == {"sun_elevation": -10.0, "stars": 1.0, "fog_color": "203040"}, "preview only the atmosphere fields given")
+	_check(not atmosphere.preview("villa", {"fog_density": 0.5}).ok and not atmosphere.preview("villa", {"sky": "missing.hdr"}).ok
+		and not atmosphere.preview("villa", {"weather": 1.0}).ok, "reject out-of-range values, missing skies and unknown settings")
+	_check(atmosphere.finish(true).ok and not atmosphere.previewing("villa") and atmosphere.values_for("villa").has("stars"), "save the atmosphere")
+	atmosphere.preview("villa", {"reset": true})
+	_check(atmosphere.values_for("villa").is_empty() and atmosphere.finish(false).ok and atmosphere.values_for("villa").has("stars"),
+		"discard a reset and keep the saved atmosphere")
+	var day: Dictionary = WorldArt.zone_state("construct")
+	var night: Dictionary = WorldArt.zone_state("construct", {"sun_elevation": -10.0, "stars": 1.0})
+	_check(night.sun_energy < 0.01 and (night.to_sun as Vector3).y < 0.0 and night.sky_energy < day.sky_energy * 0.2 and night.stars == 1.0,
+		"a sun below the horizon stops lighting and the sky darkens")
 
 func _check_spring_follow() -> void:
 	var bouncy := SpringFollow.new(3.0, 0.5, 0.0)

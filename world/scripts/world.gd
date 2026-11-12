@@ -30,6 +30,8 @@ const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const SceneScanner = preload("res://scripts/player/scene_scanner.gd")
 const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
 const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
+const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
+const AtmospherePanel = preload("res://scripts/ui/atmosphere_panel.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const WristPages = preload("res://scripts/player/wrist_pages.gd")
@@ -53,6 +55,8 @@ var grabber: PropGrabber
 var gizmo: TransformGizmo
 var scanner: SceneScanner
 var player_rig: RigAuthoring
+## Sun, sky, stars, fog and light edits per environment, shared by agents and the panel.
+var atmosphere: Atmosphere
 var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
 var wrist: WristComputer
@@ -254,6 +258,7 @@ func _setup_player() -> void:
 	player_avatar = PlayerAvatar.new()
 	player_avatar.mount(player, camera)
 	player_rig = RigAuthoring.new(player_avatar, "" if smoke_mode else "user://player-rig.json")
+	atmosphere = Atmosphere.new("" if smoke_mode else "user://atmosphere.json", _refresh_atmosphere)
 	wrist = WristComputer.new()
 	scanner = SceneScanner.new()
 	add_child(scanner)
@@ -375,6 +380,28 @@ func _button(title: String, callback: Callable) -> void:
 func _close_panel() -> void:
 	overlay.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+## Re-lights the current environment after an atmosphere edit. A shift in progress applies the
+## edit itself when it finishes.
+func _refresh_atmosphere() -> void:
+	if shifting or not is_instance_valid(zone_root):
+		return
+	var state := WorldArt.zone_state(zone_id, atmosphere.values_for(zone_id))
+	WorldArt.apply_state(self, state, state, 1.0)
+
+func _open_atmosphere() -> void:
+	if shifting:
+		return
+	_panel("", "")
+	var viewport_size := get_viewport().get_visible_rect().size
+	# A column on the right, so the sky and the scene stay in view while it changes.
+	overlay.offset_left = maxf(viewport_size.x - 560.0, viewport_size.x * 0.5 + 60.0)
+	overlay.offset_top = 28
+	overlay.offset_right = -28
+	overlay.offset_bottom = -28
+	var editor := AtmospherePanel.new()
+	overlay_content.add_child(editor)
+	editor.setup(atmosphere, zone_id, _close_panel)
 
 func _open_player_rig() -> void:
 	if shifting:
@@ -535,6 +562,7 @@ func _submit_codex_command(prompt: String) -> void:
 	if scene_animations:
 		context["animation"] = scene_animations.context(world_tools if _scene_ready() else null)
 	context["player_rig"] = player_rig.planning_context()
+	context["atmosphere"] = atmosphere.planning_context(zone_id)
 	var response: Dictionary = await grid_agent.plan(prompt, context)
 	_dev.busy = false
 	if response.has("error"):
@@ -648,7 +676,7 @@ func _load_zone(destination: String) -> void:
 	if zone_root:
 		zone_root.free()
 	_commit_zone(built)
-	WorldArt.apply_environment(self, destination)
+	WorldArt.apply_environment(self, destination, atmosphere.values_for(destination))
 	var spawn: Dictionary = WorldArt.spawn(destination)
 	player.position = spawn.position
 	player.velocity = Vector3.ZERO
@@ -761,8 +789,8 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 		return
 	shifting = true
 	var built := await _build_zone_async(destination)
-	var from_state := WorldArt.zone_state(zone_id)
-	var to_state := WorldArt.zone_state(destination)
+	var from_state := WorldArt.zone_state(zone_id, atmosphere.values_for(zone_id))
+	var to_state := WorldArt.zone_state(destination, atmosphere.values_for(destination))
 	var old_root := zone_root
 	for body in old_root.find_children("*", "CollisionObject3D", true, false):
 		body.process_mode = Node.PROCESS_MODE_DISABLED
@@ -813,7 +841,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 		light.light_energy = light.get_meta("energy")
 	RenderingServer.global_shader_parameter_set("construct_radius", 0.0)
 	RenderingServer.global_shader_parameter_set("construct_progress", 0.0)
-	WorldArt.apply_environment(self, destination)
+	WorldArt.apply_environment(self, destination, atmosphere.values_for(destination))
 	_update_agent_labels()
 	_announce_zone()
 	shifting = false

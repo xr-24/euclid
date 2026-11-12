@@ -258,7 +258,13 @@
     },
     "player_pose": {
       "type": "string",
-      "enum": ["rest", "point", "grab", "pinch", "open_palm"]
+      "enum": [
+        "rest",
+        "point",
+        "grab",
+        "pinch",
+        "open_palm"
+      ]
     },
     "player_bob": {
       "type": "number",
@@ -352,6 +358,82 @@
           "type": "null"
         }
       ]
+    },
+    "sun_azimuth": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 360,
+      "description": "Compass direction the sunlight comes from, in degrees"
+    },
+    "sun_elevation": {
+      "type": "number",
+      "minimum": -30,
+      "maximum": 90,
+      "description": "Sun height above the horizon in degrees; below 0 is night"
+    },
+    "sun_energy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 8,
+      "description": "Sunlight strength"
+    },
+    "sky_choice": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^(gradient|[A-Za-z0-9_.-]{1,92}\\.(hdr|exr))$",
+      "description": "An installed HDRI sky file name, or gradient"
+    },
+    "sky_energy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 4,
+      "description": "Sky brightness and the light it casts"
+    },
+    "star_brightness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Stars, which show once the sun is down"
+    },
+    "exposure": {
+      "type": "number",
+      "minimum": 0.2,
+      "maximum": 3,
+      "description": "Camera exposure"
+    },
+    "ambient_energy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3,
+      "description": "Fill light from the sky"
+    },
+    "fog_density": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.08,
+      "description": "Volumetric fog density; 0.002 is a light haze, 0.03 is thick"
+    },
+    "fog_direction": {
+      "type": "number",
+      "minimum": -0.9,
+      "maximum": 0.9,
+      "description": "How much fog glows toward the sun (positive) or away (negative)"
+    },
+    "haze_density": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.02,
+      "description": "Distance haze that fades the horizon"
+    },
+    "shadow_distance": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 250,
+      "description": "How far from the camera sun shadows reach, in metres"
+    },
+    "reset_atmosphere": {
+      "type": "boolean",
+      "description": "Clear this environment's atmosphere edits before applying any others"
     }
   },
   "authored_properties": [

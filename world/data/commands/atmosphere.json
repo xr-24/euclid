@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "inspect_atmosphere",
+      "description": "Inspect the current environment's atmosphere: sun direction, height, color and strength, sky (installed HDRI or gradient), stars, exposure, ambient light, fog, haze and shadow distance, which of them are edited, and the installed skies.",
+      "service": "world",
+      "handler": "_inspect_atmosphere",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "preview_atmosphere",
+      "description": "Preview atmosphere changes for the current environment. Set only the fields to change. Sun elevation below 0 is night; stars show once the sun is down. reset clears earlier edits first. The preview stays until saved or discarded.",
+      "service": "world",
+      "handler": "_preview_atmosphere",
+      "effect": "preview",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "sun_azimuth": "sun_azimuth",
+        "sun_elevation": "sun_elevation",
+        "sun_color": "color",
+        "sun_energy": "sun_energy",
+        "sky": "sky_choice",
+        "sky_energy": "sky_energy",
+        "stars": "star_brightness",
+        "exposure": "exposure",
+        "ambient": "ambient_energy",
+        "fog_density": "fog_density",
+        "fog_color": "color",
+        "fog_direction": "fog_direction",
+        "haze": "haze_density",
+        "haze_color": "color",
+        "shadow_distance": "shadow_distance",
+        "reset": "reset_atmosphere"
+      },
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    },
+    {
+      "name": "save_atmosphere",
+      "description": "Save the previewed atmosphere for this environment.",
+      "service": "world",
+      "handler": "_finish_atmosphere",
+      "effect": "write",
+      "mode": "save",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    },
+    {
+      "name": "discard_atmosphere",
+      "description": "Discard the atmosphere preview and restore the saved atmosphere.",
+      "service": "world",
+      "handler": "_finish_atmosphere",
+      "effect": "preview",
+      "mode": "discard",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": true
+    }
+  ]
+}

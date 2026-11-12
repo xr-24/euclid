@@ -32,6 +32,9 @@ const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
 const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const AtmospherePanel = preload("res://scripts/ui/atmosphere_panel.gd")
+const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
+const PiecePanel = preload("res://scripts/ui/piece_panel.gd")
 const PlayerMotor = preload("res://scripts/player/player_motor.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const WristPages = preload("res://scripts/player/wrist_pages.gd")
@@ -57,6 +60,8 @@ var scanner: SceneScanner
 var player_rig: RigAuthoring
 ## Sun, sky, stars, fog and light edits per environment, shared by agents and the panel.
 var atmosphere: Atmosphere
+var pieces := PieceEditor.new()
+var piece_panel: Control
 var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
 var wrist: WristComputer
@@ -403,6 +408,24 @@ func _open_atmosphere() -> void:
 	overlay_content.add_child(editor)
 	editor.setup(atmosphere, zone_id, _close_panel)
 
+func _open_pieces() -> void:
+	if not _scene_ready():
+		return
+	var screen := get_viewport().get_visible_rect().size
+	var aimed := ScenePlacement.aim_at(player, camera, screen * 0.5, 60.0)
+	var placement := _scene_spawn_position()
+	_panel("", "")
+	overlay.offset_left = maxf(screen.x - 560.0, screen.x * 0.5 + 60.0)
+	overlay.offset_top = 28
+	overlay.offset_right = -28
+	overlay.offset_bottom = -28
+	piece_panel = PiecePanel.new()
+	piece_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	overlay_content.add_child(piece_panel)
+	piece_panel.setup(pieces, placement, aimed.piece, _close_panel)
+	_button(gizmo.mode_label(), gizmo.toggle_mode)
+	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
+
 func _open_player_rig() -> void:
 	if shifting:
 		return
@@ -476,11 +499,15 @@ func _show_grid_palette() -> void:
 	overlay.offset_right = -30
 	overlay.offset_bottom = -overlay.offset_top
 	_palette_host.mount(overlay_content, zone_id, placement.point, placement.selected, world_tools, _workshop_action_catalog, _run_palette_action)
+	_button("Pieces", _open_pieces)
 	_button(gizmo.mode_label(), gizmo.toggle_mode)
 	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
 	_button("Back  [Esc]", _close_panel)
 
 func _select_in_palette(id: String) -> void:
+	if is_instance_valid(piece_panel) and piece_panel.is_visible_in_tree():
+		piece_panel.select_piece(id)
+		return
 	var panel := _palette_host.panel
 	if is_instance_valid(panel) and panel.has_method("select_entity"):
 		panel.select_entity(id)
@@ -514,6 +541,7 @@ func _world_context() -> Dictionary:
 	for zone in manifest.zones:
 		environments.append({"id": zone.id, "name": zone.name, "description": zone.get("description", zone.get("subtitle", ""))})
 	return {"current": zone_id, "environments": environments, "workshop_tools": _workshop_action_catalog(),
+		"piece_edit": pieces.can_edit() and not shifting,
 		"behaviors": behavior_runtime.available() if behavior_runtime and not shifting else [],
 		"command_registry": Commands.snapshot()}
 
@@ -563,6 +591,9 @@ func _submit_codex_command(prompt: String) -> void:
 		context["animation"] = scene_animations.context(world_tools if _scene_ready() else null)
 	context["player_rig"] = player_rig.planning_context()
 	context["atmosphere"] = atmosphere.planning_context(zone_id)
+	if _scene_ready():
+		var piece_list := pieces.execute({"tool": "list_pieces"})
+		context["pieces"] = piece_list.get("pieces", []).slice(0, 64)
 	var response: Dictionary = await grid_agent.plan(prompt, context)
 	_dev.busy = false
 	if response.has("error"):
@@ -703,12 +734,14 @@ func _build_zone_locked(destination: String, grid_appearance: Dictionary) -> Dic
 	build_agent_labels = context.build_agent_labels
 	if not context.build_art(destination, grid_appearance):
 		context.build_fallback(destination)
+	context.build_pieces(PieceDocument.path_for(destination, smoke_mode))
 	for anchor in manifest.anchors:
 		if anchor.zone == destination:
 			_add_anchor(anchor)
 	# Every surface gets the construct effect built in now, so nothing is swapped later.
 	WorldArt.make_constructible(build_root)
-	return {"id": destination, "root": build_root, "interactables": build_interactables, "agent_labels": build_agent_labels}
+	return {"id": destination, "root": build_root, "interactables": build_interactables, "agent_labels": build_agent_labels,
+		"piece_layer": context.piece_layer, "piece_document": context.piece_document}
 
 ## Build on a worker thread so the world keeps running.
 func _build_zone_async(destination: String) -> Dictionary:
@@ -732,6 +765,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		_palette_host.clear_view()
 	zone_id = built.id
 	zone_root = built.root
+	pieces.attach(built.piece_layer, built.piece_document, zone_root.get_meta("scene_edit", false), Packages.bounds(zone_id))
 	_grid_scenery.attach(zone_root)
 	if world_tools != null:
 		var linked_preview: String = world_tools.behavior_preview_id()
@@ -787,6 +821,8 @@ func _is_workshop(id: String) -> bool:
 func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 	if shifting or destination == zone_id:
 		return
+	if is_instance_valid(piece_panel) and piece_panel.is_visible_in_tree():
+		_close_panel()
 	shifting = true
 	var built := await _build_zone_async(destination)
 	var from_state := WorldArt.zone_state(zone_id, atmosphere.values_for(zone_id))

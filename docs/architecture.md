@@ -15,6 +15,7 @@ All paths below are relative to `world/scripts/`.
 | `zones/zone_build_context.gd` | One detached root and its interaction registry | Reviewed package builder; no live scene tree, player, UI or network access |
 | `zones/zone_packages.gd` | Validated environment packages | Spawn, bounds, views, capabilities, appearance and a piece tree (or a legacy builder path) |
 | `pieces/piece_types.gd`, `pieces/piece_builder.gd` | Registered piece types and the document builder | Field rules from `data/pieces/types.json`; trusted factories in `scripts/pieces/` |
+| `pieces/piece_editor.gd`, `persistence/piece_document.gd`, `ui/piece_panel.gd` | Live piece edits, per-environment saves and undo | UI and agent commands share a main-thread editor. The detached builder reads the same document on zone entry. |
 | `zones/villa.gd`, `zones/shore_zone.gd` | Zone-specific content | Each implements `build(context) -> bool`; false requests the fallback blockout |
 | `zones/authored_props.gd` | Stable IDs for builder-created props | Registers detached assemblies and their collision or editor pick volume |
 | `zones/workstations.gd` | Furniture for logical app anchors | Does not launch processes |

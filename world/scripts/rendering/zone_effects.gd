@@ -12,9 +12,12 @@ const CFX_SHADERS := {
 const CFX_CHANNELS := [Vector4(1, 0, 0, 0), Vector4(0, 1, 0, 0), Vector4(0, 0, 1, 0), Vector4(0, 0, 0, 1), Vector4(0.333333, 0.333333, 0.333333, 0)]
 
 
-static func make_constructible(root: Node) -> void:
-	var converted := _converted
-	for node in root.find_children("*", "MeshInstance3D", true, false):
+static func make_constructible(root: Node, cache := true) -> void:
+	var converted := _converted if cache else {}
+	var meshes := root.find_children("*", "MeshInstance3D", true, false)
+	if root is MeshInstance3D:
+		meshes.push_front(root)
+	for node in meshes:
 		var mi := node as MeshInstance3D
 		if mi.mesh == null:
 			continue

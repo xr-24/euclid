@@ -46,7 +46,15 @@ static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, re
 	if not picker.is_empty() and not _entity(picker).is_empty():
 		hit = picker
 		point = picker.position
-	return {"id": _entity(hit), "point": point, "from": from, "direction": direction}
+	return {"id": _entity(hit), "piece": _piece(hit), "point": point, "from": from, "direction": direction}
+
+static func _piece(hit: Dictionary) -> String:
+	var node := hit.get("collider") as Node
+	while node:
+		if node.has_meta("piece_id"):
+			return str(node.get_meta("piece_id"))
+		node = node.get_parent()
+	return ""
 
 static func coordinates(point: Vector3) -> Array:
 	return [point.x, point.y, point.z] if point.is_finite() else []

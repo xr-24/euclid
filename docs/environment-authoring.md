@@ -55,29 +55,40 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   shadow reach; fog density, colour and glow toward the sun; distance haze and its colour.
   `rendering/atmosphere.gd`, `ui/atmosphere_panel.gd` (Tab → Build → Atmosphere) and the
   `inspect_atmosphere`, `preview_atmosphere`, `save_atmosphere` and `discard_atmosphere` tools.
-- **Environment documents, first cut**: the piece registry (`group`, `shape`, `light`,
-  `model`), the document builder (`zones/piece_builder.gd`) and the first package built only
-  from pieces, Open Ground (`world/data/zones/open`).
+- **Environment documents** use the piece registry (`group`, `shape`, `light`, `model`) and
+  the shared builder (`scripts/pieces/piece_builder.gd`). Open Ground
+  (`world/data/zones/open_ground`) is built entirely from pieces.
+- **Live piece editing** is available in **Tab → Build → Pieces** and from the **B** palette.
+  Choose a type and a parent to add a piece. Pick one from the list or click its collider in
+  the scene, then edit the fields declared by its type. Use the move handles for translation
+  and yaw, or **Q** and the white cube for uniform scaling. **Undo piece** reverses the most
+  recent change, including a group removal.
+- **Agent tools** use the same editor. Call `list_piece_types` for exact fields, defaults and
+  installed library model IDs. `list_pieces` returns stable IDs and parent IDs. Pass a
+  `target` to inspect one piece, or pass `next_offset` back as `offset` to page through the list.
+  `add_piece` takes a type as `target`, optional `parent` and `piece_values`. `edit_piece` takes
+  a piece ID as `target` and the fields to change in `piece_values`. `remove_piece` removes
+  the target and its children. `undo_piece` uses the same history as the panel.
+- **Saves** live in `user://environment-pieces-<id>.json` with the piece tree and its undo
+  history. Creating an environment from a template copies its current piece tree into a new
+  document. Existing prop saves and package files use their own storage.
 
 ## Next, in order
 
-1. **Pieces in the editors.** `list_piece_types`, `add_piece`, `edit_piece`, `remove_piece`
-   for agents, and the same in the build palette and handles; edits saved per environment and
-   undoable. Saving a created environment writes its document.
-2. **Grid as a document.** Move the Grid floor and walls into piece types and drop
+1. **Grid as a document.** Move the Grid floor and walls into piece types and drop
    `grid_builder.gd`.
-3. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
+2. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
    brush and painted with materials; Poly Haven PBR textures and HDRI skies through the asset
    service (skies land in the atmosphere sky list); scatter pieces (what grows where, how dense).
-4. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
+3. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
    a flowing surface for streams and waterfalls; spray emitters.
-5. **One record system.** Move the prop factories (cone, box, door, model) into the piece
+4. **One record system.** Move the prop factories (cone, box, door, model) into the piece
    registry; props become pieces with a body.
-6. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
+5. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
    from its document is the test that the toolkit is general enough.
-7. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
+6. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
    doors and windows (hinge and slide behaviors).
-8. **Screens.** A video surface piece (local video first; web video needs a browser engine).
-9. **Time and weather.** Time of day driving the sun, cloud cover, rain.
-10. **Sharing.** Turn an edited environment into a package that passes the checks (including
+7. **Screens.** A video surface piece (local video first; web video needs a browser engine).
+8. **Time and weather.** Time of day driving the sun, cloud cover, rain.
+9. **Sharing.** Turn an edited environment into a package that passes the checks (including
     `check.ps1 -Performance`).

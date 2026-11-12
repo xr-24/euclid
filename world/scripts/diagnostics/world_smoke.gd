@@ -4,6 +4,7 @@ extends RefCounted
 ## Run with `-- --smoke`. Uses a throwaway save and never the user's world state.
 
 const Packages = preload("res://scripts/zones/zone_packages.gd")
+const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 
 static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
@@ -16,7 +17,7 @@ static func run(world: Node3D) -> void:
 		elif package.has("builder"):
 			assert(world.zone_root.get_child_count() > 5)
 		for piece: Dictionary in package.get("pieces", []):
-			var node: Node = world.zone_root.get_node_or_null("Piece_" + str(piece.id))
+			var node: Node = world.zone_root.get_node_or_null(PieceBuilder.LAYER + "/Piece_" + str(piece.id))
 			assert(node != null and node.get_meta("piece_type") == piece.type)
 		var anchors: Array = world.manifest.anchors.filter(func(anchor: Dictionary) -> bool: return anchor.zone == zone.id)
 		assert(world.interactables.size() == anchors.size())

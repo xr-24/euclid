@@ -37,6 +37,8 @@ func _build() -> Dictionary:
 	return {"id": "build", "title": "BUILD", "rows": [
 		{"label": "GRID TOOLS" if _world._is_workshop(_world.zone_id) else "SCENE TOOLS", "value": "B",
 			"enabled": _world._scene_ready(), "why": "LOADING", "run": Callable(_world, "_request_grid_palette"), "close": true},
+		{"label": "PIECES", "enabled": _world._scene_ready(), "why": "LOADING",
+			"run": Callable(_world, "_open_pieces"), "close": true},
 		{"label": "ATMOSPHERE", "value": "EDITED" if not _world.atmosphere.values_for(_world.zone_id).is_empty() else "",
 			"tone": "accent", "enabled": not _world.shifting, "why": "SHIFTING",
 			"run": Callable(_world, "_open_atmosphere"), "close": true},

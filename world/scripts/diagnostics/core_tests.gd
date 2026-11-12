@@ -70,6 +70,8 @@ const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
 const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
+const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -222,6 +224,7 @@ func _run() -> void:
 	await _check_grab_release()
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
+	_check_piece_edits(manifest)
 	_check_data_entity_type()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
@@ -248,6 +251,7 @@ func _run() -> void:
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")
 	_check(not library.create("signal lab", library.environments()).ok, "reject duplicate environment names")
 	_check(EnvironmentLibrary.new(path).environments() == library.environments(), "reload custom environments with stable IDs")
+	DirAccess.remove_absolute(path.get_base_dir().path_join(PieceDocument.filename(created.zone.id)))
 	DirAccess.remove_absolute(path)
 	print("CONSTRUCT_CORE_TESTS: %d checks, %d failures" % [_checks,_failures])
 	if _failures == 0: print("CONSTRUCT_CORE_TESTS_OK")
@@ -773,6 +777,7 @@ func _check_zone_packages(path: String, manifest: Dictionary) -> void:
 		"restore an environment's template reference after restart")
 	_check(not library.create("Missing template", manifest.zones, "missing").ok,
 		"reject a template outside the installed environment catalog")
+	DirAccess.remove_absolute(path.get_base_dir().path_join(PieceDocument.filename(created.zone.id)))
 	DirAccess.remove_absolute(path)
 
 func _check_pieces(manifest: Dictionary) -> void:
@@ -800,9 +805,64 @@ func _check_pieces(manifest: Dictionary) -> void:
 	root.free()
 	var context := Context.new(manifest)
 	var built := context.build("open_ground")
-	_check((built.root as Node3D).get_node_or_null("Piece_ground") is StaticBody3D,
+	_check((built.root as Node3D).get_node_or_null(PieceBuilder.LAYER + "/Piece_ground") is StaticBody3D,
 		"build the Open Ground package from pieces alone")
 	(built.root as Node3D).free()
+
+func _check_piece_edits(manifest: Dictionary) -> void:
+	var directory := "user://piece-test-%d" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(directory)
+	var path := directory.path_join(PieceDocument.filename("open_ground"))
+	var defaults: Array = Packages.definition("open_ground").pieces
+	var layer := Node3D.new()
+	root.add_child(layer)
+	var document := PieceDocument.new(path, defaults)
+	PieceBuilder.build(layer, document.pieces)
+	var editor := PieceEditor.new()
+	editor.attach(layer, document, true, Packages.bounds("open_ground"))
+	var ground := editor.node_for("ground")
+	var added := editor.execute({"tool": "add_piece", "target": "group", "piece_values": {"name": "Landing",
+		"position": [3.0, 1.0, 0.0]}})
+	_check(added.ok and ground == editor.node_for("ground"), "add a piece without rebuilding existing scenery")
+	var child := editor.execute({"tool": "add_piece", "target": "shape", "parent": added.id,
+		"piece_values": {"material": {"color": "e88033", "roughness": 0.5}}})
+	var shape := editor.node_for(child.id)
+	_check(child.ok and shape.get_parent() == editor.node_for(added.id) and shape.position == Vector3.ZERO,
+		"add a child relative to its selected parent and apply registered defaults")
+	_check(not editor.execute({"tool": "edit_piece", "target": child.id, "piece_values": {"energy": 4}}).ok
+		and not editor.execute({"tool": "edit_piece", "target": child.id, "piece_values": {"position": [900, 0, 0]}}).ok,
+		"reject a field belonging to another type and positions outside the active environment")
+	_check(editor.execute({"tool": "edit_piece", "target": child.id,
+		"piece_values": {"position": [0, 1, 0], "rotation": [0, 30, 0]}}).ok and shape == editor.node_for(child.id)
+		and shape.global_position == Vector3(3, 2, 0), "apply a transform to the live node in its parent's frame")
+	_check(editor.execute({"tool": "edit_piece", "target": child.id,
+		"piece_values": {"material": {"metallic": 0.8}}}).ok and ground == editor.node_for("ground")
+		and editor.record(child.id).material == {"color": "e88033", "roughness": 0.5, "metallic": 0.8},
+		"merge material fields without touching other pieces")
+	_check(editor.execute({"tool": "remove_piece", "target": added.id}).ok and editor.node_for(child.id) == null,
+		"remove a piece subtree")
+	var reloaded := PieceDocument.new(path, [])
+	editor.attach(layer, reloaded, true, Packages.bounds("open_ground"))
+	_check(reloaded.pieces.size() == 1 and editor.execute({"tool": "undo_piece"}).ok
+		and editor.node_for(child.id).global_position == Vector3(3, 2, 0),
+		"undo the removal after loading the piece document and its journal")
+	var library_path := directory.path_join("environments.json")
+	var library := EnvironmentLibrary.new(library_path)
+	var created := library.create("Piece editor copy", manifest.zones, "open_ground")
+	var copy_path := directory.path_join(PieceDocument.filename(created.zone.id))
+	var copy := PieceDocument.new(copy_path, [])
+	_check(created.ok and copy.pieces == reloaded.pieces and copy.history.is_empty(),
+		"save a custom environment's independent copy of the template's current pieces")
+	_check(defaults.size() == 1 and defaults[0].id == "ground", "leave installed package defaults immutable")
+	var blocked := PieceDocument.new(directory.path_join("missing/document.json"), defaults)
+	editor.attach(layer, blocked, true, Packages.bounds("open_ground"))
+	_check(not editor.execute({"tool": "add_piece", "target": "light", "piece_values": {"position": [0, 4, 0]}}).ok
+		and blocked.pieces == defaults and blocked.history.is_empty(),
+		"an unsuccessful save leaves the document and undo journal unchanged")
+	layer.free()
+	for file in [path, library_path, copy_path]:
+		DirAccess.remove_absolute(file)
+	DirAccess.remove_absolute(directory)
 
 func _check_data_entity_type() -> void:
 	var commands = preload("res://scripts/workshop/command_registry.gd")

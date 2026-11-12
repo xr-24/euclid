@@ -2,6 +2,7 @@ extends RefCounted
 
 const Store = preload("res://scripts/persistence/world_state_store.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 const LIMIT := 12
 var _path: String
 var _records: Array = []
@@ -61,8 +62,19 @@ func create(title: Variant, catalog: Array, template := "") -> Dictionary:
 	if package != "construct":
 		record["package"] = package
 	var next := _records + [record]
-	if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "environments": next}) != OK:
-		return {"ok": false, "message": "The new environment could not be saved."}
+	if not _path.is_empty():
+		var directory := _path.get_base_dir()
+		var source := directory.path_join(PieceDocument.filename(package if template.is_empty() else template))
+		var seed := PieceDocument.new(source, Packages.definition(package).get("pieces", []))
+		if not seed.error.is_empty():
+			return {"ok": false, "message": seed.error}
+		var document_path := directory.path_join(PieceDocument.filename(record.id))
+		var document := PieceDocument.new(document_path, [])
+		if not document.save(seed.pieces, []):
+			return {"ok": false, "message": "The new environment piece document could not be saved."}
+		if Store.write_json(_path, {"schema_version": 1, "environments": next}) != OK:
+			DirAccess.remove_absolute(document_path)
+			return {"ok": false, "message": "The new environment could not be saved."}
 	_records = next
 	return {"ok": true, "zone": _zone(record), "message": "Created %s from the %s package." % [name, package]}
 

@@ -13,6 +13,8 @@ const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const RenderLayers = preload("res://scripts/rendering/render_layers.gd")
+const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
+const Packages = preload("res://scripts/zones/zone_packages.gd")
 
 signal picked(id: String)
 signal edited(id: String)
@@ -76,10 +78,15 @@ func _show_mode() -> void:
 		mode_button.text = mode_label()
 
 func active() -> bool:
-	return world != null and world.overlay.visible and is_instance_valid(world._palette_host.panel) \
-		and world._palette_host.panel.is_visible_in_tree() and world._scene_ready()
+	return world != null and world.overlay.visible and world._scene_ready() and (_piece_mode() or (
+		is_instance_valid(world._palette_host.panel) and world._palette_host.panel.is_visible_in_tree()))
+
+func _piece_mode() -> bool:
+	return is_instance_valid(world.piece_panel) and world.piece_panel.is_visible_in_tree() and world.pieces.can_edit()
 
 func target() -> Node3D:
+	if _piece_mode():
+		return world.pieces.node_for(selected)
 	return world.world_tools.scene_node(selected) if not selected.is_empty() else null
 
 func _process(_delta: float) -> void:
@@ -90,7 +97,9 @@ func _process(_delta: float) -> void:
 		_looking = false
 		return
 	var id := _palette_selection()
-	if id != selected or _info.get("id") != id:
+	var piece_mode := _piece_mode()
+	if id != selected or _info.get("id") != id or _info.get("piece", false) != piece_mode \
+			or (piece_mode and _info.get("revision") != world.pieces.revision):
 		selected = id
 		_refresh_info()
 	var node := target()
@@ -103,8 +112,10 @@ func _process(_delta: float) -> void:
 	var center := node.global_position
 	var distance := maxf(0.5, camera.global_position.distance_to(center))
 	var size := distance * tan(deg_to_rad(camera.fov) * 0.5) * SCREEN_SIZE * 2.0
-	# Move works in the world's axes; Shape in the prop's own, turned by its yaw.
+	# Piece positions are local to their parent, so their handles follow the parent axes.
 	var facing := Basis.IDENTITY if mode == "move" else Basis(Vector3.UP, deg_to_rad(float(_info.get("yaw", 0.0))))
+	if piece_mode:
+		facing = (node.get_parent() as Node3D).global_basis.orthonormalized() * facing
 	global_transform = Transform3D(facing.scaled(Vector3.ONE * size), center)
 	for key in _materials:
 		var lit: bool = key == _hover or key == _drag.get("handle", "")
@@ -112,6 +123,12 @@ func _process(_delta: float) -> void:
 		(_materials[key] as StandardMaterial3D).albedo_color = base.lerp(Color.WHITE, 0.55) if lit else base
 
 func _refresh_info() -> void:
+	if _piece_mode():
+		var piece: Dictionary = world.pieces.record(selected)
+		var rotation: Array = piece.get("rotation", [0.0, 0.0, 0.0])
+		_info = {"id": selected, "piece": true, "yaw": rotation[1], "stretch": Vector3.ONE,
+			"scale": 1.0, "record": piece, "stretchable": false, "revision": world.pieces.revision}
+		return
 	var inspected: Dictionary = world.world_tools.execute("inspect", {"id": selected}) if not selected.is_empty() else {}
 	var record: Dictionary = inspected.get("entity", {})
 	_info = {"id": selected, "yaw": world.world_tools.live_yaw(selected) if not record.is_empty() else 0.0,
@@ -142,8 +159,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_begin(handle, event.position, camera)
 		else:
 			var aim := Placement.aim_at(world.player, camera, event.position, 60.0)
-			if not str(aim.id).is_empty():
-				picked.emit(aim.id)
+			var picked_id: String = aim.piece if _piece_mode() else aim.id
+			if not picked_id.is_empty():
+				picked.emit(picked_id)
 		get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
@@ -160,6 +178,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _palette_selection() -> String:
+	if _piece_mode():
+		return world.piece_panel.selected_piece()
 	var panel: Control = world._palette_host.panel
 	if panel.has_method("selected_entity"):
 		return panel.selected_entity()
@@ -227,6 +247,9 @@ func _begin(handle: String, pixel: Vector2, camera: Camera3D) -> void:
 		"transform": node.transform, "start": node.position, "basis": node.global_basis, "facing": facing,
 		"yaw": float(_info.yaw), "scale": float(_info.scale), "stretch": _info.stretch, "pixel": pixel,
 		"center": camera.unproject_position(node.global_position), "parts": {}}
+	if _info.get("piece", false):
+		_drag["piece"] = record
+		_drag["piece_revision"] = world.pieces.revision
 	if handle.length() == 2:
 		# Stretch: the handle's direction in the parent's space, the prop's extent along it and
 		# where its opposite face sits, all measured in the prop's own frame.
@@ -290,6 +313,10 @@ func _measure(pixel: Vector2) -> Variant:
 	return null
 
 func _update(pixel: Vector2, snap: bool) -> void:
+	if not is_instance_valid(_drag.node) or target() != _drag.node \
+			or (_drag.has("piece") and _drag.piece_revision != world.pieces.revision):
+		_cancel()
+		return
 	var now: Variant = _measure(pixel)
 	var anchor: Variant = _drag.anchor
 	if now == null or anchor == null:
@@ -315,10 +342,16 @@ func _update(pixel: Vector2, snap: bool) -> void:
 		if snap:
 			yaw = snappedf(yaw, SNAP.turn)
 	elif handle == "size":
-		var rule := Commands.field("scale")
-		scale_value = clampf(scale_value * float(now) / float(anchor), float(rule.minimum), float(rule.maximum))
+		var minimum: float = Commands.field("scale").minimum
+		var maximum: float = Commands.field("scale").maximum
+		if _drag.has("piece"):
+			var axes: Array = _drag.piece.get("scale", [1.0, 1.0, 1.0])
+			minimum = 0.01 / axes.min()
+			maximum = 100.0 / axes.max()
+		scale_value *= float(now) / float(anchor)
 		if snap:
 			scale_value = snappedf(scale_value, SNAP.size)
+		scale_value = clampf(scale_value, minimum, maximum)
 	else:
 		# Pull this face out or in; the prop scales about its pivot, so shift the pivot by just
 		# enough to keep the opposite face still.
@@ -333,6 +366,23 @@ func _update(pixel: Vector2, snap: bool) -> void:
 		stretch[index] = amount
 		moved += (_drag.axis as Vector3) * float(_drag.far_face) * (1.0 - ratio)
 	var bounds: AABB = world.world_tools.bounds
+	if _drag.has("piece"):
+		var piece: Dictionary = _drag.piece
+		var local_bounds: AABB = (_drag.parent as Node3D).global_transform.affine_inverse() * (world.zone_root.global_transform * bounds)
+		moved = moved.clamp(local_bounds.position, local_bounds.end)
+		var turn: Array = piece.get("rotation", [0.0, 0.0, 0.0]).duplicate()
+		turn[1] = yaw
+		var scale_axes := Packages.vector(piece.get("scale", [1.0, 1.0, 1.0])) * scale_value
+		var values := {}
+		if not moved.is_equal_approx(_drag.start):
+			values["position"] = Placement.coordinates(moved)
+		if handle == "turn" and not is_equal_approx(yaw, float(_drag.yaw)):
+			values["rotation"] = turn
+		if handle == "size" and not is_equal_approx(scale_value, 1.0):
+			values["scale"] = Placement.coordinates(scale_axes)
+		_drag["values"] = values
+		node.transform = PieceBuilder.transform_of(piece.merged(values, true))
+		return
 	moved = moved.clamp(bounds.position, bounds.end)
 	_drag["position"] = moved
 	_drag["new_yaw"] = yaw
@@ -352,6 +402,19 @@ func _update(pixel: Vector2, snap: bool) -> void:
 	node.position = moved
 
 func _commit() -> void:
+	if _drag.has("piece"):
+		var id: String = _drag.id
+		var values: Dictionary = _drag.get("values", {})
+		if _drag.piece_revision != world.pieces.revision or not is_instance_valid(_drag.node) or target() != _drag.node:
+			_cancel()
+			return
+		_cancel()
+		if not values.is_empty():
+			var result: Dictionary = world.pieces.execute({"tool": "edit_piece", "target": id, "piece_values": values})
+			if not result.ok:
+				world._console_notice(result.message)
+			edited.emit(id)
+		return
 	var node: Node3D = _drag.node
 	if not _drag.has("position") or not is_instance_valid(node):
 		_cancel()
@@ -379,6 +442,11 @@ func _cancel() -> void:
 	if _drag.is_empty():
 		return
 	var node: Node3D = _drag.node
+	if _drag.has("piece"):
+		if is_instance_valid(node) and world.pieces.node_for(_drag.id) == node:
+			node.transform = PieceBuilder.transform_of(world.pieces.record(_drag.id))
+		_drag.clear()
+		return
 	if is_instance_valid(node):
 		node.transform = _drag.transform
 		for part: Node3D in _drag.parts:

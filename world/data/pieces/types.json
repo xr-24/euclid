@@ -23,6 +23,7 @@
       "description": "A solid box, sphere, cylinder, capsule or flat plane with a material. Round shapes use size X as the diameter and size Y as the height.",
       "script": "res://scripts/pieces/shape_piece.gd",
       "required": ["shape", "size"],
+      "defaults": { "shape": "box", "size": [1, 1, 1] },
       "fields": {
         "shape": { "type": "string", "enum": ["box", "sphere", "cylinder", "capsule", "plane"] },
         "size": { "type": "array", "description": "Metres along X, Y and Z", "items": { "type": "number", "minimum": 0.01, "maximum": 2000 }, "minItems": 3, "maxItems": 3 },
@@ -48,6 +49,7 @@
       "description": "A point (omni) or spot light. Spots shine along the piece's -Z.",
       "script": "res://scripts/pieces/light_piece.gd",
       "required": ["kind"],
+      "defaults": { "kind": "omni" },
       "fields": {
         "kind": { "type": "string", "enum": ["omni", "spot"] },
         "color": { "$ref": "#/$defs/color" },
@@ -62,6 +64,7 @@
       "description": "A model from the installed library or an imported asset.",
       "script": "res://scripts/pieces/model_piece.gd",
       "required": ["source", "asset_id"],
+      "defaults": { "source": "library" },
       "fields": {
         "source": { "type": "string", "enum": ["library", "runtime"] },
         "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,96}$" },

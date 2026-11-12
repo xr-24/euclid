@@ -1,6 +1,7 @@
 {
   "version": 1,
   "$defs": {
+    "piece_offset": { "type": "number", "minimum": 0, "maximum": 4096 },
     "behavior": {
       "type": "object",
       "properties": {

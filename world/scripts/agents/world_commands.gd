@@ -19,6 +19,12 @@ func execute(definition: Dictionary, plan: Dictionary) -> Dictionary:
 func _run_registered_action(plan: Dictionary) -> Dictionary:
 	return _world._run_registered_action(plan)
 
+func _piece_command(plan: Dictionary) -> Dictionary:
+	var placement: Array = []
+	if plan.tool == "add_piece" and not plan.has("parent") and not plan.get("piece_values", {}).has("position"):
+		placement = _world._scene_spawn_position()
+	return _world.pieces.execute(plan, placement)
+
 func _inspect_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.inspect(plan.get("target", ""))
 

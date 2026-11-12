@@ -32,7 +32,7 @@ function createRegistry(snapshot) {
         typeof command.handler !== 'string' || !command.handler ||
         !Array.isArray(command.surfaces) || command.surfaces.some(surface => !['palette', 'f2', 'mcp'].includes(surface)) ||
         !['read', 'write', 'preview', 'draft', 'undo'].includes(command.effect) ||
-        !['scene', 'session'].includes(command.scope) || !['scene', 'prop', 'none'].includes(command.undo) ||
+        !['scene', 'session'].includes(command.scope) || !['scene', 'prop', 'piece', 'none'].includes(command.undo) ||
         typeof command.mutates_world !== 'boolean' ||
         !command.fields || Object.values(command.fields).some(key => !Object.hasOwn(definitions, key)) ||
         !Array.isArray(command.required) || command.required.some(key => !Object.hasOwn(command.fields, key)) ||
@@ -99,7 +99,8 @@ function createRegistry(snapshot) {
 
   const mcpTools = commands.filter(command => command.surfaces.includes('mcp')).map(command => ({
     name: command.name,
-    description: command.description + (command.undo === 'scene' ? ' The edit supports scene undo.' : ''),
+    description: command.description + (command.undo === 'scene' ? ' The edit supports scene undo.' :
+      command.undo === 'piece' ? ' The edit supports undo_piece.' : ''),
     inputSchema: resolve(inputSchema(command, true)),
     ...(command.effect === 'read' || command.destructive ?
       { annotations: { ...(command.effect === 'read' ? { readOnlyHint: true } : {}), ...(command.destructive ? { destructiveHint: true } : {}) } } : {}),
@@ -196,6 +197,11 @@ function createRegistry(snapshot) {
   }
 
   function normalizePlannerPlan(plan, context) {
+    if (isObject(plan?.piece_values)) {
+      const filled = value => isObject(value) ? Object.fromEntries(Object.entries(value)
+        .filter(([, entry]) => entry !== null).map(([key, entry]) => [key, filled(entry)])) : value;
+      plan = { ...plan, piece_values: filled(plan.piece_values) };
+    }
     if (validWorldPlan(plan, context)) return plan;
     const command = runtimeCommands(context).find(entry => entry.name === plan?.tool);
     if (!command) return null;
@@ -216,16 +222,20 @@ function createRegistry(snapshot) {
   }
 
   // The planner uses a strict envelope. The command schema is applied again to the result.
-  function structured(rule) {
+  function structured(rule, nullableOptional = false) {
     const clean = Object.fromEntries(Object.entries(rule).filter(([key]) =>
       ['type', 'description', 'enum', 'properties', 'items', 'anyOf'].includes(key)));
     if (clean.type === 'object') {
-      clean.properties = Object.fromEntries(Object.entries(clean.properties).map(([key, field]) => [key, structured(field)]));
+      clean.properties = Object.fromEntries(Object.entries(clean.properties).map(([key, field]) => {
+        const formatted = structured(field, nullableOptional);
+        return [key, nullableOptional && !rule.required.includes(key)
+          ? { anyOf: [formatted, { type: 'null' }] } : formatted];
+      }));
       clean.required = Object.keys(clean.properties);
       clean.additionalProperties = false;
     }
-    if (clean.items) clean.items = structured(clean.items);
-    if (clean.anyOf) clean.anyOf = clean.anyOf.map(structured);
+    if (clean.items) clean.items = structured(clean.items, nullableOptional);
+    if (clean.anyOf) clean.anyOf = clean.anyOf.map(option => structured(option, nullableOptional));
     return clean;
   }
 
@@ -250,7 +260,7 @@ function createRegistry(snapshot) {
       }
     }
     for (const [key, types] of additional) {
-      const choices = [...types].map(type => structured(resolve(definitions[type])));
+      const choices = [...types].map(type => structured(resolve(definitions[type]), type === 'piece_values'));
       fields[key] = { anyOf: [...choices, { type: 'null' }] };
     }
     return object(fields, Object.keys(fields));
@@ -296,7 +306,26 @@ for (const file of readdirSync(directory).sort()) {
   if (manifest.version !== 1 || !Array.isArray(manifest.commands)) throw new Error('Invalid command manifest: ' + file);
   entries.push(...manifest.commands);
 }
-export const installedSnapshot = { version: 1, schema: read('schema.json'), commands: entries };
+const schema = read('schema.json');
+const pieces = JSON.parse(readFileSync(new URL('../world/data/pieces/types.json', import.meta.url), 'utf8'));
+const { id: pieceId, type: _pieceType, ...pieceFields } = pieces.common;
+for (const { fields } of Object.values(pieces.types)) {
+  for (const [key, rule] of Object.entries(fields)) {
+    if (!Object.hasOwn(pieceFields, key)) pieceFields[key] = rule;
+    else {
+      const choices = pieceFields[key].anyOf ?? [pieceFields[key]];
+      if (!choices.some(choice => JSON.stringify(choice) === JSON.stringify(rule))) {
+        pieceFields[key] = { anyOf: [...choices, rule] };
+      }
+    }
+  }
+}
+Object.assign(schema.$defs, {
+  piece_id: pieceId,
+  piece_values: { type: 'object', properties: pieceFields, required: [] },
+  piece_type: { type: 'string', enum: Object.keys(pieces.types) },
+});
+export const installedSnapshot = { version: 1, schema, commands: entries };
 const installed = createRegistry(installedSnapshot);
 const cached = new Map();
 

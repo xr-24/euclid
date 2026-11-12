@@ -21,8 +21,11 @@ const cases = [
   { tool: 'set_behavior', target: id, behavior: null },
   { tool: 'set_behavior', target: id, behavior: { id: 'pulse', settings: [{ key: 'x', value: 1 }, { key: 'x', value: 2 }] } },
   { tool: 'draft_source', target: '' },
+  { tool: 'add_piece', target: 'shape', piece_values: { size: [1, 2, 3], material: { color: 'ff7700' } } },
+  { tool: 'add_piece', target: 'made_up', piece_values: {} },
+  { tool: 'edit_piece', target: 'ground', piece_values: { script: 'res://untrusted.gd' } },
 ];
-const expected = [true, false, true, false, false, false, true, false, true, false, true];
+const expected = [true, false, true, false, false, false, true, false, true, false, true, true, false, false];
 
 test('a preview session owns its command catalog and argument schemas', () => {
   const snapshot = structuredClone(installedSnapshot);
@@ -43,6 +46,19 @@ test('a preview session owns its command catalog and argument schemas', () => {
   const cyclic = structuredClone(snapshot);
   cyclic.schema.$defs.scale = { $ref: '#/$defs/scale' };
   assert(!validRegistry(cyclic));
+});
+
+test('the planner and MCP expose registered piece fields for editable environments', () => {
+  const context = { piece_edit: true, current: 'custom' };
+  const values = { material: { roughness: 0.6 } };
+  const plan = { tool: 'edit_piece', target: 'ground', piece_values: { ...values, material: { ...values.material, color: null }, size: null } };
+  assert.deepEqual(normalizePlannerPlan(plan, context).piece_values, values);
+  const tools = mcpToolsFor(context);
+  const edit = tools.find(tool => tool.name === 'edit_piece');
+  assert.equal(edit.inputSchema.properties.piece_values.properties.material.properties.roughness.maximum, 1);
+  assert(!validWorldPlan({ tool: 'edit_piece', target: 'ground', piece_values: values }, { piece_edit: false }, true));
+  const schema = plannerSchema(plannerCommands(context), context);
+  assert(schema.properties.piece_values.anyOf[0].properties.material.anyOf[0].properties.roughness.anyOf);
 });
 
 test('command projections enforce schema, surface, availability and runtime bindings', () => {
@@ -79,6 +95,7 @@ test('Godot and gateway load identical commands and resolve their handlers', { s
   const ordered = list => list.toSorted((a, b) => a.name.localeCompare(b.name));
   assert.deepEqual(ordered(contract.catalog), ordered(commands));
   assert.deepEqual(contract.checks, expected);
+  assert.deepEqual(contract.piece_values, installedSnapshot.schema.$defs.piece_values);
   assert.deepEqual(contract.catalog.filter(command => command.surfaces.includes('mcp')).map(command => command.name).sort(),
     mcpTools.map(command => command.name).sort());
   for (const command of commands.filter(command => command.service !== 'assets')) {

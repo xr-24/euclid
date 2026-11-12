@@ -82,6 +82,12 @@ Agents can stretch props too, with the `stretch` property.
 
 Entity edits save to `grid-entities.json` alongside the existing location save. Each scene keeps up to 64 undo steps across restarts.
 
+To edit environment pieces, choose **Pieces** from the **B** palette or the wrist’s **Build**
+page. Pick **Open Ground** from **Areas** for an environment built from pieces. Add a shape,
+light, group or model, select it from the list and use **Apply** to save changes. You can move
+and rotate it with the world handles, and **Undo piece** reverses the last edit. See the
+[environment authoring guide](docs/environment-authoring.md) for the matching agent tools.
+
 To reuse an entity in another Grid space, select it with **B**, enter a name, and
 click **Save prefab**. In any Grid space, pick it from the library and click
 **Place prefab**. Each copy has its own position and edits. The prefab keeps

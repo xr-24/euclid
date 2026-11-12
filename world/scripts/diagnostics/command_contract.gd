@@ -25,5 +25,6 @@ func _initialize() -> void:
 	for plan in cases:
 		var definition := Commands.command(plan.tool)
 		checks.append(not definition.is_empty() and Commands.valid_plan(definition, plan))
-	print("EUCLID_COMMAND_CONTRACT ", JSON.stringify({"catalog": catalog, "handlers": handlers, "checks": checks}))
+	print("EUCLID_COMMAND_CONTRACT ", JSON.stringify({"catalog": catalog, "handlers": handlers, "checks": checks,
+		"piece_values": Commands.field("piece_values")}))
 	quit()

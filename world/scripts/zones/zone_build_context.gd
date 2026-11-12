@@ -4,12 +4,15 @@ const Workstations = preload("res://scripts/zones/workstations.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Pieces = preload("res://scripts/pieces/piece_builder.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 var manifest: Dictionary
 var build_root: Node3D
 var build_interactables: Array[Dictionary] = []
 var build_agent_labels: Dictionary = {}
 var package := {}
 var appearance := {}
+var piece_document: PieceDocument
+var piece_layer: Node3D
 
 func _init(definitions: Dictionary) -> void:
 	manifest = definitions.duplicate(true)
@@ -33,13 +36,20 @@ func build_art(destination: String, grid_appearance := {}) -> bool:
 		var built: Variant = builder.call("build", self)
 		if not (built is bool and built):
 			return false
-	# Pieces build after a legacy builder, so a package can move to pieces a part at a time.
-	return Pieces.build(build_root, package.pieces) if package.has("pieces") else package.has("builder")
+	return package.has("pieces") or package.has("builder")
+
+func build_pieces(path := "") -> void:
+	piece_document = PieceDocument.new(path, package.get("pieces", []))
+	piece_layer = Node3D.new()
+	piece_layer.name = Pieces.LAYER
+	build_root.add_child(piece_layer)
+	Pieces.build(piece_layer, piece_document.pieces)
 
 func build(destination: String) -> Dictionary:
 	begin(destination)
 	if not build_art(destination):
 		build_fallback(destination)
+	build_pieces()
 	for anchor in manifest.anchors:
 		if anchor.zone == destination:
 			_add_anchor(anchor)

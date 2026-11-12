@@ -4,7 +4,7 @@ extends RefCounted
 const DIRECTORY := "res://data/commands"
 const PLACEHOLDERS := {"target": "", "name": "", "template": "", "preserve_rig": false, "clip": null, "behavior": null, "changes": null}
 
-static var _schema := _read("schema.json")
+static var _schema := _load_schema()
 static var _patterns := {}
 static var _commands := _load_commands()
 static var _locals := _load_locals()
@@ -140,6 +140,28 @@ static func _read(file: String) -> Dictionary:
 	push_error("Invalid command registry file: " + file)
 	return {}
 
+static func _load_schema() -> Dictionary:
+	var schema := _read("schema.json")
+	var path := "res://data/pieces/types.json"
+	var pieces: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var properties: Dictionary = pieces.common.duplicate()
+	schema["$defs"]["piece_id"] = properties.id
+	properties.erase("id")
+	properties.erase("type")
+	for definition: Dictionary in pieces.types.values():
+		for key: String in definition.fields:
+			var rule: Dictionary = definition.fields[key]
+			if not properties.has(key):
+				properties[key] = rule
+			elif properties[key] != rule:
+				var choices: Array = properties[key].get("anyOf", [properties[key]]).duplicate()
+				if rule not in choices:
+					choices.append(rule)
+				properties[key] = {"anyOf": choices}
+	schema["$defs"]["piece_values"] = {"type": "object", "properties": properties, "required": []}
+	schema["$defs"]["piece_type"] = {"type": "string", "enum": pieces.types.keys()}
+	return schema
+
 static func _load_commands() -> Dictionary:
 	var entries := {}
 	for file in DirAccess.get_files_at(DIRECTORY):
@@ -157,7 +179,7 @@ static func valid_definition(value: Variant) -> bool:
 			or value.get("service") not in ["scene", "world", "animation", "assets", "development"] \
 			or not value.get("handler") is String or value.handler.is_empty() \
 			or value.get("effect") not in ["read", "write", "preview", "draft", "undo"] \
-			or value.get("scope") not in ["scene", "session"] or value.get("undo") not in ["none", "scene", "prop"] \
+			or value.get("scope") not in ["scene", "session"] or value.get("undo") not in ["none", "scene", "prop", "piece"] \
 			or not value.get("mutates_world") is bool or not value.get("fields") is Dictionary \
 			or not value.get("required") is Array or not value.get("surfaces") is Array:
 		return false

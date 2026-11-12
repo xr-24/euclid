@@ -10,6 +10,7 @@ const FACTORY_DIRECTORY := "res://scripts/pieces/"
 
 static var _data := _load()
 static var _factories := {}
+static var _factory_mutex := Mutex.new()
 
 static func types() -> Dictionary:
 	return _data.types
@@ -42,10 +43,13 @@ static func valid_tree(pieces: Variant) -> bool:
 	return _valid_level(pieces, {}, [0], 0)
 
 static func factory(type: String) -> GDScript:
+	_factory_mutex.lock()
 	if not _factories.has(type):
 		var loaded := load(str(_data.types[type]["script"])) as GDScript
 		_factories[type] = loaded if loaded != null and loaded.has_script_method("build") else null
-	return _factories[type]
+	var factory_script: GDScript = _factories[type]
+	_factory_mutex.unlock()
+	return factory_script
 
 static func _valid_level(pieces: Variant, ids: Dictionary, count: Array, depth: int) -> bool:
 	if not pieces is Array or depth > MAX_DEPTH:

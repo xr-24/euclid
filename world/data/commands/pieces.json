@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "list_piece_types", "description": "List registered environment piece types, exact field schemas, defaults and installed model IDs.",
+      "service": "world", "handler": "_piece_command", "effect": "read", "surfaces": ["f2", "mcp", "palette"],
+      "fields": {}, "required": [], "scope": "scene", "undo": "none", "mutates_world": false
+    },
+    {
+      "name": "list_pieces", "description": "List pieces in the current environment with stable IDs, or inspect one piece by ID. Omit target to list. Pass the returned next_offset as offset for the next page.",
+      "service": "world", "handler": "_piece_command", "effect": "read", "surfaces": ["f2", "mcp", "palette"],
+      "fields": {"target": "piece_id", "offset": "piece_offset"}, "required": [], "scope": "scene", "undo": "none", "mutates_world": false
+    },
+    {
+      "name": "add_piece", "description": "Add a registered environment piece. Target is its type. Use the type's fields in piece_values and optional parent ID for a child. Position is local to the parent. Without a root position Euclid places it at the crosshair. Check list_piece_types for defaults and required fields.",
+      "service": "world", "handler": "_piece_command", "effect": "write", "surfaces": ["f2", "mcp", "palette"],
+      "fields": {"target": "piece_type", "parent": "piece_id", "piece_values": "piece_values"}, "required": ["target"],
+      "scope": "scene", "undo": "piece", "mutates_world": true, "availability": "piece_edit"
+    },
+    {
+      "name": "edit_piece", "description": "Edit fields of an existing piece by ID. Set only requested fields in piece_values. Material changes merge with existing material fields.",
+      "service": "world", "handler": "_piece_command", "effect": "write", "surfaces": ["f2", "mcp", "palette"],
+      "fields": {"target": "piece_id", "piece_values": "piece_values"}, "required": ["target", "piece_values"],
+      "scope": "scene", "undo": "piece", "mutates_world": true, "availability": "piece_edit"
+    },
+    {
+      "name": "remove_piece", "description": "Remove an environment piece and its children by stable ID. Undo with undo_piece.",
+      "service": "world", "handler": "_piece_command", "effect": "write", "surfaces": ["f2", "mcp", "palette"], "destructive": true,
+      "fields": {"target": "piece_id"}, "required": ["target"], "scope": "scene", "undo": "piece", "mutates_world": true, "availability": "piece_edit"
+    },
+    {
+      "name": "undo_piece", "description": "Undo the most recent environment piece edit in the current environment.",
+      "service": "world", "handler": "_piece_command", "effect": "undo", "surfaces": ["f2", "mcp", "palette"],
+      "fields": {}, "required": [], "scope": "scene", "undo": "none", "mutates_world": true, "availability": "piece_edit"
+    }
+  ]
+}

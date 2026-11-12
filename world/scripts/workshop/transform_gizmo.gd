@@ -323,7 +323,7 @@ func _update(pixel: Vector2, snap: bool) -> void:
 		# Pull this face out or in; the prop scales about its pivot, so shift the pivot by just
 		# enough to keep the opposite face still.
 		var index: int = _drag.index
-		var rule := Commands.field("stretch").get("items", {})
+		var rule: Dictionary = Commands.field("stretch").get("items", {})
 		var extent: float = _drag.extent
 		var amount := clampf(stretch[index] * (extent + float(now) - float(anchor)) / extent,
 			float(rule.get("minimum", 0.2)), float(rule.get("maximum", 5.0)))

@@ -30,7 +30,7 @@ var _refresh: Callable
 func _init(path: String, refresh: Callable) -> void:
 	_path = path
 	_refresh = refresh
-	var file := FileAccess.open(path, FileAccess.READ) if not path.is_empty() else null
+	var file: FileAccess = null if path.is_empty() else FileAccess.open(path, FileAccess.READ)
 	if file and file.get_length() <= 262144:
 		var data: Variant = JSON.parse_string(file.get_as_text())
 		if data is Dictionary and data.get("version") == 1 and data.get("environments") is Dictionary:
@@ -118,7 +118,7 @@ static func defaults(zone: String) -> Dictionary:
 static func skies() -> Array:
 	if _skies.is_empty():
 		_skies = ["gradient"]
-		for file in DirAccess.get_files_at(HDRI_DIR):
+		for file: String in DirAccess.get_files_at(HDRI_DIR):
 			var sky := file.trim_suffix(".import")
 			if sky.get_extension() in ["hdr", "exr"] and sky not in _skies:
 				_skies.append(sky)

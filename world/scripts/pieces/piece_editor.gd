@@ -8,21 +8,42 @@ const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const Document = preload("res://scripts/persistence/piece_document.gd")
+const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const PAGE_SIZE := 64
 
 var _layer: Node3D
 var _document: Document
+var _displayed: Array
+var _appearance := Callable()
 var bounds: AABB
 var revision := 0
 var _editable := false
 
-func attach(layer: Node3D, document: Document, can_edit: bool, area: AABB) -> void:
+func attach(layer: Node3D, document: Document, can_edit: bool, area: AABB, displayed: Variant = null) -> void:
 	_layer = layer
 	_document = document
+	_displayed = document.pieces if displayed == null else displayed
+	_appearance = Callable()
 	_editable = can_edit
 	bounds = area
 	revision += 1
 	changed.emit()
+
+## A source preview can project alternate visual fields without changing the saved document.
+func set_appearance(project: Callable) -> void:
+	_appearance = project
+	if is_instance_valid(_layer):
+		_sync_display()
+		revision += 1
+
+func _sync_display() -> void:
+	var next: Array = _appearance.call(_document.pieces) if _appearance.is_valid() else _document.pieces
+	if next != _displayed:
+		Builder.sync(_layer, _displayed, next)
+		_displayed = next
+		var side: float = _layer.get_parent().get_meta("construct_side", 0.0) if _layer.get_parent() else 0.0
+		if side != 0.0:
+			Effects.set_side(_layer, side)
 
 func can_edit() -> bool:
 	return is_instance_valid(_layer) and _editable and _document.error.is_empty()
@@ -147,10 +168,9 @@ func _save(next: Array, undo: Array[Dictionary], id: String, message: String) ->
 	if next != _document.pieces:
 		if not Types.valid_tree(next):
 			return _failure("Check the selected piece type's required fields and field values.")
-		var previous: Array = _document.pieces
 		if not _document.save(next, undo):
 			return _failure("The environment piece document could not be saved.")
-		Builder.sync(_layer, previous, next)
+		_sync_display()
 		revision += 1
 		changed.emit()
 	return {"ok": true, "message": message, "id": id}

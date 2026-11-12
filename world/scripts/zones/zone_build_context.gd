@@ -5,14 +5,15 @@ const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Pieces = preload("res://scripts/pieces/piece_builder.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
+const Scenery = preload("res://scripts/zones/grid_scenery.gd")
 var manifest: Dictionary
 var build_root: Node3D
 var build_interactables: Array[Dictionary] = []
 var build_agent_labels: Dictionary = {}
 var package := {}
-var appearance := {}
 var piece_document: PieceDocument
 var piece_layer: Node3D
+var displayed_pieces: Array
 
 func _init(definitions: Dictionary) -> void:
 	manifest = definitions.duplicate(true)
@@ -26,9 +27,7 @@ func begin(destination: String) -> void:
 	build_root.set_meta("scene_edit", package.capabilities.get("scene_edit", false))
 	build_root.set_meta("spawn", Packages.spawn(destination))
 
-func build_art(destination: String, grid_appearance := {}) -> bool:
-	package = Packages.definition(destination).duplicate(true)
-	appearance = grid_appearance if not grid_appearance.is_empty() else {"floor_spacing": 2.0, "wall_height": 1.0}
+func build_art() -> bool:
 	if package.has("builder"):
 		var builder := load(package.builder) as GDScript
 		if builder == null or not builder.has_script_method("build") or builder.get_instance_base_type() != &"RefCounted":
@@ -38,16 +37,17 @@ func build_art(destination: String, grid_appearance := {}) -> bool:
 			return false
 	return package.has("pieces") or package.has("builder")
 
-func build_pieces(path := "") -> void:
-	piece_document = PieceDocument.new(path, package.get("pieces", []))
+func build_pieces(path := "", appearance := {}) -> void:
+	piece_document = PieceDocument.new(path, package.get("pieces", []), int(package.get("piece_revision", 0)))
+	displayed_pieces = Scenery.project(piece_document.pieces, package.get("piece_appearance", {}), appearance)
 	piece_layer = Node3D.new()
 	piece_layer.name = Pieces.LAYER
 	build_root.add_child(piece_layer)
-	Pieces.build(piece_layer, piece_document.pieces)
+	Pieces.build(piece_layer, displayed_pieces)
 
 func build(destination: String) -> Dictionary:
 	begin(destination)
-	if not build_art(destination):
+	if not build_art():
 		build_fallback(destination)
 	build_pieces()
 	for anchor in manifest.anchors:

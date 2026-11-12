@@ -732,16 +732,16 @@ func _build_zone_locked(destination: String, grid_appearance: Dictionary) -> Dic
 	build_root = context.build_root
 	build_interactables = context.build_interactables
 	build_agent_labels = context.build_agent_labels
-	if not context.build_art(destination, grid_appearance):
+	if not context.build_art():
 		context.build_fallback(destination)
-	context.build_pieces(PieceDocument.path_for(destination, smoke_mode))
+	context.build_pieces(PieceDocument.path_for(destination, smoke_mode), grid_appearance)
 	for anchor in manifest.anchors:
 		if anchor.zone == destination:
 			_add_anchor(anchor)
 	# Every surface gets the construct effect built in now, so nothing is swapped later.
 	WorldArt.make_constructible(build_root)
 	return {"id": destination, "root": build_root, "interactables": build_interactables, "agent_labels": build_agent_labels,
-		"piece_layer": context.piece_layer, "piece_document": context.piece_document}
+		"piece_layer": context.piece_layer, "piece_document": context.piece_document, "displayed_pieces": context.displayed_pieces}
 
 ## Build on a worker thread so the world keeps running.
 func _build_zone_async(destination: String) -> Dictionary:
@@ -765,8 +765,9 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		_palette_host.clear_view()
 	zone_id = built.id
 	zone_root = built.root
-	pieces.attach(built.piece_layer, built.piece_document, zone_root.get_meta("scene_edit", false), Packages.bounds(zone_id))
-	_grid_scenery.attach(zone_root)
+	pieces.attach(built.piece_layer, built.piece_document, zone_root.get_meta("scene_edit", false),
+		Packages.piece_bounds(zone_id), built.displayed_pieces)
+	_grid_scenery.attach(pieces, Packages.definition(zone_id).get("piece_appearance", {}))
 	if world_tools != null:
 		var linked_preview: String = world_tools.behavior_preview_id()
 		if not linked_preview.is_empty():

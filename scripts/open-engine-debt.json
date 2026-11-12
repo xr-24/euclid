@@ -10,8 +10,7 @@
     "gateway/workbench-runner.mjs": { "count": 1, "reason": "The benchmark_villa tool runs the villa benchmark." }
   },
   "code_builders": {
-    "construct": "Grid floor and walls become piece types (roadmap step 2).",
-    "villa": "Villa becomes a document once water, planting and materials are pieces (roadmap step 6).",
-    "beach": "Shore becomes a document once terrain and water are pieces (roadmap step 6)."
+    "villa": "Villa becomes a document once water, planting and materials are pieces.",
+    "beach": "Shore becomes a document once terrain and water are pieces."
   }
 }

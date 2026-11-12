@@ -3,6 +3,7 @@ render_mode unshaded;
 #include "res://shaders/construct_fx.gdshaderinc"
 
 uniform float floor_spacing = 2.0;
+uniform vec4 surface_tint : source_color = vec4(1.0);
 
 float grid_lines(vec2 point, float spacing, float width) {
 	vec2 cell = point / spacing;
@@ -28,5 +29,5 @@ void fragment() {
 	float grain = 0.5 + 0.5 * sin(point.x * 3.1 + sin(point.z * 7.2)) * sin(point.z * 11.7);
 	vec3 surface = vec3(0.011, 0.007, 0.013) * (0.7 + tile * 0.55 + grain * 0.11);
 	vec3 traces = vec3(0.35, 0.017, 0.028) * (fine * 0.063 + major * 0.087 * tile);
-	ALBEDO = (surface + traces) * (1.0 - wire) + effect.rgb;
+	ALBEDO = (surface + traces) * surface_tint.rgb * (1.0 - wire) + effect.rgb;
 }

@@ -3,6 +3,7 @@ extends RefCounted
 
 const DIRECTORY := "res://data/zones"
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 static var _packages := _load_packages()
 static var _aliases := {}
 
@@ -26,6 +27,11 @@ static func spawn(id: String) -> Dictionary:
 
 static func bounds(id: String) -> AABB:
 	var corners: Array = definition(id).bounds
+	return AABB(vector(corners[0]), vector(corners[1]))
+
+static func piece_bounds(id: String) -> AABB:
+	var package := definition(id)
+	var corners: Array = package.get("piece_bounds", package.bounds)
 	return AABB(vector(corners[0]), vector(corners[1]))
 
 static func environment(id: String) -> Dictionary:
@@ -69,6 +75,18 @@ static func valid(value: Variant) -> bool:
 		return false
 	if value.has("pieces") and not PieceTypes.valid_tree(value.pieces):
 		return false
+	if not PieceDocument.valid_revision(value.get("piece_revision", 0)):
+		return false
+	if value.has("piece_bounds") and not _valid_bounds(value.piece_bounds):
+		return false
+	var bindings: Variant = value.get("piece_appearance", {})
+	if not bindings is Dictionary:
+		return false
+	for binding: Variant in bindings.values():
+		if not binding is Dictionary or not binding.get("id") is String or not binding.get("path") is Array:
+			return false
+		if binding.path.is_empty() or binding.path.size() > 2 or not binding.path.all(_binding_key):
+			return false
 	for spec in [["name", 96], ["description", 180]]:
 		if value.has(spec[0]) and (not value[spec[0]] is String or value[spec[0]].length() > spec[1]):
 			return false
@@ -106,6 +124,15 @@ static func valid(value: Variant) -> bool:
 	if value.benchmark_views.is_empty():
 		return false
 	return true
+
+static func _binding_key(value: Variant) -> bool:
+	return value is String and value.is_valid_identifier()
+
+static func _valid_bounds(value: Variant) -> bool:
+	if not value is Array or value.size() != 2 or not value.all(_valid_vector):
+		return false
+	var size := vector(value[1])
+	return size.x > 0.0 and size.y > 0.0 and size.z > 0.0
 
 static func _valid_vector(value: Variant) -> bool:
 	return value is Array and value.size() == 3 and value.all(_number)

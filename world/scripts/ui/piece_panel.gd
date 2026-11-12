@@ -135,6 +135,15 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 			if choice == value:
 				options.select(options.item_count - 1)
 		control = options
+	elif field.get("type") == "array" and field.get("items", {}).get("type") == "object":
+		var text := TextEdit.new()
+		text.custom_minimum_size.y = 112
+		if value is Array:
+			var lines := PackedStringArray()
+			for item in value:
+				lines.append("  " + JSON.stringify(item))
+			text.text = "[\n" + ",\n".join(lines) + "\n]"
+		control = text
 	else:
 		var text := LineEdit.new()
 		text.text = _display_value(value, field)
@@ -239,6 +248,8 @@ static func _changes(inputs: Dictionary) -> Dictionary:
 static func _read(control: Control) -> Variant:
 	if control is OptionButton:
 		return control.get_selected_metadata()
+	if control is TextEdit:
+		return control.text.strip_edges()
 	return (control as LineEdit).text.strip_edges()
 
 func _row(text: String, input: Control, parent: Control = null) -> HBoxContainer:

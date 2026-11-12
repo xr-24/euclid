@@ -225,6 +225,7 @@ func _run() -> void:
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
+	_check_piece_upgrade()
 	_check_data_entity_type()
 	_check_workshop_actions(path)
 	_check_prefabs(path)
@@ -863,6 +864,27 @@ func _check_piece_edits(manifest: Dictionary) -> void:
 	for file in [path, library_path, copy_path]:
 		DirAccess.remove_absolute(file)
 	DirAccess.remove_absolute(directory)
+
+func _check_piece_upgrade() -> void:
+	var path := "user://piece-upgrade-%d.json" % Time.get_ticks_usec()
+	var package := Packages.definition("construct")
+	var defaults: Array = package.pieces
+	var revision: int = int(package.piece_revision)
+	var local := {"id": "saved-lamp", "type": "light", "kind": "omni", "position": [4, 2, 3]}
+	_check(Store.write_json(path, {"schema_version": 1, "pieces": [local], "undo": [{"pieces": []}]}) == OK,
+		"seed a piece save from before the Grid's conversion")
+	var doc := PieceDocument.new(path, defaults, revision)
+	var saved_lamp := doc.pieces.any(func(record: Dictionary) -> bool:
+		return record.id == local.id and record.kind == local.kind and Packages.vector(record.position) == Vector3(4, 2, 3))
+	_check(doc.error.is_empty() and doc.pieces.size() == defaults.size() + 1 and saved_lamp
+		and doc.history.size() == 1 and doc.history[0].pieces == defaults,
+		"add the structural defaults to old saves and to each undo snapshot")
+	var edited := doc.pieces.filter(func(record: Dictionary) -> bool: return record.id != "backdrop")
+	_check(doc.save(edited, doc.history), "save an intentional removal after the Grid upgrade")
+	var reopened := PieceDocument.new(path, defaults, revision)
+	_check(reopened.pieces == edited and not reopened.pieces.any(func(record: Dictionary) -> bool: return record.id == "backdrop"),
+		"respect a deliberate removal on later loads")
+	DirAccess.remove_absolute(path)
 
 func _check_data_entity_type() -> void:
 	var commands = preload("res://scripts/workshop/command_registry.gd")

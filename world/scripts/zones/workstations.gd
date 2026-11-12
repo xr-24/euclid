@@ -1,7 +1,6 @@
 extends RefCounted
 ## App furniture is a presentation of an anchor; it never launches processes.
 const Assets = preload("res://scripts/assets/asset_library.gd")
-const Grid = preload("res://scripts/zones/grid_zone.gd")
 const Props = preload("res://scripts/zones/authored_props.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 
@@ -10,7 +9,7 @@ static func build(root: Node3D, at: Vector3, anchor: Dictionary) -> Node3D:
 	var asset := "terminal"
 	var style: String = Packages.definition(anchor.zone).workstation
 	if style == "grid":
-		station = Grid.workstation(root, at)
+		station = _grid_terminal(root, at)
 	else:
 		station = Node3D.new()
 		station.position = at
@@ -60,3 +59,47 @@ static func _box(root: Node3D, at: Vector3, size: Vector3, color: Color, solid :
 	root.add_child(visual)
 	if solid:
 		Assets.add_static_box(root, at, size)
+
+static func _grid_terminal(root: Node3D, at: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = "GridTerminal"
+	body.set_meta("terminal_screen", true)
+	body.position = at
+	root.add_child(body)
+	var casing := _material(Color("24191e"))
+	var light := _material(Color("41141b"), Color("ff4a42"), 0.85)
+	var display := _material(Color("1b0b10"), Color("40121a"), 0.42)
+	_box_mesh(body, Vector3(0, 0.06, 0), Vector3(1.15, 0.12, 0.72), casing)
+	_box_mesh(body, Vector3(0, 0.57, 0), Vector3(0.52, 0.94, 0.37), casing)
+	_box_mesh(body, Vector3(0, 0.57, 0.191), Vector3(0.028, 0.9, 0.012), light)
+	_box_mesh(body, Vector3(0, 1.27, 0), Vector3(1.36, 0.64, 0.15), casing)
+	_box_mesh(body, Vector3(0, 1.27, 0.077), Vector3(1.27, 0.56, 0.012), display)
+	_box_mesh(body, Vector3(0, 1.52, 0.085), Vector3(1.18, 0.012, 0.01), light)
+	_box_collider(body, Vector3(0, 0.8, 0), Vector3(1.15, 1.6, 0.42))
+	return body
+
+static func _box_mesh(root: Node3D, at: Vector3, size: Vector3, material: Material) -> void:
+	var instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	instance.mesh = mesh
+	instance.material_override = material
+	instance.position = at
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(instance)
+
+static func _material(color: Color, emission := Color.BLACK, energy := 0.0) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = energy > 0.0
+	material.emission = emission
+	material.emission_energy_multiplier = energy
+	return material
+
+static func _box_collider(body: StaticBody3D, at: Vector3, size: Vector3) -> void:
+	var collider := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	collider.shape = box
+	collider.position = at
+	body.add_child(collider)

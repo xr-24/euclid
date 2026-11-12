@@ -395,7 +395,7 @@ func refresh_actions() -> void:
 			"shoreline": available = _world._shoreline.available()
 			"grid": available = _world._grid_scenery.available()
 			"grid_palette": available = draft.get("status") != "passed" or _world._is_workshop(_world.zone_id)
-			"behavior", "workshop_tool": available = _world._grid_scenery.available() and _world.zone_id == draft.get("preview_zone")
+			"behavior", "workshop_tool": available = _world._is_workshop(_world.zone_id) and _world.zone_id == draft.get("preview_zone")
 		if draft.get("agent_source", false) and draft.get("subject") != "grid_palette":
 			available = true
 		console.update_development(draft, available and not _world.shifting and not _action_busy,

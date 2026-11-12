@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode unshaded, fog_disabled;
 #include "res://shaders/construct_fx.gdshaderinc"
 
+uniform vec4 surface_tint : source_color = vec4(1.0);
+
 varying vec3 world_point;
 varying vec3 local_point;
 varying vec3 wall_normal;
@@ -48,5 +50,5 @@ void fragment() {
 	lines += fragment_band * red_glow * (0.004 + 0.027 * step(0.93, fract(panel.y * 28.0)));
 	vec3 backscatter = vec3(0.052, 0.005, 0.012) * distance_haze * red_glow;
 	vec3 light = vec3(1.24, 0.034, 0.045) * lines * (0.35 + 0.65 * red_glow) * (1.0 - distance_haze * 0.52);
-	ALBEDO = (rock + backscatter + light) * (1.0 - wire) + shift.rgb;
+	ALBEDO = (rock + backscatter + light) * surface_tint.rgb * (1.0 - wire) + shift.rgb;
 }

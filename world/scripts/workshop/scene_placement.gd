@@ -25,13 +25,28 @@ static func pick(player: CharacterBody3D, camera: Camera3D, bounds: AABB, grid: 
 			selected = _entity(picker)
 	var ahead := player.global_position + Vector3(direction.x, 0, direction.z).normalized() * 3.0
 	if grid:
-		if not hit.is_empty() and hit.collider is Node and hit.collider.name == "GridFloor" and hit.normal.y > 0.9:
-			ahead = hit.position
-		ahead.y = 0.0
-		return {"selected": selected, "point": ahead.clamp(bounds.position, bounds.end)}
+		if _floor(hit, bounds.grow(0.001)) and hit.normal.y > 0.9:
+			return {"selected": selected, "point": (hit.position as Vector3).clamp(bounds.position, bounds.end)}
+		var point := _ground_below(state, player, ahead.clamp(bounds.position, bounds.end), bounds)
+		return {"selected": selected, "point": point}
 	if not _floor(hit, bounds):
 		hit = _ray(state, player, ahead + Vector3.UP * 2.0, ahead + Vector3.DOWN * 8.0)
 	return {"selected": selected, "point": hit.position if _floor(hit, bounds) else Vector3.INF}
+
+static func _ground_below(state: PhysicsDirectSpaceState3D, player: CharacterBody3D, at: Vector3, bounds: AABB) -> Vector3:
+	var from := Vector3(at.x, maxf(at.y + 2.0, bounds.end.y + 0.1), at.z)
+	var to := Vector3(at.x, bounds.position.y - 1.0, at.z)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var excluded: Array[RID] = [player.get_rid()]
+	for attempt in 8:
+		query.exclude = excluded
+		var hit := state.intersect_ray(query)
+		if hit.is_empty():
+			break
+		if _floor(hit, bounds.grow(0.001)):
+			return (hit.position as Vector3).clamp(bounds.position, bounds.end)
+		excluded.append(hit.rid)
+	return Vector3.INF
 
 static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, reach: float, from_inside := false) -> Dictionary:
 	var from := camera.project_ray_origin(pixel)

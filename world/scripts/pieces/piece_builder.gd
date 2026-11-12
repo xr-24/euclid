@@ -28,9 +28,9 @@ static func sync(parent: Node3D, before: Array, after: Array) -> void:
 		if node == null:
 			_build(parent, record, true)
 			continue
-		var rebuilt: bool = old.type != record.type or Types.types()[record.type].fields.keys().any(
+		var changed_fields: bool = old.type != record.type or Types.types()[record.type].fields.keys().any(
 			func(key: String) -> bool: return old.get(key) != record.get(key))
-		if rebuilt:
+		if changed_fields and not _update_factory(node, old, record):
 			var replacement := _make(record)
 			parent.remove_child(node)
 			Effects.make_constructible(replacement, false)
@@ -46,6 +46,12 @@ static func sync(parent: Node3D, before: Array, after: Array) -> void:
 		sync(node, old.get("children", []), record.get("children", []))
 	for id in previous:
 		parent.get_node("Piece_" + id).free()
+
+static func _update_factory(node: Node3D, old: Dictionary, record: Dictionary) -> bool:
+	if old.type != record.type:
+		return false
+	var factory := Types.factory(record.type)
+	return factory != null and factory.has_script_method("update_fields") and factory.call("update_fields", node, old, record) == true
 
 static func transform_of(record: Dictionary) -> Transform3D:
 	var at := _vector(record.get("position", [0.0, 0.0, 0.0]))

@@ -33,6 +33,7 @@ static func make_constructible(root: Node, cache := true) -> void:
 ## cannot take the effect (text) are hidden while a shift runs.
 
 static func set_side(root: Node, side: float) -> void:
+	root.set_meta("construct_side", side)
 	for node in root.find_children("*", "GeometryInstance3D", true, false):
 		var gi := node as GeometryInstance3D
 		var fx := gi is MeshInstance3D and (gi as MeshInstance3D).mesh != null

@@ -8,13 +8,12 @@ const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 
 static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
+	await _check_grid_pieces(world, tree)
 	await _check_prop_lock(world, tree)
 	for zone in world.manifest.zones:
 		world._load_zone(zone.id)
 		var package := Packages.definition(zone.id)
-		if zone.id == "construct":
-			assert(world.zone_root.get_node_or_null("GridFloor") is StaticBody3D)
-		elif package.has("builder"):
+		if package.has("builder"):
 			assert(world.zone_root.get_child_count() > 5)
 		for piece: Dictionary in package.get("pieces", []):
 			var node: Node = world.zone_root.get_node_or_null(PieceBuilder.LAYER + "/Piece_" + str(piece.id))
@@ -63,6 +62,43 @@ static func run(world: Node3D) -> void:
 		print("CONSTRUCT_GATEWAY_OK: authenticated snapshot received in Godot")
 	print("CONSTRUCT_SMOKE_OK: installed zones, anchors, collision, application return, saved location round trip, in-place shift")
 	tree.quit()
+
+static func _check_grid_pieces(world: Node3D, tree: SceneTree) -> void:
+	var floor_body: StaticBody3D = world.pieces.node_for("floor")
+	var slab := floor_body.get_node("Collision") as CollisionShape3D
+	var surface := floor_body.get_node("Mesh") as MeshInstance3D
+	var backdrop: MultiMeshInstance3D = world.pieces.node_for("backdrop").get_node("Boxes")
+	assert(surface.mesh.size == Vector2(640, 640) and slab.shape.size == Vector3(128, 0.4, 128))
+	assert(backdrop.multimesh.instance_count > 150)
+	for direction in ["north", "south", "east", "west"]:
+		var barrier: StaticBody3D = world.pieces.node_for("boundary-" + direction)
+		assert(barrier.get_node_or_null("Mesh") == null and barrier.get_node("Collision").shape is BoxShape3D)
+
+	var committed_spacing: float = surface.material_override.get_shader_parameter("floor_spacing")
+	var committed_height := backdrop.scale.y
+	var changed: Dictionary = await world._execute_world_tool({"tool": "edit_piece", "target": "floor",
+		"piece_values": {"material": {"line_spacing": 5.5}}})
+	assert(changed.ok and is_equal_approx(surface.material_override.get_shader_parameter("floor_spacing"), 5.5))
+	var draft := "piece-appearance-smoke"
+	var preview: Dictionary = await world._preview_live_change({"draft": draft, "grid": {
+		"schema_version": 1, "floor_spacing": 4.0, "wall_height": 1.25}})
+	assert(preview.ok and world._live_change_status(draft) == "active")
+	assert(world.pieces.node_for("floor") == floor_body and floor_body.get_node("Collision") == slab)
+	assert(is_equal_approx(surface.material_override.get_shader_parameter("floor_spacing"), 4.0) and is_equal_approx(backdrop.scale.y, 1.25))
+	assert(world.pieces.record("floor").material.line_spacing == 5.5)
+	assert(world._finish_live_change("discard", draft).live)
+	assert(is_equal_approx(surface.material_override.get_shader_parameter("floor_spacing"), 5.5) and is_equal_approx(backdrop.scale.y, committed_height))
+	assert(world.pieces.execute({"tool": "undo_piece"}).ok)
+	assert(is_equal_approx(surface.material_override.get_shader_parameter("floor_spacing"), committed_spacing))
+
+	world.player.position = Vector3(4, 0.05, 4)
+	assert(world.pieces.execute({"tool": "edit_piece", "target": "floor", "piece_values": {"position": [0, 1, 0]}}).ok)
+	await tree.physics_frame
+	await tree.physics_frame
+	var placement: Array = world._scene_spawn_position()
+	assert(placement.size() == 3 and is_equal_approx(placement[1], 1.0), "Prop placement follows the moved floor.")
+	assert(world.pieces.execute({"tool": "undo_piece"}).ok)
+	print("CONSTRUCT_GRID_PIECES_OK")
 
 static func _check_prop_lock(world: Node3D, tree: SceneTree) -> void:
 	world.set_physics_process(false)

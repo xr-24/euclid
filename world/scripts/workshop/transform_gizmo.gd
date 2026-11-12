@@ -368,7 +368,8 @@ func _update(pixel: Vector2, snap: bool) -> void:
 	var bounds: AABB = world.world_tools.bounds
 	if _drag.has("piece"):
 		var piece: Dictionary = _drag.piece
-		var local_bounds: AABB = (_drag.parent as Node3D).global_transform.affine_inverse() * (world.zone_root.global_transform * bounds)
+		var area: AABB = world.pieces.bounds
+		var local_bounds: AABB = (_drag.parent as Node3D).global_transform.affine_inverse() * (world.zone_root.global_transform * area)
 		moved = moved.clamp(local_bounds.position, local_bounds.end)
 		var turn: Array = piece.get("rotation", [0.0, 0.0, 0.0]).duplicate()
 		turn[1] = yaw

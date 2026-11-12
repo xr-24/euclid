@@ -62,7 +62,10 @@ world and development handlers. The coordinator dispatches to those services.
 The [environment packages](zone-packages.md) supply zone-specific content and
 configuration through a private build context.
 
-The Grid keeps the existing `construct` zone ID. Its builder creates the floor and boundaries under a detached root. The backdrop batches the fractured wall and suspended geometry separately from the playable floor. The coordinator attaches the workshop entities on the main thread before committing the zone.
+The Grid keeps the existing `construct` zone ID. Its piece document declares the playable
+floor, collision boundaries, and a single box batch for the fractured wall and suspended
+geometry. The coordinator attaches the workshop entities on the main thread before committing
+the zone.
 
 `workshop/world_tools.gd` is the shared command boundary. Entity records use a stable ID, a registered type, a position in metres, yaw, scale and a color. The tool service validates each proposed edit and saves it before changing the scene. Entity types are trusted factories in `workshop/entity_types.gd`.
 
@@ -269,10 +272,10 @@ preview to the active profile. Discard restores the previous profile. The host
 operates on material uniforms while the solver and its gameplay probes continue
 on the existing scene nodes.
 
-`zones/grid_scenery.gd` manages the shared Grid template's replaceable visuals.
-It hands the zone builder a profile snapshot and swaps only the floor visual
-and backdrop on the main thread. The collision, anchors, entity nodes, player,
-and agent bridge retain their identity during a scenery reload.
+`zones/grid_scenery.gd` maps the Workbench profile to the piece fields declared in the zone
+document. The detached builder reads a profile snapshot. Live previews update the floor
+material and the batch height in place. Local piece overrides take precedence over committed
+profile defaults and return when a preview is discarded.
 
 `ui/grid_palette_host.gd` owns the Grid palette's version 1 reload contract.
 After checks pass, a palette-only draft can supply its exact reviewed script

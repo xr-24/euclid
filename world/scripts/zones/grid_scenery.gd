@@ -1,27 +1,28 @@
 extends RefCounted
-## Owns the replaceable scenery while the zone, physics and workshop stay attached.
+## Adapts the Workbench's version 1 appearance file to declared piece fields.
 
-const Grid = preload("res://scripts/zones/grid_zone.gd")
-const WorldArt = preload("res://scripts/world_art.gd")
+const Editor = preload("res://scripts/pieces/piece_editor.gd")
+const Types = preload("res://scripts/pieces/piece_types.gd")
 const PATH := "res://data/grid_appearance.json"
 const DEFAULT := {"schema_version": 1, "floor_spacing": 2.0, "wall_height": 1.0}
 
 var _committed := _read_committed()
 var _draft := {}
-var _zone: Node3D
+var _editor: Editor
+var _bindings := {}
 
 func profile() -> Dictionary:
-	# The builder gets a value snapshot before a worker starts.
 	var current: Dictionary = _draft.get("profile", _committed)
-	return current.duplicate()
+	return {"values": current.duplicate(), "preview": not _draft.is_empty()}
 
-func attach(zone: Node3D) -> void:
-	_zone = zone if zone.has_node("GridScenery") else null
-	if available() and _zone.get_node("GridScenery").get_meta("appearance") != profile():
-		_replace()
+func attach(editor: Editor, bindings: Dictionary) -> void:
+	_editor = editor
+	_bindings = bindings
+	_refresh()
 
 func available() -> bool:
-	return is_instance_valid(_zone)
+	return _editor != null and _bindings.values().any(func(binding: Dictionary) -> bool:
+		return _editor.node_for(binding.id) != null)
 
 func preview(candidate: Dictionary) -> Dictionary:
 	var id: String = candidate.get("draft", "")
@@ -33,7 +34,7 @@ func preview(candidate: Dictionary) -> Dictionary:
 	if not _draft.is_empty() and _draft.id != id:
 		return {"ok": false, "message": "Finish the current Grid preview first."}
 	_draft = {"id": id, "profile": appearance.duplicate()}
-	_replace()
+	_refresh()
 	return {"ok": true, "message": "Grid scenery reloaded. Close the panel to look around."}
 
 func status(id: String) -> String:
@@ -45,27 +46,49 @@ func finish(id: String, keep: bool) -> bool:
 	if keep:
 		_committed = _draft.profile
 	_draft = {}
-	if not keep:
-		_replace()
+	_refresh()
 	return true
 
 func reload_committed() -> void:
 	_committed = _read_committed()
-	_replace()
+	_refresh()
 
-func _replace() -> void:
-	if not available():
+func _refresh() -> void:
+	if _editor == null:
 		return
-	var previous := _zone.get_node("GridScenery")
-	var next := Grid.scenery(profile())
-	WorldArt.make_constructible(next)
-	var floor_visual := previous.get_node("FloorVisual") as MeshInstance3D
-	var side: Variant = floor_visual.get_instance_shader_parameter("construct_side")
-	if side is float and side != 0.0:
-		WorldArt.set_side(next, side)
-	_zone.remove_child(previous)
-	_zone.add_child(next)
-	previous.queue_free()
+	_editor.set_appearance(Callable() if _bindings.is_empty() else project.bind(_bindings, profile()))
+
+## Committed appearance supplies defaults. A preview temporarily takes precedence over local
+## values, and neither operation writes to the user's document.
+static func project(records: Array, bindings: Dictionary, appearance: Dictionary) -> Array:
+	if bindings.is_empty() or not appearance.has("values"):
+		return records
+	var result := records.duplicate()
+	for index in result.size():
+		var record: Dictionary = result[index]
+		var updated := record.duplicate()
+		for key in bindings:
+			var binding: Dictionary = bindings[key]
+			if binding.id != record.id or not appearance.values.has(key):
+				continue
+			var path: Array = binding.path
+			var field: String = path[-1]
+			var fields := updated
+			if path.size() == 2:
+				var nested: Variant = updated.get(path[0], {})
+				if not nested is Dictionary:
+					continue
+				fields = nested.duplicate()
+			if fields.has(field) and not appearance.preview:
+				continue
+			fields[field] = appearance.values[key]
+			if path.size() == 2:
+				updated[path[0]] = fields
+		if record.has("children"):
+			updated["children"] = project(record.children, bindings, appearance)
+		if Types.valid(updated):
+			result[index] = updated
+	return result
 
 static func _read_committed() -> Dictionary:
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))

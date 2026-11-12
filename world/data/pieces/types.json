@@ -27,19 +27,9 @@
       "fields": {
         "shape": { "type": "string", "enum": ["box", "sphere", "cylinder", "capsule", "plane"] },
         "size": { "type": "array", "description": "Metres along X, Y and Z", "items": { "type": "number", "minimum": 0.01, "maximum": 2000 }, "minItems": 3, "maxItems": 3 },
-        "material": {
-          "type": "object",
-          "required": [],
-          "properties": {
-            "color": { "$ref": "#/$defs/color" },
-            "texture": { "type": "string", "description": "An installed PBR texture set", "pattern": "^[a-z0-9_]{1,64}$" },
-            "texture_size": { "type": "number", "description": "Metres one texture tile covers", "minimum": 0.05, "maximum": 100 },
-            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
-            "metallic": { "type": "number", "minimum": 0, "maximum": 1 },
-            "emission": { "$ref": "#/$defs/color" },
-            "emission_energy": { "type": "number", "minimum": 0, "maximum": 16 }
-          }
-        },
+        "material": {"$ref": "#/$defs/piece_material"},
+        "render": {"type": "boolean", "description": "Draw the shape. A collision-only shape can stay solid while invisible."},
+        "collision_size": {"type": "array", "description": "Optional size of a box collider, independent of the visible shape.", "items": {"type": "number", "minimum": 0.01, "maximum": 2000}, "minItems": 3, "maxItems": 3},
         "collision": { "type": "boolean" },
         "cast_shadow": { "type": "boolean" }
       }
@@ -69,6 +59,41 @@
         "source": { "type": "string", "enum": ["library", "runtime"] },
         "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,96}$" },
         "collision": { "type": "boolean" }
+      }
+    },
+    "box_batch": {
+      "label": "Box batch",
+      "description": "Draw many decorative boxes as one batch. Each box has a position, rotation and size relative to the piece.",
+      "script": "res://scripts/pieces/box_batch_piece.gd",
+      "required": [
+        "instances"
+      ],
+      "defaults": {
+        "instances": [
+          {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "size": [
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      "fields": {
+        "instances": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"type": "object", "required": ["position", "rotation", "size"], "properties": {"position": {"$ref": "#/$defs/position"}, "rotation": {"type": "array", "description": "Degrees about X, Y and Z", "items": {"type": "number", "minimum": -360, "maximum": 360}, "minItems": 3, "maxItems": 3}, "size": {"type": "array", "description": "Metres along X, Y and Z", "items": {"type": "number", "minimum": 0.01, "maximum": 2000}, "minItems": 3, "maxItems": 3}}}},
+        "material": {"$ref": "#/$defs/piece_material"},
+        "height_scale": {"type": "number", "description": "Scale the batch and its offsets along its local Y axis", "minimum": 0.1, "maximum": 8},
+        "cast_shadow": {"type": "boolean"}
       }
     }
   }

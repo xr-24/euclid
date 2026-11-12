@@ -56,8 +56,13 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   `rendering/atmosphere.gd`, `ui/atmosphere_panel.gd` (Tab → Build → Atmosphere) and the
   `inspect_atmosphere`, `preview_atmosphere`, `save_atmosphere` and `discard_atmosphere` tools.
 - **Environment documents** use the piece registry (`group`, `shape`, `light`, `model`) and
-  the shared builder (`scripts/pieces/piece_builder.gd`). Open Ground
-  (`world/data/zones/open_ground`) is built entirely from pieces.
+  the shared builder (`scripts/pieces/piece_builder.gd`). Open Ground and the Grid are built
+  from pieces. The Grid uses a lattice plane with its own collision dimensions, invisible
+  solid boundary boxes, and one `box_batch` for the fractured skyline.
+- **Grid appearance** can be edited in **Pieces**. Select **Lattice floor** for line spacing
+  and tint, or **Fractured skyline** for height, tint, and its local box transforms. Workbench
+  scenery previews temporarily apply to those same pieces. The committed profile supplies
+  the defaults for fields that have no local edit.
 - **Live piece editing** is available in **Tab → Build → Pieces** and from the **B** palette.
   Choose a type and a parent to add a piece. Pick one from the list or click its collider in
   the scene, then edit the fields declared by its type. Use the move handles for translation
@@ -75,20 +80,18 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 
 ## Next, in order
 
-1. **Grid as a document.** Move the Grid floor and walls into piece types and drop
-   `grid_builder.gd`.
-2. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
+1. **Terrain, ground materials and planting.** A height-field piece that can be sculpted with a
    brush and painted with materials; Poly Haven PBR textures and HDRI skies through the asset
    service (skies land in the atmosphere sky list); scatter pieces (what grows where, how dense).
-3. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
+2. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
    a flowing surface for streams and waterfalls; spray emitters.
-4. **One record system.** Move the prop factories (cone, box, door, model) into the piece
+3. **One record system.** Move the prop factories (cone, box, door, model) into the piece
    registry; props become pieces with a body.
-5. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
+4. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
    from its document is the test that the toolkit is general enough.
-6. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
+5. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
    doors and windows (hinge and slide behaviors).
-7. **Screens.** A video surface piece (local video first; web video needs a browser engine).
-8. **Time and weather.** Time of day driving the sun, cloud cover, rain.
-9. **Sharing.** Turn an edited environment into a package that passes the checks (including
+6. **Screens.** A video surface piece (local video first; web video needs a browser engine).
+7. **Time and weather.** Time of day driving the sun, cloud cover, rain.
+8. **Sharing.** Turn an edited environment into a package that passes the checks (including
     `check.ps1 -Performance`).

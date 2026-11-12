@@ -65,11 +65,13 @@ func create(title: Variant, catalog: Array, template := "") -> Dictionary:
 	if not _path.is_empty():
 		var directory := _path.get_base_dir()
 		var source := directory.path_join(PieceDocument.filename(package if template.is_empty() else template))
-		var seed := PieceDocument.new(source, Packages.definition(package).get("pieces", []))
+		var definition := Packages.definition(package)
+		var base_revision: int = int(definition.get("piece_revision", 0))
+		var seed := PieceDocument.new(source, definition.get("pieces", []), base_revision)
 		if not seed.error.is_empty():
 			return {"ok": false, "message": seed.error}
 		var document_path := directory.path_join(PieceDocument.filename(record.id))
-		var document := PieceDocument.new(document_path, [])
+		var document := PieceDocument.new(document_path, [], base_revision)
 		if not document.save(seed.pieces, []):
 			return {"ok": false, "message": "The new environment piece document could not be saved."}
 		if Store.write_json(_path, {"schema_version": 1, "environments": next}) != OK:

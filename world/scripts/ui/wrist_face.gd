@@ -2,7 +2,7 @@ extends Control
 ## The wrist computer's face: header, page tabs and the page, laid out at a design size of
 ## 1008 x 672 and scaled to whatever size the wrist renders it at. It is drawn as light
 ## (additively, over a faint veil), in the Grid's colours: red traces and lamps on near-black
-## (see grid_wall.gdshader and grid_zone.gd).
+## (see grid_wall.gdshader).
 
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const BRIGHT := Color("ffe4e1")

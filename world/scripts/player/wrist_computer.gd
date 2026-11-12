@@ -174,12 +174,8 @@ func toggle_wrist() -> void:
 func turn(direction: int) -> void:
 	if _pages.is_empty():
 		return
-	if current().get("id") == "scan":
-		raise_wrist("build")
-		return
+	# Every page is on the ring, the scanner included.
 	page = posmod(page + direction, _pages.size())
-	if current().get("id") == "scan":
-		page = posmod(page + direction, _pages.size())
 	typing = false
 	_armed = ""
 

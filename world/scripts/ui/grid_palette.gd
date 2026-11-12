@@ -46,7 +46,7 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_action_catalog = catalog
 	_run_action = run_action
 	add_theme_constant_override("separation", 10)
-	var spawn_row := HBoxContainer.new()
+	var spawn_row := HFlowContainer.new()
 	add_child(spawn_row)
 	for type in Commands.built_in_props():
 		var definition: Dictionary = EntityTypes.TYPES[type]
@@ -106,7 +106,7 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_color.color_changed.connect(_show_color_code)
 	color_field.add_child(_color)
 	_show_color_code(_color.color)
-	var actions := HBoxContainer.new()
+	var actions := HFlowContainer.new()
 	add_child(actions)
 	var action_buttons := {}
 	for definition in Commands.catalog():
@@ -394,6 +394,15 @@ func _select(index: int) -> void:
 	_color.color = Color.html(record.color)
 	_show_color_code(_color.color)
 	_form_baseline = _form_values()
+
+## The prop being edited, for the in-world handles (transform_gizmo.gd).
+func selected_entity() -> String:
+	return _selected
+
+## Selects a prop picked in the world, or reloads its fields after it was moved there.
+func select_entity(id: String) -> void:
+	_selected = id
+	_refresh()
 
 func _show_color_code(color: Color) -> void:
 	_color_label.text = "Color  #%s" % color.to_html(false).to_upper()

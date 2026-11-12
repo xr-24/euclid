@@ -17,7 +17,7 @@ func status_line() -> String:
 	return "%s  ·  %02d:%02d" % [_zone_name(_world.zone_id).to_upper(), clock.hour, clock.minute]
 
 func pages() -> Array:
-	return [_areas(), _build(), _agents(), _workbench(), _system(), _world.scanner.page()]
+	return [_areas(), _build(), _world.scanner.page(), _agents(), _workbench(), _system()]
 
 func _areas() -> Dictionary:
 	var rows := []

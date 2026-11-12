@@ -60,6 +60,7 @@ const TerminalView = preload("res://scripts/ui/terminal_view.gd")
 const AgentsPanel = preload("res://scripts/ui/agents_panel.gd")
 const WristComputer = preload("res://scripts/player/wrist_computer.gd")
 const SpringFollow = preload("res://scripts/player/spring_follow.gd")
+const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -226,6 +227,9 @@ func _run() -> void:
 	_check_agents_panel()
 	_check_wrist_computer()
 	_check_spring_follow()
+	_check(is_equal_approx(TransformGizmo._segment_distance(Vector2(5, 3), Vector2.ZERO, Vector2(10, 0)), 3.0)
+		and is_equal_approx(TransformGizmo._segment_distance(Vector2(14, 0), Vector2.ZERO, Vector2(10, 0)), 4.0),
+		"measure how far the pointer is from a gizmo handle on screen")
 	var library := EnvironmentLibrary.new(path)
 	var created := library.create("Signal Lab", manifest.zones)
 	_check(created.ok and created.zone.template == "grid", "create a custom environment from the Grid template")

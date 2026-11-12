@@ -28,6 +28,13 @@ const LOOK_LAG := Vector2(0.011, 0.008)
 const ACCEL_LAG := 0.0009
 const SWAY_LIMIT := 0.045
 const BOB := Vector3(0.008, 0.013, 0.012)
+## While the wrist computer is up the forearm stays level and readable but still looks carried:
+## WATCH_BOB is its side sway, footfall dip and fore-and-aft give in metres at full speed,
+## WATCH_BREATH how far it rises with each breath, and WATCH_LAG the share of the turning and
+## acceleration lag it keeps.
+const WATCH_BOB := Vector3(0.003, 0.005, 0.002)
+const WATCH_BREATH := 0.0015
+const WATCH_LAG := 0.3
 ## How far the sway and bob tilt the hands, in radians per metre of offset.
 const TILT := 2.6
 ## How far along the forearm, from elbow to wrist, the wrist computer's emitter sits.
@@ -320,6 +327,12 @@ func tick(delta: float, pose: Poses.Pose, target: Vector3, speed := 0.0, velocit
 		# holding up the wrist computer, stays steadier.
 		var steady := (1.0 - watch) if index == 0 else 1.0 - 0.6 * weight
 		var motion := (sway + Vector3(step_side, step_dip, side * cos(_stride_phase) * BOB.z * stride)) * steady
+		if index == 0 and watch > 0.0:
+			# The raised forearm moves gently with the walk instead of hanging still.
+			var carried := Vector3(sin(_stride_phase) * WATCH_BOB.x * stride,
+				(absf(sin(_stride_phase)) - 2.0 / PI) * WATCH_BOB.y * stride + breath * WATCH_BREATH,
+				cos(_stride_phase) * WATCH_BOB.z * stride)
+			motion += (carried + sway * WATCH_LAG) * watch
 		var settled := _follow(chain, "spring_reach", goal.position, delta, REACH_FOLLOW)
 		goal.position = shoulder + (settled + motion - shoulder).limit_length(reach * 0.97)
 		var tilt := Basis.from_euler(Vector3(-motion.y * TILT, motion.x * TILT, motion.x * TILT * 0.6))

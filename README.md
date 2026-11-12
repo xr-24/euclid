@@ -66,6 +66,13 @@ The Grid, a villa and a beach share the same space. Press 1–3 (or pick a zone 
 
 Press **1** to enter The Grid. Aim at the floor and press **B**, then choose **Spawn orange cone**. If you're aiming into the distance, the palette places it a few metres ahead. Aim at an existing cone before pressing **B** to select it, or pick it from the entity list. Change its position, yaw, scale or color, then press **Apply**. Duplicate, delete and undo are in the same palette.
 
+While the palette is open, the selected prop has handles you can drag in the world: the red,
+green and blue arrows move it along X, Y and Z, the white ball slides it over the ground, the
+yellow ring turns it and the white cube resizes it. Hold **Ctrl** while dragging to snap (25 cm,
+15° or 0.1×), and press **Escape** mid-drag to put it back. Click another prop in the world to
+select it, and hold the middle mouse button to look around. Each drag is one undo step, and the
+fields update to match.
+
 Entity edits save to `grid-entities.json` alongside the existing location save. Each scene keeps up to 64 undo steps across restarts.
 
 To reuse an entity in another Grid space, select it with **B**, enter a name, and

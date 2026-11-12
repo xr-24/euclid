@@ -10,8 +10,18 @@ varying vec3 signal_point;
 void vertex() {
 	VERTEX += CUSTOM0.xyz * hover_pose.x + CUSTOM1.xyz * hover_pose.y;
 	float clock = signal_time < 0.0 ? TIME : signal_time;
+	// Hair drifts a little at the tips, in two directions so it never swings like a curtain.
 	float wave = sin(clock * 0.65 + VERTEX.y * 10.0);
-	VERTEX.x += COLOR.r * UV.y * UV.y * wave * 0.016;
+	float drift = sin(clock * 0.41 + VERTEX.x * 13.0 + 1.7);
+	VERTEX.x += COLOR.r * UV.y * UV.y * wave * 0.012;
+	VERTEX.z += COLOR.r * UV.y * UV.y * drift * 0.008;
+	// Each ribbon is a centreline (NORMAL holds its direction, UV2.x its half-width); turn it
+	// to face the camera so it keeps its width from every side.
+	vec3 eye = (inverse(MODELVIEW_MATRIX) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	vec3 side = cross(normalize(NORMAL), eye - VERTEX);
+	float side_length = length(side);
+	side = side_length > 1e-5 ? side / side_length : vec3(1.0, 0.0, 0.0);
+	VERTEX += side * UV2.x * (UV.x * 2.0 - 1.0);
 	signal_point = VERTEX;
 	world_point = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }

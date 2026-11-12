@@ -26,6 +26,7 @@ const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
 const PlayerAvatar = preload("res://scripts/player/player_avatar.gd")
 const PropGrabber = preload("res://scripts/player/prop_grabber.gd")
+const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const SceneScanner = preload("res://scripts/player/scene_scanner.gd")
 const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
 const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
@@ -48,6 +49,8 @@ var player: CharacterBody3D
 var camera: Camera3D
 var player_avatar: PlayerAvatar
 var grabber: PropGrabber
+## Drag handles on the selected prop while the build palette is open.
+var gizmo: TransformGizmo
 var scanner: SceneScanner
 var player_rig: RigAuthoring
 var _player_motor := PlayerMotor.new()
@@ -257,6 +260,11 @@ func _setup_player() -> void:
 	scanner.setup("" if smoke_mode else "user://water-edits.json", wrist)
 	grabber = PropGrabber.new()
 	add_child(grabber)
+	gizmo = TransformGizmo.new()
+	gizmo.world = self
+	add_child(gizmo)
+	gizmo.picked.connect(_select_in_palette)
+	gizmo.edited.connect(_select_in_palette)
 	wrist.mount(self, camera, player_avatar.hands, WristPages.new(self))
 
 func _setup_ui() -> void:
@@ -434,12 +442,24 @@ func _show_grid_palette() -> void:
 	var placement := ScenePlacement.pick(player, camera, world_tools.bounds, grid, true)
 	_panel("Grid tools" if grid else "Scene tools", "")
 	var viewport_size := get_viewport().get_visible_rect().size
-	overlay.offset_left = maxf(24.0, viewport_size.x * 0.44)
+	# A column on the right, clear of the middle of the view, so the selected prop and its
+	# handles stay in sight.
+	overlay.offset_left = maxf(viewport_size.x - 640.0, viewport_size.x * 0.5 + 60.0)
 	overlay.offset_top = minf(110.0, viewport_size.y * 0.1)
 	overlay.offset_right = -30
 	overlay.offset_bottom = -overlay.offset_top
 	_palette_host.mount(overlay_content, zone_id, placement.point, placement.selected, world_tools, _workshop_action_catalog, _run_palette_action)
 	_button("Back  [Esc]", _close_panel)
+
+func _select_in_palette(id: String) -> void:
+	var panel := _palette_host.panel
+	if is_instance_valid(panel) and panel.has_method("select_entity"):
+		panel.select_entity(id)
+
+func _look(relative: Vector2) -> void:
+	player.rotate_y(-relative.x * sensitivity)
+	pitch = clampf(pitch - relative.y * sensitivity, -1.35, 1.35)
+	camera.rotation.x = pitch
 
 func _run_grid_agent(prompt: String, placement: Array, palette: Control) -> void:
 	if gateway_connected:
@@ -958,9 +978,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_panel(nearest.label, str(status.get("summary", "No report yet.")))
 			_button("Back", _close_panel)
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not overlay.visible:
-		player.rotate_y(-event.relative.x * sensitivity)
-		pitch = clampf(pitch - event.relative.y * sensitivity, -1.35, 1.35)
-		camera.rotation.x = pitch
+		_look(event.relative)
 	elif event is InputEventMouseButton and event.pressed and not overlay.visible:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 

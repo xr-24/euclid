@@ -8,6 +8,24 @@ For rendering changes, use scripts/benchmark.ps1 at the same window size and pro
 
 Run the gateway tests and Godot smoke test after changes to those respective components. Preserve the user's saved world state. Keep credentials and machine-local tools out of Git. Use a disposable background Blender for automated builds; do not clear the user's live scene.
 
+## Working alongside other agents
+
+Several agents (Codex, Claude and others) work on Euclid, often at the same time. To keep
+their work from colliding in one folder:
+
+- Work on your own branch in your own worktree, not in the user's checkout:
+  `git worktree add ../euclid-<agent>-<topic> -b <agent>/<topic>`. Euclid's own Workbench
+  drafts already work this way.
+- Commit your work before you hand back, with a message that says what changed and why. Never
+  leave uncommitted changes in the user's checkout for the next agent to find.
+- Run the checks before you say something works: `scripts/check.ps1` on Windows, or
+  `scripts/check.sh` in a Linux shell (it needs the Linux Godot 4.7.2 build in `.tools/godot`).
+  If you could not run them, say so plainly.
+- `main` only moves forward after the user has run the checks on that commit. Do not merge or
+  push to `main` yourself unless asked.
+- Rendering or content changes also run `scripts/check.ps1 -Performance`, which holds the
+  villa and shore to the frame budget.
+
 ## Talking to Ishtar (Brandon's Grok Bot assistant)
 
 Ishtar is another AI assistant Brandon uses. It can send tasks via `codex exec` / `claude -p`. To message Ishtar back (a finished result, a blocker, or a question for Brandon), run:

@@ -1,3 +1,6 @@
+# -Performance also runs the rendered villa and shore benchmarks against the frame budget
+# (60 FPS average, 16.67 ms at the 95th percentile, 1920 x 1080). It opens a window.
+param([switch]$Performance)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $godotPath = Join-Path $projectRoot '.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
@@ -33,5 +36,12 @@ try {
     }
     & npm.cmd test
     if ($LASTEXITCODE -ne 0) { throw 'Gateway integration tests failed.' }
+    if ($Performance) {
+        foreach ($zone in @('villa', 'beach')) {
+            & powershell -NoProfile -File (Join-Path $PSScriptRoot 'benchmark.ps1') -Zone $zone -Width 1920 -Height 1080 -MinimumFps 60 -MaximumP95Ms 16.67 `
+                -OutputDirectory (Join-Path $projectRoot ".local\benchmarks\check-$zone")
+            if ($LASTEXITCODE -ne 0) { throw "The $zone missed the frame budget. See .local\benchmarks\check-$zone." }
+        }
+    }
     Write-Host 'All Euclid checks passed.'
 } finally { Pop-Location }

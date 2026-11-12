@@ -65,7 +65,8 @@ test('command projections enforce schema, surface, availability and runtime bind
 });
 
 const project = fileURLToPath(new URL('../world/', import.meta.url));
-const godot = process.env.GODOT_BIN ?? fileURLToPath(new URL('../.tools/godot/Godot_v4.7.2-stable_win64_console.exe', import.meta.url));
+const bundledGodot = process.platform === 'win32' ? 'Godot_v4.7.2-stable_win64_console.exe' : 'Godot_v4.7.2-stable_linux.x86_64';
+const godot = process.env.GODOT_BIN ?? fileURLToPath(new URL(`../.tools/godot/${bundledGodot}`, import.meta.url));
 test('Godot and gateway load identical commands and resolve their handlers', { skip: !existsSync(godot) }, async () => {
   const { stdout, stderr } = await promisify(execFile)(godot, ['--headless', '--path', path.resolve(project),
     '--script', 'res://scripts/diagnostics/command_contract.gd', '--quit-after', '120'], {

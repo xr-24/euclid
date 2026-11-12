@@ -18,15 +18,15 @@ All paths below are relative to `world/scripts/`.
 | `zones/authored_props.gd` | Stable IDs for builder-created props | Registers detached assemblies and their collision or editor pick volume |
 | `zones/workstations.gd` | Furniture for logical app anchors | Does not launch processes |
 | `assets/asset_library.gd` | Imported assets, immutable PBR templates, noise and collision geometry | Reuses resources across visits; resource-cache access is synchronized |
-| `rendering/zone_environment.gd` | Sky, sun, exposure, fog and GI | Receives explicit Environment and DirectionalLight3D resources |
+| `world_art.gd` (environment section) | Sky, sun, exposure, fog and GI, and their blend during a shift | Reads the package's atmosphere plus any saved atmosphere edits |
+| `rendering/atmosphere.gd`, `ui/atmosphere_panel.gd` | Per-environment atmosphere edits (sun, sky, stars, fog, haze, light) | UI and registered world tools share one draft; saved apart from the packages |
 | `rendering/zone_effects.gd` | Constructible materials and per-instance effect state | Shared templates; state belongs to geometry instances |
-| `rendering/zone_transition.gd` | Timed shift presentation and old-zone cleanup | Receives the scene tree, environment, sun and camera; never writes saves |
 | `rendering/graphics_settings.gd` | Balanced/Cinematic budgets and graphics preferences | Separate from zone art direction and the world save |
 | `simulation/water_system.gd` | Water construction, probes, wakes and buoyancy | Consumes a zone root and player; GPU solver remains under `thirdparty/` |
 | `simulation/water_interactions.gd` | Bounded, time-scaled wake, splash and fountain impulses | Pure functions; separate pool and shore profiles |
 | `player/player_motor.gd` | Walking, jumping, wading and swimming | Inputs and water state go in; one body movement step comes out |
 | `player/rig_authoring.gd`, `ui/player_rig_panel.gd` | Player material and hand clip drafts | UI and registered world tools share one preview and save service; edits live in a separate player profile |
-| `ui/world_ui.gd` | Menus and application previews | Emits user-intent signals; cannot load zones or save the world |
+| `player/wrist_computer.gd`, `player/wrist_pages.gd`, `ui/wrist_face.gd` | The wrist computer, Euclid's only menu | Pages are data; the face is drawn into its own viewport |
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
 | `agents/development_host.gd` | F4 Workbench, Agent Chat, development actions, benchmarks, native CLI and voice | Routes conversations to the task gateway and avatar activation to the world coordinator |

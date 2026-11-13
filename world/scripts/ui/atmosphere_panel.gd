@@ -11,6 +11,9 @@ const SkyCache = preload("res://scripts/assets/runtime_skies.gd")
 
 ## field, label, minimum, maximum, step, format
 const SLIDERS := {
+	"Time & weather": [["time_of_day", "Time of day", 0.0, 24.0, 0.05, ""],
+		["day_length", "Day length", 1.0, 120.0, 1.0, "%d min"],
+		["cloud_cover", "Cloud cover", 0.0, 1.0, 0.01, ""], ["rain", "Rain", 0.0, 1.0, 0.01, ""]],
 	"Sun": [["sun_azimuth", "Direction", 0.0, 360.0, 1.0, "%d°"], ["sun_elevation", "Height", -30.0, 90.0, 0.5, "%.1f°"],
 		["sun_energy", "Strength", 0.0, 8.0, 0.05, "%.2f"]],
 	"Sky": [["sky_energy", "Brightness", 0.0, 4.0, 0.05, "%.2f"], ["stars", "Stars", 0.0, 2.0, 0.05, "%.2f"]],
@@ -29,6 +32,8 @@ var _readouts := {}
 var _formats := {}
 var _colors := {}
 var _sky := OptionButton.new()
+var _time_mode := OptionButton.new()
+var _clock_poll := 0.0
 var _notice := Label.new()
 var _loading := false
 var _options: Array = []
@@ -54,11 +59,13 @@ func setup(atmosphere: Atmosphere, zone: String, close: Callable, client: SkyCli
 	body.size_flags_horizontal = SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 6)
 	scroll.add_child(body)
-	for section in ["Sun", "Sky", "Light", "Fog"]:
+	for section in ["Time & weather", "Sun", "Sky", "Light", "Fog"]:
 		var header := Label.new()
 		header.text = section
 		header.add_theme_font_size_override("font_size", 18)
 		body.add_child(header)
+		if section == "Time & weather":
+			_add_time_mode(body)
 		if section == "Sky":
 			var sky_row := HBoxContainer.new()
 			_sky.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -80,6 +87,27 @@ func setup(atmosphere: Atmosphere, zone: String, close: Callable, client: SkyCli
 	add_child(_notice)
 	_atmosphere.changed.connect(_load)
 	_load()
+
+func _add_time_mode(parent: Control) -> void:
+	_time_mode.size_flags_horizontal = SIZE_EXPAND_FILL
+	for option in [["manual", "Manual sun"], ["fixed", "Fixed time"], ["cycle", "Day and night cycle"]]:
+		_time_mode.add_item(option[1])
+		_time_mode.set_item_metadata(_time_mode.item_count - 1, option[0])
+	_time_mode.item_selected.connect(func(index: int) -> void:
+		_change("time_mode", _time_mode.get_item_metadata(index)))
+	parent.add_child(_time_mode)
+
+func _process(delta: float) -> void:
+	if not is_visible_in_tree() or _time_mode.get_selected_metadata() != "cycle":
+		return
+	_clock_poll += delta
+	if _clock_poll >= 0.5:
+		_clock_poll = 0.0
+		var slider: HSlider = _sliders.time_of_day
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			var hour := _atmosphere.current_hour(_zone)
+			slider.set_value_no_signal(hour)
+			_readouts.time_of_day.text = _format("time_of_day", hour)
 
 func _slider(parent: Control, spec: Array) -> void:
 	var field: String = spec[0]
@@ -128,6 +156,12 @@ func _load() -> void:
 	_loading = true
 	var summary := _atmosphere.inspect(_zone)
 	var values: Dictionary = summary.values
+	for index in _time_mode.item_count:
+		if _time_mode.get_item_metadata(index) == values.time_mode:
+			_time_mode.select(index)
+	_sliders.time_of_day.editable = values.time_mode != "manual"
+	_sliders.day_length.editable = values.time_mode == "cycle"
+	_sliders.sun_elevation.editable = values.time_mode == "manual"
 	if _options != summary.skies:
 		_options = summary.skies
 		_sky.clear()
@@ -163,6 +197,11 @@ func _say(result: Dictionary) -> void:
 	_notice.text = "" if result.ok else str(result.message)
 
 func _format(field: String, value: float) -> String:
+	if field == "time_of_day":
+		var minutes := posmod(roundi(value * 60.0), 1440)
+		return "%02d:%02d" % [floori(minutes / 60.0), minutes % 60]
+	if field in ["cloud_cover", "rain"]:
+		return "%d%%" % roundi(value * 100.0)
 	var format: String = _formats[field]
 	return format % (roundi(value) if format.begins_with("%d") else value)
 

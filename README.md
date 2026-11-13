@@ -69,6 +69,16 @@ In **Build → Pieces**, add **Vegetation scatter**, **Water surface**, **Water 
 or **Physics prop**. Make scatter a child of a terrain to follow its sculpted height.
 The villa and shore can be edited through the same Pieces panel.
 
+Add **Building plan** for an editable room with a floor, walls, a roof, and
+optional steps. Choose the door or window for each side and set its size,
+position, and hinge or slide motion. Aim at a door or window and press **E**
+to use it. **Stairs** can also be placed independently.
+
+Add **Video screen** and select **Video → Import…**, choose a local file, then
+**Apply**. OGV files play directly. MP4, MOV, WebM and MKV files use FFmpeg on
+your PATH for import. Press **E** at the screen to play or pause. The same piece
+fields set dimensions, autoplay, looping, and volume.
+
 Let go of the palm beam to drop the prop where it is; it keeps the turn you gave it.
 Right-click while holding it to place it and lock its physics there instead. Right-click a
 locked prop to make it movable again, including while holding it. Unlocked props respond to gravity and can be pushed by
@@ -292,8 +302,10 @@ Open **Tab → Build → Atmosphere** to change the current environment's sun (d
 color, strength), sky (an installed HDRI or a painted gradient, its brightness and stars),
 light (exposure, fill, shadow reach) and fog (density, color, glow toward the sun, haze).
 Changes show live; **Save** keeps them for this environment, **Discard** returns to the saved
-look and **Reset** goes back to the environment's own settings. Put the sun below the horizon
-for night; stars come out as it sets.
+look and **Reset** goes back to the environment's own settings. In **Time & weather**,
+choose **Fixed time** to place the sun by the clock or **Day and night cycle** to let it
+move. **Day length** is the real time in minutes for one full cycle. **Cloud cover** and
+**Rain** work in all modes. In **Manual sun**, lower the sun below the horizon for night.
 
 Agents use the same draft through `inspect_atmosphere`, `preview_atmosphere`,
 `save_atmosphere` and `discard_atmosphere`, for example **Make it dusk with a few stars and a

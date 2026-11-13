@@ -26,6 +26,7 @@ uniform vec4 hide_sun_a = vec4(0.0);
 uniform vec4 hide_sun_b = vec4(0.0);
 // Star field brightness; it shows as the sun goes down.
 uniform float stars = 0.0;
+uniform float cloud_cover : hint_range(0.0, 1.0) = 0.0;
 
 vec3 pano(sampler2D tex, float yaw, vec3 dir, vec4 hide) {
 	vec2 st = vec2(mod(atan(dir.x, dir.z) - yaw, 6.2831853), acos(clamp(dir.y, -1.0, 1.0)));
@@ -45,8 +46,38 @@ float hash2(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float cloud_hash(vec2 cell) {
+	vec3 p = fract(vec3(cell.xyx) * 0.1031);
+	p += dot(p, p.yzx + 33.33);
+	return fract((p.x + p.y) * p.z);
+}
+
+float cloud_noise(vec2 p) {
+	vec2 cell = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(cloud_hash(cell), cloud_hash(cell + vec2(1, 0)), f.x),
+		mix(cloud_hash(cell + vec2(0, 1)), cloud_hash(cell + vec2(1, 1)), f.x), f.y);
+}
+
 void sky() {
 	vec3 c = mix(pano(panorama_a, yaw_a, EYEDIR, hide_sun_a) * energy_a, pano(panorama_b, yaw_b, EYEDIR, hide_sun_b) * energy_b, blend);
+	float cloud = 0.0;
+	if (cloud_cover > 0.001 && EYEDIR.y > 0.0) {
+		vec2 p = EYEDIR.xz / max(EYEDIR.y + 0.24, 0.24) * 4.0;
+		if (!AT_CUBEMAP_PASS) {
+			p += vec2(TIME * 0.012, TIME * 0.004);
+		}
+		vec2 warp = vec2(cloud_noise(p * 0.63 + 12.0), cloud_noise(p * 0.65 - 16.0)) - 0.5;
+		p += warp * 1.4;
+		float n = 0.56 * cloud_noise(p) + 0.29 * cloud_noise(p * 2.13 + 7.0)
+			+ 0.15 * cloud_noise(p * 4.32 - 11.0);
+		float edge = mix(0.84, 0.20, cloud_cover);
+		cloud = smoothstep(edge - 0.07, edge + 0.13, n) * smoothstep(0.0, 0.12, EYEDIR.y);
+		float daylight = LIGHT0_ENABLED ? smoothstep(-0.16, 0.16, LIGHT0_DIRECTION.y) : 1.0;
+		vec3 gray = mix(vec3(0.015, 0.019, 0.027), vec3(0.42, 0.49, 0.58), daylight);
+		c = mix(c, gray * (0.74 + n * 0.54), cloud * 0.93);
+	}
 	if (stars > 0.0 && EYEDIR.y > -0.02) {
 		// Points on a fine grid of directions; a few are bright, and they fade in as the sun sets.
 		vec3 p = EYEDIR * 260.0;
@@ -56,14 +87,14 @@ void sky() {
 		float twinkle = 0.75 + 0.25 * sin(TIME * (1.0 + h * 3.0) + h * 40.0);
 		float night = LIGHT0_ENABLED ? 1.0 - smoothstep(-0.12, 0.08, LIGHT0_DIRECTION.y) : 1.0;
 		float horizon = smoothstep(-0.02, 0.12, EYEDIR.y);
-		c += vec3(0.85, 0.9, 1.0) * point * (0.5 + 3.0 * fract(h * 97.0)) * twinkle * stars * night * horizon;
+		c += vec3(0.85, 0.9, 1.0) * point * (0.5 + 3.0 * fract(h * 97.0)) * twinkle * stars * night * horizon * (1.0 - cloud);
 	}
 	if (!AT_CUBEMAP_PASS && LIGHT0_ENABLED) {
 		float size = max(LIGHT0_SIZE, 0.0093) * sun_disk_scale;
 		float d = dot(EYEDIR, LIGHT0_DIRECTION);
 		float disk = smoothstep(cos(size * 0.6), cos(size * 0.5), d);
 		float halo = pow(max(d, 0.0), 900.0) * 0.6 + pow(max(d, 0.0), 60.0) * 0.08;
-		c += LIGHT0_COLOR * LIGHT0_ENERGY * (disk * 60.0 + halo * 4.0) * sun_visibility;
+		c += LIGHT0_COLOR * LIGHT0_ENERGY * (disk * 60.0 + halo * 4.0) * sun_visibility * (1.0 - cloud);
 	}
 	if (!AT_CUBEMAP_PASS && construct_progress > 0.0) {
 		float k = sin(construct_progress * 3.1415927);

@@ -104,11 +104,23 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 - **Villa and shore** use those pieces along with editable models, shapes, lights and buoyant
   props. Their Blender-generated meshes remain reusable model assets.
 
-## Next, in order
+- **Building plans** generate a floor, four walls, a flat or gabled roof, and optional
+  entrance steps. Each wall can hold a hinged or sliding door or window. Aim at the
+  opening and press **E** to use it. In **Pieces**, select **Building plan** to set its
+  footprint, finishes, and opening settings, or add **Stairs** independently. Agents can
+  edit the same fields with `edit_piece`, including the opening's saved initial state.
+- **Video screens** are registered pieces. Add a screen in **Pieces**, import a local
+  video, and apply it. Screens play Ogg Theora and can use FFmpeg to convert common
+  formats during import. Aim at the screen and press **E** to pause or resume. Agents
+  can discover imported IDs with `list_local_videos` and use `control_video_screen` for
+  playback. Source files stay on the player's machine, and shared agent views hide
+  the video image.
+- **Time and weather** live in **Build → Atmosphere**. Set a fixed hour or let the day
+  cycle, then adjust cloud cover and rain. The same preview, save and discard tools
+  accept `time_mode`, `time_of_day`, `day_length`, `cloud_cover` and `rain`.
 
-1. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
-   doors and windows (hinge and slide behaviors).
-2. **Screens.** A video surface piece (local video first; web video needs a browser engine).
-3. **Time and weather.** Time of day driving the sun, cloud cover, rain.
-4. **Sharing.** Turn an edited environment into a package that passes the checks (including
-    `check.ps1 -Performance`).
+## Next
+
+- **Sharing.** Turn an edited environment into a package that passes the checks, including
+  `check.ps1 -Performance`.
+- **Web playback.** Add a browser-backed source for in-world screens.

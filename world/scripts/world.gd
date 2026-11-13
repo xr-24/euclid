@@ -33,6 +33,7 @@ const SceneScanner = preload("res://scripts/player/scene_scanner.gd")
 const RigAuthoring = preload("res://scripts/player/rig_authoring.gd")
 const PlayerRigPanel = preload("res://scripts/ui/player_rig_panel.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
+const Weather = preload("res://scripts/rendering/weather.gd")
 const AtmospherePanel = preload("res://scripts/ui/atmosphere_panel.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
@@ -119,6 +120,7 @@ var world_bridge: HTTPRequest
 var environment_library: RefCounted
 var agent_presence := AgentPresence.new()
 var scene_animations: RefCounted
+var _weather := Weather.new()
 var _shoreline := ShorelineLook.new()
 var _grid_scenery := GridScenery.new()
 var _workshop_actions := WorkshopToolRegistry.new()
@@ -147,6 +149,7 @@ func _ready() -> void:
 	Graphics.configure(get_viewport(), smoke_mode)
 	_setup_input()
 	_setup_lighting()
+	add_child(_weather)
 	_setup_player()
 	behavior_runtime = BehaviorRuntime.new(player)
 	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library, behavior_runtime)
@@ -403,11 +406,14 @@ func _close_panel() -> void:
 
 ## Re-lights the current environment after an atmosphere edit. A shift in progress applies the
 ## edit itself when it finishes.
-func _refresh_atmosphere() -> void:
+func _refresh_atmosphere(from_clock := false) -> void:
 	if shifting or not is_instance_valid(zone_root):
 		return
-	var state := WorldArt.zone_state(zone_id, atmosphere.values_for(zone_id))
+	var state := WorldArt.zone_state(zone_id, atmosphere.lighting_values(zone_id))
+	if from_clock:
+		state.shadow_distance = sun.directional_shadow_max_distance
 	WorldArt.apply_state(self, state, state, 1.0)
+	_weather.update(camera, atmosphere.rain_amount(zone_id))
 
 func _open_atmosphere() -> void:
 	if shifting:
@@ -438,7 +444,7 @@ func _open_pieces() -> void:
 	piece_panel = PiecePanel.new()
 	piece_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	overlay_content.add_child(piece_panel)
-	piece_panel.setup(pieces, placement, aimed.piece, _close_panel)
+	piece_panel.setup(pieces, placement, aimed.piece, _close_panel, rad_to_deg(player.rotation.y))
 	_button(gizmo.mode_label(), gizmo.toggle_mode)
 	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
 
@@ -743,7 +749,7 @@ func _load_zone(destination: String) -> void:
 	if zone_root:
 		zone_root.free()
 	_commit_zone(built)
-	WorldArt.apply_environment(self, destination, atmosphere.values_for(destination))
+	WorldArt.apply_environment(self, destination, atmosphere.lighting_values(destination))
 	var spawn: Dictionary = WorldArt.spawn(destination)
 	player.position = TerrainTools.above_surface(pieces, spawn.position)
 	player.velocity = Vector3.ZERO
@@ -829,14 +835,21 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		WorldArt.set_side(zone_root, side)
 	add_child(zone_root)
 	scanner.attach(zone_root, zone_id, world_tools)
+	_refresh_piece_interactions()
 	_shoreline.attach(zone_root)
 	_dev.refresh_actions()
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
 
+func _refresh_piece_interactions() -> void:
+	var enabled := pieces.summaries().any(func(entry: Dictionary) -> bool:
+		return PieceEditor.Types.types()[entry.type].get("interactions", false))
+	zone_root.set_meta("has_piece_interactions", enabled)
+
 func _refresh_piece_services() -> void:
 	if is_instance_valid(zone_root) and zone_root.is_inside_tree():
+		_refresh_piece_interactions()
 		scanner.refresh_water(zone_root, zone_id)
 		_shoreline.attach(zone_root)
 		world_tools.refresh_piece_props(zone_root)
@@ -873,8 +886,8 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 		_close_panel()
 	shifting = true
 	var built := await _build_zone_async(destination)
-	var from_state := WorldArt.zone_state(zone_id, atmosphere.values_for(zone_id))
-	var to_state := WorldArt.zone_state(destination, atmosphere.values_for(destination))
+	var from_state := WorldArt.zone_state(zone_id, atmosphere.lighting_values(zone_id))
+	var to_state := WorldArt.zone_state(destination, atmosphere.lighting_values(destination))
 	var old_root := zone_root
 	for body in old_root.find_children("*", "CollisionObject3D", true, false):
 		body.process_mode = Node.PROCESS_MODE_DISABLED
@@ -925,7 +938,7 @@ func _shift(destination: String, seconds := SHIFT_SECONDS) -> void:
 		light.light_energy = light.get_meta("energy")
 	RenderingServer.global_shader_parameter_set("construct_radius", 0.0)
 	RenderingServer.global_shader_parameter_set("construct_progress", 0.0)
-	WorldArt.apply_environment(self, destination, atmosphere.values_for(destination))
+	WorldArt.apply_environment(self, destination, atmosphere.lighting_values(destination))
 	_update_agent_labels()
 	_announce_zone()
 	shifting = false
@@ -979,6 +992,13 @@ func _add_anchor(anchor: Dictionary) -> void:
 		build_agent_labels[anchor.agent_id] = _label3d(anchor.label, at + Vector3(0,2.2,0), Color("d8e7ff"), 30)
 		build_agent_labels[anchor.agent_id].set_meta("name", anchor.label)
 
+func _process(delta: float) -> void:
+	if not is_instance_valid(zone_root):
+		return
+	if not shifting and atmosphere.advance(zone_id, delta):
+		_refresh_atmosphere(true)
+	_weather.update(camera, 0.0 if shifting else atmosphere.rain_amount(zone_id))
+
 func _physics_process(delta: float) -> void:
 	if not player:
 		return
@@ -1030,6 +1050,15 @@ func _update_interaction_hint() -> void:
 		nearest = {"kind": "companion", "agent_id": agent}
 		hint.text = "E: Command agent"
 		return
+	if is_instance_valid(zone_root) and zone_root.get_meta("has_piece_interactions", false):
+		var center := get_viewport().get_visible_rect().size * 0.5
+		var target: Variant = ScenePlacement.aim_at(player, camera, center, 3.5).interaction
+		if is_instance_valid(target) and target.is_visible_in_tree():
+			var label: String = target.interaction_label()
+			if not label.is_empty():
+				nearest = {"kind": "piece", "target": target}
+				hint.text = "E: " + label
+				return
 	var best := 3.0
 	for item in interactables:
 		var prop := item.get("prop") as Node3D
@@ -1085,6 +1114,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		player_avatar.interact()
 		if nearest.kind == "companion":
 			_dev.open_console(nearest.agent_id)
+		elif nearest.kind == "piece":
+			if is_instance_valid(nearest.target):
+				nearest.target.interact()
 		elif nearest.kind == "application":
 			_open_app(nearest.app_id, nearest.get("prop"))
 		else:

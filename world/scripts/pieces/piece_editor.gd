@@ -172,12 +172,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 				return _failure("That piece no longer exists.")
 			if values.has("position") and values.position != entry.piece.get("position") and not _valid_position(values.position, entry.parent):
 				return _failure("Place the piece inside this environment's bounds.")
-			var previous: Dictionary = entry.piece
-			var updated := previous.merged(values.duplicate(true), true)
-			for key in values:
-				if previous.get(key) is Dictionary and values[key] is Dictionary:
-					updated[key] = previous[key].merged(values[key], true)
-			entry.level[entry.index] = updated
+			entry.level[entry.index] = _merge_fields(entry.piece, values)
 		"remove_piece":
 			if entry.is_empty():
 				return _failure("That piece no longer exists.")
@@ -249,6 +244,12 @@ func _save(next: Array, undo: Array[Dictionary], id: String, message: String) ->
 		revision += 1
 		changed.emit()
 	return {"ok": true, "message": message, "id": id}
+
+static func _merge_fields(before: Dictionary, changes: Dictionary) -> Dictionary:
+	var next := before.duplicate(true)
+	for key in changes:
+		next[key] = _merge_fields(next[key], changes[key]) if next.get(key) is Dictionary and changes[key] is Dictionary else changes[key]
+	return next
 
 static func _find(level: Array, id: String, parent := "") -> Dictionary:
 	for index in level.size():

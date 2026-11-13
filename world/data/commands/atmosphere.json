@@ -3,7 +3,7 @@
   "commands": [
     {
       "name": "inspect_atmosphere",
-      "description": "Inspect the current environment's atmosphere: sun direction, height, color and strength, sky (installed HDRI or gradient), stars, exposure, ambient light, fog, haze and shadow distance, which of them are edited, and the installed skies.",
+      "description": "Inspect the current environment's atmosphere: sun direction, height, color and strength, sky (installed HDRI or gradient), stars, exposure, ambient light, fog, haze and shadow distance, time, cloud cover and rain, which of them are edited, and the installed skies.",
       "service": "world",
       "handler": "_inspect_atmosphere",
       "effect": "read",
@@ -19,7 +19,7 @@
     },
     {
       "name": "preview_atmosphere",
-      "description": "Preview atmosphere changes for the current environment. Set only the fields to change. Sun elevation below 0 is night; stars show once the sun is down. reset clears earlier edits first. The preview stays until saved or discarded.",
+      "description": "Preview atmosphere changes for the current environment. Set only the fields to change. Use time_mode fixed or cycle with time_of_day and day_length, or manual to use sun direction and elevation. Cloud cover and rain are 0 to 1. reset clears earlier edits first. The preview stays until saved or discarded.",
       "service": "world",
       "handler": "_preview_atmosphere",
       "effect": "preview",
@@ -43,6 +43,11 @@
         "haze": "haze_density",
         "haze_color": "color",
         "shadow_distance": "shadow_distance",
+        "time_mode": "time_mode",
+        "time_of_day": "time_of_day",
+        "day_length": "day_length",
+        "cloud_cover": "weather_amount",
+        "rain": "weather_amount",
         "reset": "reset_atmosphere"
       },
       "required": [],

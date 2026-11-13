@@ -61,6 +61,15 @@ func _sky_command(plan: Dictionary) -> Dictionary:
 		imported["message"] = "%s is ready. Preview it using sky %s." % [imported.sky.name, imported.sky.key]
 	return imported
 
+func _video_command(plan: Dictionary) -> Dictionary:
+	if plan.tool == "list_local_videos":
+		var videos := preload("res://scripts/assets/video_library.gd").installed()
+		return {"ok": true, "videos": videos, "message": "%d local videos. Assign a video ID to a Video screen piece." % videos.size()}
+	var node := _world.pieces.node_for(plan.target) as Node3D
+	if node == null or node.get_meta("piece_type") != "video_screen" or not node.is_visible_in_tree():
+		return {"ok": false, "message": "Choose a visible video screen in this environment."}
+	return node.playback(plan.get("playback", "status"))
+
 func _inspect_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.inspect(plan.get("target", ""))
 

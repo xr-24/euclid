@@ -11,6 +11,7 @@ const Water = preload("res://scripts/simulation/water_system.gd")
 const WaterAssets = preload("res://scripts/assets/asset_library.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const AssetLibrary = preload("res://scripts/asset_library.gd")
+const Weather = preload("res://scripts/rendering/weather.gd")
 const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
 
@@ -183,11 +184,15 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 		s.yaw = deg_to_rad(s.sun_azimuth - float(sun_data.get("u", 0.0)) * 360.0)
 	else:
 		s.panorama = _gradient_sky(s.get("sky_colors", Packages.environment("construct").sky_colors))
+	var clock: bool = s.get("time_mode", "manual") != "manual"
+	var heading: float = s.sun_azimuth
 	s.hide_photo_sun = Vector4.ZERO
-	if edits.has("sun_elevation"):
-		elevation = float(edits.sun_elevation)
+	if clock or edits.has("sun_elevation"):
+		var solar := Weather.sun_at(float(s.get("time_of_day", 12.0)), heading)
+		elevation = solar.y if clock else float(edits.sun_elevation)
+		heading = solar.x if clock else heading
 		# A sun moved off the photographed one: dim the photo's sun so only the drawn one shows.
-		if panorama != null and not _hdri_sun(str(s.hdri)).is_empty() and absf(elevation - photo_elevation) > 1.0:
+		if panorama != null and not _hdri_sun(str(s.hdri)).is_empty() and (clock or absf(elevation - photo_elevation) > 1.0):
 			var hidden := _direction(s.sun_azimuth, photo_elevation)
 			hidden.w = 1.0
 			s.hide_photo_sun = hidden
@@ -196,7 +201,14 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 		s.sun_energy *= smoothstep(-4.0, 3.0, elevation)
 		s.sky_energy *= lerpf(0.03, 1.0, daylight)
 		s.ambient = float(s.get("ambient", 1.0)) * lerpf(0.25, 1.0, daylight)
-	var to_sun := _direction(s.sun_azimuth, elevation)
+	var cover := maxf(float(s.get("cloud_cover", 0.0)), float(s.get("rain", 0.0)) * 0.72)
+	s.cloud_cover = cover
+	if cover > 0.0:
+		s.sun_energy *= lerpf(1.0, 0.35, cover)
+		s.sky_energy *= lerpf(1.0, 0.72, cover)
+		s.fog_density += float(s.get("rain", 0.0)) * 0.003
+		s.haze = float(s.get("haze", 0.0)) + float(s.get("rain", 0.0)) * 0.004
+	var to_sun := _direction(heading, elevation)
 	s.to_sun = Vector3(to_sun.x, to_sun.y, to_sun.z)
 	return s
 
@@ -223,8 +235,8 @@ static func _apply_edits(s: Dictionary, edits: Dictionary) -> void:
 				s["haze_color"] = Color(value)
 			"fog_direction":
 				s["fog_anisotropy"] = float(value)
-			"sun_elevation":
-				s["sun_elevation"] = float(value)
+			"time_mode":
+				s[key] = value
 			_:
 				s[key] = float(value)
 
@@ -249,6 +261,7 @@ static func apply_state(world: Node3D, a: Dictionary, b: Dictionary, t: float) -
 	sky_mat.set_shader_parameter("stars", lerpf(a.get("stars", 0.0), b.get("stars", 0.0), t))
 	env.ambient_light_energy = lerpf(a.get("ambient", 1.0), b.get("ambient", 1.0), t)
 	sky_mat.set_shader_parameter("blend", t)
+	sky_mat.set_shader_parameter("cloud_cover", lerpf(a.cloud_cover, b.cloud_cover, t))
 	var to_sun: Vector3 = (a.to_sun as Vector3).slerp(b.to_sun, t).normalized()
 	sun.basis = Basis.looking_at(-to_sun, Vector3.UP if absf(to_sun.y) < 0.99 else Vector3.FORWARD)
 	sun.light_color = (a.sun_color as Color).lerp(b.sun_color, t)

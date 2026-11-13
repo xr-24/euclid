@@ -229,6 +229,59 @@
         "model_instances": {"type": "array", "maxItems": 512, "items": {"type": "object", "properties": {"position": {"$ref": "#/$defs/position"}, "rotation": {"type": "array", "items": {"type": "number", "minimum": -360, "maximum": 360}, "minItems": 3, "maxItems": 3}, "size": {"type": "array", "items": {"type": "number", "minimum": 0.01, "maximum": 20}, "minItems": 3, "maxItems": 3}}, "required": ["position", "rotation", "size"]}}
       }
     },
+    "building": {
+      "label": "Building plan",
+      "description": "A walkable room with a floor, four walls, roof, steps and working openings. Front faces local -Z.",
+      "script": "res://scripts/pieces/building_piece.gd",
+      "placement_yaw": 180,
+      "placement_lift": 0.04,
+      "interactions": true,
+      "required": ["footprint", "wall_height"],
+      "defaults": {"footprint": [6, 5], "wall_height": 2.7, "roof": "gable", "floor": true, "walls": true, "openings": {"front": {"kind": "door"}, "right": {"kind": "window", "motion": "slide"}}},
+      "validate_record": true,
+      "fields": {
+        "footprint": {"type": "array", "description": "Width and depth in metres", "items": {"type": "number", "minimum": 2, "maximum": 64}, "minItems": 2, "maxItems": 2},
+        "wall_height": {"type": "number", "minimum": 1, "maximum": 10},
+        "wall_thickness": {"type": "number", "minimum": 0.08, "maximum": 0.7},
+        "floor": {"type": "boolean"},
+        "walls": {"type": "boolean"},
+        "roof": {"type": "string", "enum": ["none", "flat", "gable"]},
+        "roof_rise": {"type": "number", "minimum": 0.15, "maximum": 8},
+        "openings": {"type": "object", "properties": {"front": {"$ref": "#/$defs/building_opening"}, "right": {"$ref": "#/$defs/building_opening"}, "back": {"$ref": "#/$defs/building_opening"}, "left": {"$ref": "#/$defs/building_opening"}}, "required": []},
+        "steps": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "offset": {"type": "number", "minimum": -30, "maximum": 30}, "width": {"type": "number", "minimum": 0.5, "maximum": 20}, "rise": {"type": "number", "minimum": 0.1, "maximum": 5}, "run": {"type": "number", "minimum": 0.3, "maximum": 25}, "count": {"type": "number", "minimum": 1, "maximum": 32}}, "required": []},
+        "material": {"$ref": "#/$defs/piece_material"},
+        "floor_material": {"$ref": "#/$defs/piece_material"},
+        "roof_material": {"$ref": "#/$defs/piece_material"}
+      }
+    },
+    "stairs": {
+      "label": "Stairs",
+      "description": "Walkable stairs connecting two heights. The top meets local Z = 0.",
+      "script": "res://scripts/pieces/stairs_piece.gd",
+      "required": ["stair_plan"],
+      "defaults": {"stair_plan": {"rise": 0.6, "run": 1.25, "width": 1.35, "count": 4}},
+      "fields": {
+        "stair_plan": {"$ref": "#/$defs/stair_plan"},
+        "material": {"$ref": "#/$defs/piece_material"}
+      }
+    },
+    "video_screen": {
+      "label": "Video screen",
+      "description": "A local video surface. Choose a video from list_local_videos, or import a file from the Pieces panel. The screen faces local +Z.",
+      "script": "res://scripts/pieces/video_screen_piece.gd",
+      "placement_yaw": 0,
+      "placement_lift": 1.5,
+      "interactions": true,
+      "required": ["screen_size"],
+      "defaults": {"screen_size": [2.4, 1.35], "autoplay": true, "loop": true, "volume": 0.8},
+      "fields": {
+        "screen_size": {"type": "array", "description": "Width and height in metres", "items": {"type":"number","minimum":0.2,"maximum":30}, "minItems":2,"maxItems":2},
+        "video_id": {"type": "string", "catalog": "local_video", "pattern": "^([a-f0-9]{32})?$"},
+        "autoplay": {"type": "boolean"},
+        "loop": {"type": "boolean"},
+        "volume": {"type": "number","minimum":0,"maximum":1}
+      }
+    },
     "terrain": {
       "label": "Terrain",
       "description": "A walkable surface for sculpting and painting with the terrain brush.",

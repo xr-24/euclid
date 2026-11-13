@@ -1,12 +1,19 @@
 {
   "version": 1,
   "$defs": {
+    "video_playback": {"type":"string", "enum":["status","play","pause","restart"]},
+    "time_mode": {"type":"string", "enum":["manual","fixed","cycle"]},
+    "time_of_day": {"type":"number", "minimum":0, "maximum":24, "description":"Local hour in a 24-hour day"},
+    "day_length": {"type":"number", "minimum":1, "maximum":120, "description":"Real minutes per full day"},
+    "weather_amount": {"type":"number", "minimum":0, "maximum":1},
     "terrain_points": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/position" } },
     "terrain_brush": { "type": "string", "enum": ["raise", "lower", "smooth", "flatten", "paint"] },
     "terrain_radius": { "type": "number", "minimum": 4, "maximum": 60 },
     "terrain_strength": { "type": "number", "minimum": 0.01, "maximum": 4 },
     "terrain_paint": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
     "material_query": { "type": "string", "maxLength": 120 },
+    "building_opening": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["none", "door", "window"]}, "motion": {"type": "string", "enum": ["hinge", "slide"]}, "offset": {"type": "number", "minimum": -30, "maximum": 30}, "width": {"type": "number", "minimum": 0.5, "maximum": 8}, "height": {"type": "number", "minimum": 0.4, "maximum": 6}, "sill": {"type": "number", "minimum": 0, "maximum": 4}, "open": {"type": "boolean"}}, "required": []},
+    "stair_plan": {"type": "object", "properties": {"width": {"type": "number", "minimum": 0.5, "maximum": 20}, "rise": {"type": "number", "minimum": 0.1, "maximum": 5}, "run": {"type": "number", "minimum": 0.3, "maximum": 25}, "count": {"type": "number", "minimum": 1, "maximum": 32}}, "required": []},
     "piece_material": {
       "type": "object",
       "required": [],

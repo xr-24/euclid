@@ -227,6 +227,7 @@ func _run() -> void:
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
+	_check_building()
 	_check_prop_migration(path + ".piece-migration")
 	_check_piece_upgrade()
 	await _check_terrain()
@@ -895,6 +896,28 @@ func _check_piece_edits(manifest: Dictionary) -> void:
 		DirAccess.remove_absolute(file)
 	DirAccess.remove_absolute(directory)
 
+func _check_building() -> void:
+	var layer := Node3D.new()
+	root.add_child(layer)
+	var editor := PieceEditor.new()
+	var area := AABB(Vector3(-10, -10, -10), Vector3(20, 20, 20))
+	editor.attach(layer, PieceDocument.new("", []), true, area)
+	var built := editor.execute({"tool": "add_piece", "target": "building", "piece_values": {"position": [0, 0, 0]}})
+	_check(built.ok, "place a building from the registered plan")
+	if built.ok:
+		var shell := editor.node_for(built.id)
+		var opened := editor.execute({"tool": "edit_piece", "target": built.id,
+			"piece_values": {"openings": {"front": {"open": true}}}})
+		var plan := editor.record(built.id)
+		_check(opened.ok and editor.node_for(built.id) == shell and plan.openings.front.kind == "door"
+			and plan.openings.right.motion == "slide", "edit one opening without replacing other fields or rebuilding the shell")
+		var invalid := editor.execute({"tool": "edit_piece", "target": built.id,
+			"piece_values": {"openings": {"right": {"width": 2.4}}}})
+		_check(not invalid.ok and editor.record(built.id) == plan, "reject a sliding window with insufficient travel")
+		_check(editor.execute({"tool": "undo_piece"}).ok and not editor.record(built.id).openings.front.get("open", false),
+			"undo the building edit")
+	layer.free()
+
 func _check_piece_upgrade() -> void:
 	var path := "user://piece-upgrade-%d.json" % Time.get_ticks_usec()
 	var package := Packages.definition("construct")
@@ -1219,6 +1242,19 @@ func _check_atmosphere() -> void:
 	var night: Dictionary = WorldArt.zone_state("construct", {"sun_elevation": -10.0, "stars": 1.0})
 	_check(night.sun_energy < 0.01 and (night.to_sun as Vector3).y < 0.0 and night.sky_energy < day.sky_energy * 0.2 and night.stars == 1.0,
 		"a sun below the horizon stops lighting and the sky darkens")
+
+	var zone := "open_ground"
+	_check(atmosphere.preview(zone, {"time_mode": "cycle", "time_of_day": 23.9, "day_length": 1.0}).ok
+		and atmosphere.advance(zone, 0.5) and is_equal_approx(atmosphere.current_hour(zone), 0.1)
+		and atmosphere.finish(true).ok, "cycle through midnight and save the current hour")
+	_check(atmosphere.preview(zone, {"time_mode": "fixed", "time_of_day": 8.0, "rain": 0.6}).ok
+		and is_equal_approx(atmosphere.current_hour(zone), 8.0) and is_equal_approx(atmosphere.rain_amount(zone), 0.6)
+		and atmosphere.finish(false).ok and is_equal_approx(atmosphere.current_hour(zone), 0.1)
+		and is_zero_approx(atmosphere.rain_amount(zone)), "discard weather and restore the running clock")
+	var noon := WorldArt.zone_state(zone, {"time_mode": "fixed", "time_of_day": 12.0})
+	var dusk := WorldArt.zone_state(zone, {"time_mode": "fixed", "time_of_day": 18.0, "cloud_cover": 0.7})
+	_check(noon.to_sun.y > 0.8 and absf(dusk.to_sun.y) < 0.001 and dusk.cloud_cover == 0.7,
+		"drive the rendered sun and clouds from the atmosphere settings")
 
 func _check_spring_follow() -> void:
 	var bouncy := SpringFollow.new(3.0, 0.5, 0.0)

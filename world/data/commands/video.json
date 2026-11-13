@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "list_local_videos", "description": "List local videos imported by the player. Use an ID as video_id on a video_screen piece.",
+      "service": "world", "handler": "_video_command", "effect": "read", "surfaces": ["f2", "mcp"],
+      "fields": {}, "required": [], "scope": "session", "undo": "none", "mutates_world": false
+    },
+    {
+      "name": "control_video_screen", "description": "Read status, play, pause, or restart a video screen by piece ID.",
+      "service": "world", "handler": "_video_command", "effect": "preview", "surfaces": ["f2", "mcp"],
+      "fields": {"target": "piece_id", "playback": "video_playback"}, "required": ["target"],
+      "scope": "scene", "undo": "none", "mutates_world": false
+    }
+  ]
+}

@@ -4,6 +4,7 @@ extends VBoxContainer
 const Registry = preload("res://scripts/workshop/command_registry.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
+const Videos = preload("res://scripts/assets/video_library.gd")
 const Library = preload("res://scripts/asset_library.gd")
 const Types = preload("res://scripts/pieces/piece_types.gd")
 
@@ -22,10 +23,13 @@ var _placement: Array
 var _field_controls := {}
 var _revision := {}
 var _rendered := false
+var _video_importing := false
+var _facing := 0.0
 
-func setup(editor: PieceEditor, placement: Array, selected: String, close: Callable) -> void:
+func setup(editor: PieceEditor, placement: Array, selected: String, close: Callable, facing := 0.0) -> void:
 	_editor = editor
 	_placement = placement
+	_facing = facing
 	_selected = selected
 	var heading := HBoxContainer.new()
 	add_child(heading)
@@ -113,9 +117,65 @@ func _show_fields(record: Dictionary) -> void:
 			continue
 		_add_field(key, fields[key], record.get(key), _field_controls, _fields)
 
+func _video_options(key: String, value: Variant, inputs: Dictionary, parent: Control) -> void:
+	var options := OptionButton.new()
+	options.fit_to_longest_item = false
+	_fill_videos(options, value)
+	var row := _row("Video", options, parent)
+	_button(row, "Import…", _browse_video.bind(options))
+	inputs[key] = {"control": options, "type": "string", "allow_empty": true, "initial": _read(options)}
+
+func _browse_video(options: OptionButton) -> void:
+	if _video_importing:
+		return
+	var chooser := FileDialog.new()
+	chooser.title = "Import local video"
+	chooser.access = FileDialog.ACCESS_FILESYSTEM
+	chooser.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	chooser.filters = PackedStringArray(["*.ogv,*.mp4,*.m4v,*.mov,*.webm,*.mkv ; Video"])
+	add_child(chooser)
+	chooser.file_selected.connect(_import_video.bind(options))
+	chooser.file_selected.connect(func(_path: String) -> void: chooser.queue_free())
+	chooser.canceled.connect(chooser.queue_free)
+	chooser.popup_centered_ratio(0.65)
+
+func _import_video(path: String, options: OptionButton) -> void:
+	_video_importing = true
+	_notice.text = "Importing video…"
+	var result := {}
+	var task := WorkerThreadPool.add_task(func() -> void: result.merge(Videos.import_local(path)), false, "Import local video")
+	while not WorkerThreadPool.is_task_completed(task):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	_video_importing = false
+	if not result.ok:
+		_notice.text = result.message
+		return
+	if is_instance_valid(options):
+		_fill_videos(options, result.id)
+	_notice.text = "Video imported. Apply to show it on this screen."
+
+func _fill_videos(options: OptionButton, selected: Variant) -> void:
+	options.clear()
+	options.add_item("No video")
+	options.set_item_metadata(0, "")
+	for item: Dictionary in Videos.installed():
+		options.add_item(item.name)
+		var index := options.item_count - 1
+		options.set_item_metadata(index, item.id)
+		if item.id == selected:
+			options.select(index)
+	if selected is String and not selected.is_empty() and options.selected == 0:
+		options.add_item("Video unavailable")
+		options.set_item_metadata(options.item_count - 1, selected)
+		options.select(options.item_count - 1)
+
 func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictionary, parent: Control) -> void:
 	if field.has("$ref"):
 		field = Registry.field(str(field["$ref"]).get_file())
+	if field.get("catalog") == "local_video":
+		_video_options(key, value, inputs, parent)
+		return
 	if field.get("type") == "object":
 		var label := Label.new()
 		label.text = key.capitalize()
@@ -186,9 +246,14 @@ func _create() -> void:
 	var parent: String = _parent.get_selected_metadata()
 	if not parent.is_empty():
 		plan["parent"] = parent
-	var missing: Array = Types.types()[type].required.filter(func(key: String) -> bool:
-		return not Types.types()[type].get("defaults", {}).has(key))
+	var definition: Dictionary = Types.types()[type]
+	var missing: Array = definition.required.filter(func(key: String) -> bool:
+		return not definition.get("defaults", {}).has(key))
 	if missing.is_empty():
+		if definition.has("placement_yaw") and parent.is_empty() and not _placement.is_empty():
+			var at := _placement.duplicate()
+			at[1] += float(definition.get("placement_lift", 0.0))
+			plan["piece_values"] = {"position": at, "rotation": [0, wrapf(_facing + float(definition.placement_yaw), -180.0, 180.0), 0]}
 		_run(plan, true)
 		return
 	# Gather required fields with no default before writing a piece.
@@ -250,7 +315,7 @@ static func _changes(inputs: Dictionary) -> Dictionary:
 		var value: Variant = _read(field.control)
 		if value == field.initial:
 			continue
-		if value == null or (value is String and value.is_empty()):
+		if value == null or (value is String and value.is_empty() and not field.get("allow_empty", false)):
 			return {"error": "Enter a value for %s." % key.capitalize()}
 		if field.type in ["array", "number"]:
 			value = JSON.parse_string(value)

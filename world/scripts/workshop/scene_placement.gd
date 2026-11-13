@@ -61,7 +61,9 @@ static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, re
 	if not picker.is_empty() and not _entity(picker).is_empty():
 		hit = picker
 		point = picker.position
-	return {"id": _entity(hit), "piece": _piece(hit), "point": point, "from": from, "direction": direction}
+	var collider := hit.get("collider") as Node
+	return {"id": _entity(hit), "piece": _piece(hit), "point": point, "from": from, "direction": direction,
+		"interaction": collider.get_meta("piece_interaction", null) if collider and collider.has_meta("piece_interaction") else null}
 
 static func _piece(hit: Dictionary) -> String:
 	var node := hit.get("collider") as Node

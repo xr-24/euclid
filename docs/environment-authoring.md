@@ -116,7 +116,7 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   painted wall linings, framed doors and windows with handles, ceilings with downlights, the
   roof (flat with eaves, parapet with vigas, or gable), entrance steps and lights, a gravel
   apron, stepping stones and a patio deck; `house_furniture.gd` furnishes each room against
-  walls free of openings. `pool: true` swaps the deck for a stone terrace with an in-ground
+  walls free of openings, using real models where installed: `world/data/pieces/house_furnishings.json` lists, per furniture slot and style, the library models to try (fitted to the slot, never enlarged) before falling back to a simple stand-in, and `scripts/build-furniture.ps1` downloads and prepares the CC0 Poly Haven ones. `pool: true` swaps the deck for a stone terrace with an in-ground
   pool; parented to a terrain, the house digs the basin. Styles live in
   `world/data/pieces/house_styles.json` (finishes, roof, proportions); `materials` on the
   piece overrides any finish. Static surfaces are merged per material when built, so a house

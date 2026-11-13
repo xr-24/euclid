@@ -94,6 +94,7 @@ static func build(record: Dictionary) -> Node3D:
 		furniture.name = "Furniture"
 		furniture.position.y = floor_y
 		root.add_child(furniture)
+		look["style_name"] = str(record.get("style", "modern"))
 		Furniture.furnish(furniture, list, walls, ceiling, outer, inner, look)
 	# Batch each part of the house separately, so the roof or ceilings can still be hidden.
 	for part: Node in root.get_children():

@@ -73,6 +73,14 @@ MODELS = [
     'crystalline_iceplant', 'cheiridopsis_succulent', 'flower_gazania', 'shrub_02', 'shrub_04',
     'wild_rooibos_bush', 'grass_medium_02', 'rock_face_01', 'rock_face_02', 'boulder_01',
     'coastal_cliff_01', 'coast_line_02', 'searsia_burchellii', 'wooden_bookshelf_worn',
+] + [
+    # House furnishings (world/data/pieces/house_furnishings.json picks among these).
+    'sofa_02', 'sofa_03', 'modern_arm_chair_01', 'mid_century_lounge_chair', 'Ottoman_01', 'GreenChair_01',
+    'modern_coffee_table_01', 'coffee_table_round_01', 'CoffeeTable_01', 'side_table_01', 'side_table_tall_01',
+    'dining_chair_02', 'bar_chair_round_01', 'modern_wooden_cabinet', 'drawer_cabinet', 'vintage_cabinet_01',
+    'wooden_display_shelves_01', 'steel_frame_shelves_03', 'Shelf_01', 'painted_wooden_nightstand',
+    'ClassicNightstand_01', 'modern_ceiling_lamp_01', 'hanging_picture_frame_01', 'hanging_picture_frame_02',
+    'hanging_picture_frame_03', 'ceiling_fan',
 ]
 
 
@@ -94,8 +102,31 @@ def download(url, dest, size=None):
     return True
 
 
+def fetch_model(asset):
+    files = get_json('/files/' + asset)
+    gltf = files['gltf']['2k']['gltf']
+    folder = RAW_MODELS / asset
+    download(gltf['url'], folder / Path(gltf['url']).name, gltf['size'])
+    for rel, info in gltf.get('include', {}).items():
+        download(info['url'], folder / rel, info['size'])
+    alpha = files.get('Alpha', {}).get('2k', {}).get('jpg')
+    if alpha:
+        download(alpha['url'], folder / 'textures' / f'{asset}_alpha_2k.jpg', alpha['size'])
+    print('MODEL', asset, flush=True)
+
+
+def fetch_models_only():
+    """Fetch just the model ids given after "--" (no HDRIs, textures or credits rewrite)."""
+    ids = sys.argv[sys.argv.index('--') + 1:]
+    for asset in ids:
+        fetch_model(asset)
+    print('CONSTRUCT_FETCH_OK', len(ids), flush=True)
+
+
 def main():
     credits = []
+    if '--' in sys.argv:
+        return fetch_models_only()
     for asset, res in HDRIS.items():
         info = get_json('/files/' + asset)['hdri'][res]['hdr']
         download(info['url'], GODOT_ASSETS / 'hdri' / f'{asset}_{res}.hdr', info['size'])

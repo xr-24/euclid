@@ -6,6 +6,7 @@ const Layout = preload("res://scripts/pieces/house_layout.gd")
 const Shapes = preload("res://scripts/pieces/shape_piece.gd")
 const Finishes = preload("res://scripts/pieces/piece_material.gd")
 const Library = preload("res://scripts/asset_library.gd")
+const CHOICES := "res://data/pieces/house_furnishings.json"
 
 const LOOK := {
 	"fabric": {"color": "8d877e", "roughness": 1.0},
@@ -36,9 +37,11 @@ const LOOK := {
 	"paint_c": {"color": "d9b66a", "roughness": 0.9},
 }
 
+static var _choices := _load_choices()
+
 static func furnish(root: Node3D, list: Array[Dictionary], walls: Array[Dictionary], ceiling: float, outer: float,
 		inner: float, look: Dictionary) -> void:
-	var finish := {}
+	var finish := {"style": str(look.get("style_name", "modern"))}
 	for key: String in LOOK:
 		finish[key] = Finishes.make(LOOK[key])
 	finish["baseboard"] = look.baseboard
@@ -112,15 +115,20 @@ static func _bedroom(node: Node3D, room: Dictionary, f: Dictionary, main: bool) 
 		if spot.length < width + 1.1:
 			break
 		var x := side_x * (width * 0.5 + 0.34)
-		_part(bed, Vector3(0.48, 0.5, 0.4), Vector3(x, 0.25, 0.22), f.wood)
-		_lamp(bed, Vector3(x, 0.5, 0.2), f)
+		var stand := _model(bed, "nightstand", f, Vector3(x, 0, 0.27))
+		if stand == null:
+			_part(bed, Vector3(0.48, 0.5, 0.4), Vector3(x, 0.25, 0.22), f.wood)
+		_lamp(bed, Vector3(x, float(stand.get_meta("height")) if stand else 0.5, 0.22), f)
 	_part(bed, Vector3(width + 0.6, 0.012, length + 0.6), Vector3(0, 0.006, length * 0.5 + 0.35), f.rug, false)
-	_art(bed, Vector3(0, 1.62, 0), Vector2(minf(width, 1.2), 0.6), f, int(room.index))
+	if _model(bed, "art", f, Vector3(0, 1.2, 0.05), 0.0, int(room.index)) == null:
+		_art(bed, Vector3(0, 1.62, 0), Vector2(minf(width, 1.2), 0.6), f, int(room.index))
 	# A wardrobe on another wall.
 	var closet := _best(room, 1.9, false, false, [spot.side])
 	if not closet.is_empty():
 		var wardrobe := Node3D.new()
 		_on_wall(closet.side, closet.centre).add(node, wardrobe)
+		if _model(wardrobe, "storage", f, Vector3(0, 0, 0.32)) != null:
+			return
 		_part(wardrobe, Vector3(1.8, 2.25, 0.6), Vector3(0, 1.125, 0.3), f.lacquer)
 		for door_x: float in [-0.45, 0.45]:
 			_part(wardrobe, Vector3(0.012, 0.35, 0.02), Vector3(door_x * 0.06 / 0.45, 1.15, 0.61), f.black, false)
@@ -134,29 +142,43 @@ static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 		spot = _best(room, 2.2, false, true, [], true, 0.5)
 	if spot.is_empty():
 		spot = _best(room, 1.8, false, false)
+	var media_wall := not spot.is_empty()
+	if spot.is_empty():
+		# Glass and doors on every wall: float the seating in the room, facing the widest view.
+		spot = _focus(room)
 	if spot.is_empty():
 		return
 	var place := _on_wall(spot.side, spot.centre)
-	var media := Node3D.new()
-	place.add(node, media)
-	_part(media, Vector3(2.0, 0.42, 0.42), Vector3(0, 0.21, 0.21), f.wood)
-	_part(media, Vector3(1.96, 0.012, 0.004), Vector3(0, 0.21, 0.422), f.dark_wood, false)
-	if not _window_above(spot, 0.75):
-		_part(media, Vector3(1.45, 0.83, 0.045), Vector3(0, 1.25, 0.03), f.screen, false)
-	else:
-		_part(media, Vector3(1.2, 0.7, 0.06), Vector3(0, 0.77, 0.3), f.screen, false)
+	if media_wall:
+		var media := Node3D.new()
+		place.add(node, media)
+		if _model(media, "media_unit", f, Vector3(0, 0, 0.3)) == null:
+			_part(media, Vector3(2.0, 0.42, 0.42), Vector3(0, 0.21, 0.21), f.wood)
+			_part(media, Vector3(1.96, 0.012, 0.004), Vector3(0, 0.21, 0.422), f.dark_wood, false)
+		if not _window_above(spot, 0.75):
+			_part(media, Vector3(1.45, 0.83, 0.045), Vector3(0, 1.25, 0.03), f.screen, false)
+		else:
+			_part(media, Vector3(1.2, 0.7, 0.06), Vector3(0, 0.77, 0.3), f.screen, false)
 	var depth := _depth(spot.side, clear)
 	var gap := clampf(depth - 1.25, 2.2, 3.2)
 	var sofa := Node3D.new()
 	place.add(node, sofa)
 	sofa.position += place.inward * (gap + 0.95)
 	sofa.rotation.y += PI
-	_sofa(sofa, 2.3, f)
+	if _model(sofa, "sofa", f) == null:
+		_sofa(sofa, 2.3, f)
 	var table := Node3D.new()
 	place.add(node, table)
 	table.position += place.inward * (gap * 0.55 + 0.35)
-	_part(table, Vector3(1.15, 0.05, 0.6), Vector3(0, 0.38, 0), f.wood)
-	_part(table, Vector3(1.05, 0.33, 0.5), Vector3(0, 0.175, 0), f.dark_wood)
+	if _model(table, "coffee_table", f) == null:
+		_part(table, Vector3(1.15, 0.05, 0.6), Vector3(0, 0.38, 0), f.wood)
+		_part(table, Vector3(1.05, 0.33, 0.5), Vector3(0, 0.175, 0), f.dark_wood)
+	# An armchair beside the table, turned toward it, when one is installed.
+	var chair := Node3D.new()
+	place.add(node, chair)
+	chair.position += place.inward * (gap * 0.55 + 0.35) + place.along * 1.75
+	chair.rotation.y += -PI * 0.5
+	_model(chair, "armchair", f)
 	var rug := Node3D.new()
 	place.add(node, rug)
 	rug.position += place.inward * (gap * 0.55 + 0.5)
@@ -168,12 +190,15 @@ static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 	_part(lamp, Vector3(0.3, 0.03, 0.3), Vector3(0, 0.015, 0), f.black)
 	_cylinder(lamp, 0.015, 1.45, Vector3(0, 0.74, 0), f.black)
 	_cylinder(lamp, 0.2, 0.3, Vector3(0, 1.5, 0), f.shade, 0.16)
-	_plant(node, place.point + place.inward * 0.35 - place.along * 1.35, f)
+	var pot := place.point + place.inward * 0.45 - place.along * 1.55
+	if _model(node, "plant", f, pot) == null:
+		_plant(node, pot, f)
 	var gallery := _best(room, 1.6, false, true, [spot.side])
 	if not gallery.is_empty():
 		var wall := Node3D.new()
 		_on_wall(gallery.side, gallery.centre).add(node, wall)
-		_art(wall, Vector3(0, 1.5, 0), Vector2(1.3, 0.9), f, int(room.index) + 1)
+		if _model(wall, "art", f, Vector3(0, 1.0, 0.05), 0.0, int(room.index) + 1) == null:
+			_art(wall, Vector3(0, 1.5, 0), Vector2(1.3, 0.9), f, int(room.index) + 1)
 
 static func _sofa(sofa: Node3D, width: float, f: Dictionary) -> void:
 	# Built facing +Z with its back at z = -0.45.
@@ -244,6 +269,9 @@ static func _kitchen(node: Node3D, room: Dictionary, f: Dictionary, ceiling: flo
 			var stool := Node3D.new()
 			island.add_child(stool)
 			stool.position = Vector3(x, 0, 0.75)
+			stool.rotation.y = PI
+			if _model(stool, "bar_stool", f) != null:
+				continue
 			_cylinder(stool, 0.18, 0.04, Vector3(0, 0.66, 0), f.wood)
 			_cylinder(stool, 0.018, 0.64, Vector3(0, 0.32, 0), f.black)
 			_cylinder(stool, 0.17, 0.02, Vector3(0, 0.01, 0), f.black)
@@ -275,16 +303,17 @@ static func _table(table: Node3D, length: float, width: float, seats: int, f: Di
 			table.add_child(chair)
 			chair.position = Vector3(x, 0, side_z * (width * 0.5 + 0.22))
 			chair.rotation.y = 0.0 if side_z < 0.0 else PI
-			_chair(chair, f)
+			if _model(chair, "dining_chair", f) == null:
+				_chair(chair, f)
 	var pendant := Node3D.new()
 	table.add_child(pendant)
 	_cylinder(pendant, 0.005, 0.9, Vector3(0, 2.2, 0), f.black)
 	_cylinder(pendant, 0.22, 0.18, Vector3(0, 1.7, 0), f.shade, 0.06)
 
 static func _chair(chair: Node3D, f: Dictionary) -> void:
-	# Faces -Z (toward the table when placed on the -Z side, rotated otherwise).
+	# Faces +Z, like library models.
 	_part(chair, Vector3(0.44, 0.05, 0.44), Vector3(0, 0.46, 0), f.wood)
-	_part(chair, Vector3(0.44, 0.42, 0.04), Vector3(0, 0.7, 0.2), f.wood)
+	_part(chair, Vector3(0.44, 0.42, 0.04), Vector3(0, 0.7, -0.2), f.wood)
 	for leg_x: float in [-0.19, 0.19]:
 		for leg_z: float in [-0.19, 0.19]:
 			_part(chair, Vector3(0.035, 0.44, 0.035), Vector3(leg_x, 0.22, leg_z), f.black, false)
@@ -351,13 +380,14 @@ static func _office(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 	var chair := Node3D.new()
 	desk.add_child(chair)
 	chair.position = Vector3(0, 0, 1.0)
-	_chair(chair, f)
+	chair.rotation.y = PI
+	if _model(chair, "dining_chair", f) == null:
+		_chair(chair, f)
 	var shelf := _best(room, 1.4, false, false, [spot.side])
-	if not shelf.is_empty() and Library.has("wooden_bookshelf_worn"):
-		var books := Library.instance("wooden_bookshelf_worn")
-		if books:
-			_on_wall(shelf.side, shelf.centre).add(node, books)
-			books.position += _on_wall(shelf.side, shelf.centre).inward * 0.3
+	if not shelf.is_empty():
+		var books := Node3D.new()
+		_on_wall(shelf.side, shelf.centre).add(node, books)
+		_model(books, "bookshelf", f, Vector3(0, 0, 0.25))
 
 static func _hall(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 	var clear: Dictionary = room.clear
@@ -404,6 +434,19 @@ static func _best(room: Dictionary, need: float, prefer_inner: bool, solid_only:
 				best = {"side": side, "centre": (span[0] + span[1]) * 0.5, "length": length}
 	return best
 
+## The side with the most wall, whatever is in it: the side a floating seating group faces.
+static func _focus(room: Dictionary) -> Dictionary:
+	var best := {}
+	var most := 0.0
+	for side: Dictionary in room.sides:
+		var length := 0.0
+		for span: Array in side.solid:
+			length += float(span[1]) - float(span[0])
+		if length > most:
+			most = length
+			best = {"side": side, "centre": (float(side.low) + float(side.high)) * 0.5, "length": float(side.high) - float(side.low)}
+	return best
+
 static func _window_above(spot: Dictionary, height: float) -> bool:
 	var half := float(spot.length) * 0.5
 	for opening: Dictionary in spot.side.openings:
@@ -443,6 +486,59 @@ static func _on_wall(side: Dictionary, at: float) -> WallSpot:
 	# Local +X runs along the wall; "sign" maps plan positions along the side to local X.
 	spot.sign = spot.along.x if int(side.axis) == 0 else spot.along.z
 	return spot
+
+# --- Library models -----------------------------------------------------------------------------
+
+## A library model for a furniture slot (house_furnishings.json), fitted to the slot, standing at
+## `at` and facing +Z then `turn`. Returns its holder, whose "height" meta is the fitted height,
+## or null when no model for the slot is installed, so the caller can build a stand-in.
+static func _model(parent: Node3D, slot: String, f: Dictionary, at := Vector3.ZERO, turn := 0.0, pick := 0) -> Node3D:
+	var rule: Dictionary = _choices.get("slots", {}).get(slot, {})
+	var options: Dictionary = rule.get("models", {})
+	var ids: Array = options.get(str(f.get("style", "")), options.get("default", []))
+	var installed := ids.filter(func(id: Variant) -> bool: return Library.has(str(id)))
+	if installed.is_empty():
+		return null
+	var id := str(installed[pick % installed.size()])
+	var model := Library.instance(id)
+	if model == null:
+		return null
+	var size := Library.size(id)
+	var spin := deg_to_rad(float(_choices.get("turn", {}).get(id, 0.0)))
+	if absf(sin(spin)) > 0.7:
+		size = Vector3(size.z, size.y, size.x)
+	var target: Array = rule.get("size", [1, 1, 1])
+	var fit := 1.0
+	if size.x > 0.0 and size.y > 0.0 and size.z > 0.0:
+		fit = minf(1.0, minf(float(target[0]) / size.x, minf(float(target[1]) / size.y, float(target[2]) / size.z)))
+	var holder := Node3D.new()
+	holder.name = slot.capitalize().replace(" ", "")
+	holder.position = at
+	holder.rotation.y = turn
+	holder.set_meta("height", size.y * fit)
+	holder.set_meta("library_id", id)
+	parent.add_child(holder)
+	model.scale = Vector3.ONE * fit
+	model.rotation.y = spin
+	holder.add_child(model)
+	# A plain box keeps the player from walking through it.
+	if size.y * fit > 0.2:
+		var body := StaticBody3D.new()
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = size * fit
+		shape.shape = box
+		shape.position.y = size.y * fit * 0.5
+		body.add_child(shape)
+		holder.add_child(body)
+	return holder
+
+static func _load_choices() -> Dictionary:
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(CHOICES))
+	if not value is Dictionary or value.get("version") != 1:
+		push_error("Invalid house furnishings: " + CHOICES)
+		return {}
+	return value
 
 # --- Parts --------------------------------------------------------------------------------------
 

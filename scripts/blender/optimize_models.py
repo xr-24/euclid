@@ -51,6 +51,20 @@ BUDGETS = {
     'coastal_cliff_01': (120_000, 2048),
     'coast_line_02': (120_000, 2048),
     'searsia_burchellii': (60_000, 2048),
+    # House furnishings: seen up close indoors, so keep shape but cap the heavy ones.
+    'dining_chair_02': (8_000, 1024),
+    'bar_chair_round_01': (6_000, 1024),
+    'modern_wooden_cabinet': (12_000, 2048),
+    'drawer_cabinet': (12_000, 2048),
+    'vintage_cabinet_01': (20_000, 2048),
+    'modern_arm_chair_01': (9_000, 2048),
+    'mid_century_lounge_chair': (7_000, 2048),
+    'sofa_03': (8_000, 2048),
+    'modern_coffee_table_02': (8_000, 1024),
+    'CoffeeTable_01': (8_000, 1024),
+    'side_table_tall_01': (5_000, 1024),
+    'steel_frame_shelves_03': (8_000, 1024),
+    'ceiling_fan': (8_000, 1024),
 }
 DEFAULT_TEXTURE = 1024
 FOLIAGE_WORDS = ('leaf', 'leaves', 'foliage', 'twig', 'grass', 'blade', 'needle', 'petal', 'flower')

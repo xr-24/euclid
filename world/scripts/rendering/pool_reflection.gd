@@ -61,7 +61,9 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var source := get_viewport().get_camera_3d()
 	if source == null or viewport == null: return
-	var active := visibility.is_on_screen() and source.global_position.y > level+0.03 and source.global_position.distance_to(water.global_position)<80
+	if material.shader.resource_path.ends_with("/ocean.gdshader"):
+		level = water.global_position.y
+	var active := absf(water.global_basis.y.normalized().y) > 0.999 and water.is_visible_in_tree() and visibility.is_on_screen() and source.global_position.y > level+0.03 and source.global_position.distance_to(water.global_position)<80
 	material.set_shader_parameter("pool_reflection_enabled",active)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if active else SubViewport.UPDATE_DISABLED
 	mirror_sun.visible = active and not use_scene_sun

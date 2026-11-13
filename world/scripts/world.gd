@@ -18,6 +18,7 @@ const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 const GridAgentClient = preload("res://scripts/agents/grid_agent_client.gd")
 const AssetClient = preload("res://scripts/agents/asset_client.gd")
+const SkyClient = preload("res://scripts/agents/sky_client.gd")
 const MaterialClient = preload("res://scripts/agents/material_client.gd")
 const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
@@ -53,6 +54,7 @@ const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 var manifest: Dictionary
 var asset_client: Node
 var material_client: MaterialClient
+var sky_client: SkyClient
 var zone_id := "construct"
 var zone_root: Node3D
 var player: CharacterBody3D
@@ -274,6 +276,7 @@ func _setup_player() -> void:
 	scanner = SceneScanner.new()
 	add_child(scanner)
 	scanner.setup("" if smoke_mode else "user://water-edits.json", wrist)
+	pieces.display_changed.connect(_refresh_piece_services)
 	grabber = PropGrabber.new()
 	add_child(grabber)
 	terrain_brush = TerrainBrush.new()
@@ -417,8 +420,9 @@ func _open_atmosphere() -> void:
 	overlay.offset_right = -28
 	overlay.offset_bottom = -28
 	var editor := AtmospherePanel.new()
+	editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	overlay_content.add_child(editor)
-	editor.setup(atmosphere, zone_id, _close_panel)
+	editor.setup(atmosphere, zone_id, _close_panel, sky_client)
 
 func _open_pieces() -> void:
 	if not _scene_ready():
@@ -797,9 +801,6 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 		_palette_host.clear_view()
 	zone_id = built.id
 	zone_root = built.root
-	pieces.attach(built.piece_layer, built.piece_document, zone_root.get_meta("scene_edit", false),
-		Packages.piece_bounds(zone_id), built.displayed_pieces)
-	_grid_scenery.attach(pieces, Packages.definition(zone_id).get("piece_appearance", {}))
 	if world_tools != null:
 		var linked_preview: String = world_tools.behavior_preview_id()
 		if not linked_preview.is_empty():
@@ -813,7 +814,15 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 			var path := "" if smoke_mode else "user://%s-entities-%s.json" % [prefix, zone_id]
 			scene_tools[zone_id] = WorldTools.new(path, prefab_library, behavior_runtime, ScenePlacement.bounds_for(zone_id))
 		world_tools = scene_tools[zone_id]
-		world_tools.attach(zone_root)
+		var prior: Array = built.piece_document.pieces
+		world_tools.migrate_saved_props(built.piece_document)
+		if prior != built.piece_document.pieces:
+			BuildContext.refresh_pieces(built)
+	pieces.attach(built.piece_layer, built.piece_document, zone_root.get_meta("scene_edit", false),
+		Packages.piece_bounds(zone_id), built.displayed_pieces)
+	_grid_scenery.attach(pieces, Packages.definition(zone_id).get("piece_appearance", {}))
+	if world_tools != null:
+		world_tools.attach(zone_root, pieces)
 		if not world_tools.authored_geometry_changed.is_connected(_refresh_authored_lighting):
 			world_tools.authored_geometry_changed.connect(_refresh_authored_lighting)
 	if side != 0.0:
@@ -825,6 +834,12 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
+
+func _refresh_piece_services() -> void:
+	if is_instance_valid(zone_root) and zone_root.is_inside_tree():
+		scanner.refresh_water(zone_root, zone_id)
+		_shoreline.attach(zone_root)
+		world_tools.refresh_piece_props(zone_root)
 
 func _refresh_authored_lighting() -> void:
 	if environment:
@@ -1136,6 +1151,9 @@ func _setup_gateway() -> void:
 	material_client = MaterialClient.new()
 	add_child(material_client)
 	material_client.configure(asset_client)
+	sky_client = SkyClient.new()
+	add_child(sky_client)
+	sky_client.configure(asset_client)
 	grid_agent = GridAgentClient.new()
 	add_child(grid_agent)
 	grid_agent.configure(gateway_url, gateway_token)

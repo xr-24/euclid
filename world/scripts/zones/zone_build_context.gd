@@ -3,6 +3,7 @@ extends RefCounted
 const Workstations = preload("res://scripts/zones/workstations.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
+const PieceWater = preload("res://scripts/pieces/piece_water.gd")
 const Pieces = preload("res://scripts/pieces/piece_builder.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 const Scenery = preload("res://scripts/zones/grid_scenery.gd")
@@ -28,14 +29,10 @@ func begin(destination: String) -> void:
 	build_root.set_meta("spawn", Packages.spawn(destination))
 
 func build_art() -> bool:
-	if package.has("builder"):
-		var builder := load(package.builder) as GDScript
-		if builder == null or not builder.has_script_method("build") or builder.get_instance_base_type() != &"RefCounted":
+	for id: String in package.get("required_geometry", []):
+		if not ResourceLoader.exists("res://assets/generated/" + id + ".glb"):
 			return false
-		var built: Variant = builder.call("build", self)
-		if not (built is bool and built):
-			return false
-	return package.has("pieces") or package.has("builder")
+	return package.has("pieces")
 
 func build_pieces(path := "", appearance := {}) -> void:
 	piece_document = PieceDocument.new(path, package.get("pieces", []), int(package.get("piece_revision", 0)),
@@ -45,6 +42,17 @@ func build_pieces(path := "", appearance := {}) -> void:
 	piece_layer.name = Pieces.LAYER
 	build_root.add_child(piece_layer)
 	Pieces.build(piece_layer, displayed_pieces)
+	PieceWater.refresh(piece_layer)
+
+static func refresh_pieces(built: Dictionary) -> void:
+	var before: Array = built.displayed_pieces
+	var ids := {}
+	for item: Dictionary in before:
+		ids[item.id] = true
+	var next: Array = before + built.piece_document.pieces.filter(func(item: Dictionary) -> bool: return not ids.has(item.id))
+	Pieces.sync(built.piece_layer, before, next)
+	PieceWater.refresh(built.piece_layer)
+	built["displayed_pieces"] = next
 
 func build(destination: String) -> Dictionary:
 	begin(destination)

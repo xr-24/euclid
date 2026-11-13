@@ -19,12 +19,16 @@ uniform float colour_depth = 6.0;     // vertical depth at which water reaches d
 uniform float swell = 0.16;           // Gerstner amplitude in metres
 uniform float swell_speed = 1.0;
 uniform float ripple_strength = 0.55;
+uniform vec2 surface_flow = vec2(0.0);
 uniform float ripple_scale = 7.0;     // metres per ripple tile
 uniform float refraction = 0.035;
 uniform float foam_width = 0.45;      // metres of depth that carry shore foam
 uniform float foam_amount = 1.0;
 uniform float roughness_value : hint_range(0.0, 1.0) = 0.035;
 uniform float reflection_strength = 1.0;
+uniform bool pool_reflection_enabled = false;
+uniform sampler2D pool_reflection : filter_linear, repeat_disable;
+uniform mat4 pool_reflection_matrix;
 // Where the shoreline solver runs (shore_water.gdshader) this surface steps aside, with the
 // matching a continuous, level seam at the simulation boundary.
 uniform bool sim_enabled = false;
@@ -112,7 +116,8 @@ void fragment() {
 	} else {
 		// Two scrolling ripple layers, faded with distance to avoid shimmering.
 		float t = TIME;
-		vec2 uv = world_pos.xz / ripple_scale;
+		vec2 flow = (MODEL_MATRIX * vec4(surface_flow.x, 0.0, surface_flow.y, 0.0)).xz;
+		vec2 uv = (world_pos.xz - flow * t) / ripple_scale;
 		vec3 na = texture(ripple_a, uv + vec2(0.012, 0.018) * t).xyz * 2.0 - 1.0;
 		vec3 nb = texture(ripple_b, uv * 1.9 + vec2(-0.017, 0.009) * t).xyz * 2.0 - 1.0;
 		vec3 n = normalize(vec3(na.xy + nb.xy, na.z * nb.z));
@@ -149,6 +154,16 @@ void fragment() {
 
 		ALBEDO = mix(body * (1.0 - transmit) * 0.35, foam_color, foam);
 		EMISSION = transmitted * (1.0 - foam);
+		if (pool_reflection_enabled) {
+			vec4 projected = pool_reflection_matrix * vec4(world_pos, 1.0);
+			vec2 mirror_uv = projected.xy / max(projected.w, 0.001) * vec2(0.5, -0.5) + 0.5;
+			mirror_uv += n.xy * detail * 0.008;
+			if (projected.w > 0.0 && all(greaterThan(mirror_uv, vec2(0.001))) && all(lessThan(mirror_uv, vec2(0.999)))) {
+				float fresnel = 0.02 + 0.98 * pow(1.0 - clamp(dot(VIEW, NORMAL), 0.0, 1.0), 5.0);
+				EMISSION = mix(EMISSION, texture(pool_reflection, mirror_uv).rgb,
+					fresnel * (1.0 - foam) * reflection_strength);
+			}
+		}
 		ROUGHNESS = mix(roughness_value, 0.85, foam);
 		METALLIC = 0.0;
 		SPECULAR = mix(0.5, 0.2, foam) * reflection_strength;

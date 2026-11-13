@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const ID = /^[a-z0-9_]{1,64}$/;
@@ -24,6 +24,23 @@ async function download(url, limit, fetcher, signal) {
 }
 
 export function createMaterialService(directory, fetcher = fetch) {
+  return createImportService(directory, {
+    kind: 'material', catalog: 'textures', type: 1, validId, extension: 'jpg', limit: LIMIT,
+    prefix: '/file/ph-assets/Textures/', files: files => Object.fromEntries(
+      Object.entries(MAPS).map(([key, map]) => [key, files[map]?.['1k']?.jpg])),
+  }, fetcher);
+}
+
+export function createSkyService(directory, fetcher = fetch) {
+  return createImportService(directory, {
+    kind: 'sky', catalog: 'hdris', type: 0, validId: id => typeof id === 'string' && ID.test(id),
+    extension: 'hdr', limit: 12 * 1024 * 1024, prefix: '/file/ph-assets/HDRIs/hdr/2k/',
+    files: files => ({ panorama: files.hdri?.['2k']?.hdr }),
+  }, fetcher);
+}
+
+function createImportService(directory, config, fetcher) {
+  const { kind, type, validId, extension, limit, prefix } = config;
   const pending = new Map();
   let catalog;
 
@@ -32,7 +49,7 @@ export function createMaterialService(directory, fetcher = fetch) {
   }
 
   function assets() {
-    catalog ??= provider('/assets?t=textures').catch(error => {
+    catalog ??= provider('/assets?t=' + config.catalog).catch(error => {
       catalog = undefined;
       throw error;
     });
@@ -41,14 +58,14 @@ export function createMaterialService(directory, fetcher = fetch) {
 
   function describe(id, item) {
     return { id, name: item.name, author: Object.keys(item.authors ?? {}).join(', '),
-      page: `https://polyhaven.com/a/${id}`, license: 'CC0', provider: 'Poly Haven', tile: 3 };
+      page: `https://polyhaven.com/a/${id}`, license: 'CC0', provider: 'Poly Haven' };
   }
 
   async function search(query) {
-    if (typeof query !== 'string' || query.length > 120 || !query.trim()) throw new Error('Enter a material name.');
+    if (typeof query !== 'string' || query.length > 120 || !query.trim()) throw new Error(`Enter a ${kind} name.`);
     const words = query.toLowerCase().trim().split(/\s+/);
     return Object.entries(await assets())
-      .filter(([id, item]) => validId(id) && item.type === 1 && typeof item.name === 'string')
+      .filter(([id, item]) => validId(id) && item.type === type && typeof item.name === 'string')
       .map(([id, item]) => {
         const name = item.name.toLowerCase();
         const terms = [...(item.tags ?? []), ...(item.categories ?? [])].join(' ').toLowerCase();
@@ -61,11 +78,11 @@ export function createMaterialService(directory, fetcher = fetch) {
   }
 
   async function read(id) {
-    if (!validId(id)) throw new Error('Invalid material ID.');
+    if (!validId(id)) throw new Error(`Invalid ${kind} ID.`);
     try {
       const folder = path.join(directory, id);
-      const info = JSON.parse(await readFile(path.join(folder, 'material.json'), 'utf8'));
-      for (const key of Object.keys(MAPS)) await stat(path.join(folder, key + '.jpg'));
+      const info = JSON.parse(await readFile(path.join(folder, kind + '.json'), 'utf8'));
+      for (const key of Object.keys(config.files({}))) await stat(path.join(folder, key + '.' + extension));
       return info;
     } catch (error) {
       if (error.code === 'ENOENT') return null;
@@ -76,30 +93,29 @@ export function createMaterialService(directory, fetcher = fetch) {
   async function prepare(id) {
     const signal = AbortSignal.timeout(23000);
     const item = (await assets())[id];
-    if (!item || item.type !== 1) throw new Error('Poly Haven material not found.');
+    if (!item || item.type !== type) throw new Error(`Poly Haven ${kind} not found.`);
     const files = await provider('/files/' + id, 1024 * 1024, signal);
     await mkdir(directory, { recursive: true });
     const stage = await mkdtemp(path.join(directory, '.import-'));
     try {
-      const downloads = await Promise.allSettled(Object.entries(MAPS).map(async ([key, map]) => {
-        const file = files[map]?.['1k']?.jpg;
-        if (!file?.url || !/^[a-f0-9]{32}$/i.test(file.md5 ?? '') || !Number.isInteger(file.size) || file.size < 1 || file.size > LIMIT) {
-          throw new Error('This material needs a 1K color, OpenGL normal and packed ARM map.');
+      const downloads = await Promise.allSettled(Object.entries(config.files(files)).map(async ([key, file]) => {
+        if (!file?.url || !/^[a-f0-9]{32}$/i.test(file.md5 ?? '') || !Number.isInteger(file.size) || file.size < 1 || file.size > limit) {
+          throw new Error(`This ${kind} is missing a supported download.`);
         }
         const url = new URL(file.url);
-        if (url.origin !== 'https://dl.polyhaven.org' || !url.pathname.startsWith('/file/ph-assets/Textures/')) {
+        if (url.origin !== 'https://dl.polyhaven.org' || !url.pathname.startsWith(prefix)) {
           throw new Error('Unexpected Poly Haven download host.');
         }
         const bytes = await download(url, file.size, fetcher, signal);
         if (bytes.length !== file.size || createHash('md5').update(bytes).digest('hex') !== file.md5.toLowerCase()) {
-          throw new Error('A material map failed its download checksum. Retry the import.');
+          throw new Error('A file failed its download checksum. Retry the import.');
         }
-        await writeFile(path.join(stage, key + '.jpg'), bytes);
+        await writeFile(path.join(stage, key + '.' + extension), bytes);
       }));
       const failed = downloads.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
       const info = describe(id, item);
-      await writeFile(path.join(stage, 'material.json'), JSON.stringify(info));
+      await writeFile(path.join(stage, kind + '.json'), JSON.stringify(info));
       try {
         await rename(stage, path.join(directory, id));
       } catch (error) {
@@ -117,15 +133,15 @@ export function createMaterialService(directory, fetcher = fetch) {
     const cached = await read(id);
     if (cached) return cached;
     if (pending.has(id)) return pending.get(id);
-    if (pending.size >= 2) throw new Error('Two materials are importing. Try again when one finishes.');
+    if (pending.size >= 2) throw new Error(`Two ${kind} imports are running. Try again when one finishes.`);
     const job = prepare(id).finally(() => pending.delete(id));
     pending.set(id, job);
     return job;
   }
 
   async function map(id, key) {
-    if (!Object.hasOwn(MAPS, key) || !await read(id)) throw new Error('Material map unavailable.');
-    return path.join(directory, id, key + '.jpg');
+    if (!Object.hasOwn(config.files({}), key) || !await read(id)) throw new Error(`The ${kind} file is unavailable.`);
+    return path.join(directory, id, key + '.' + extension);
   }
 
   return { search, importMaterial, map };

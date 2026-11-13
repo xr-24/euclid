@@ -11,6 +11,7 @@ const Water = preload("res://scripts/simulation/water_system.gd")
 const WaterAssets = preload("res://scripts/assets/asset_library.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const AssetLibrary = preload("res://scripts/asset_library.gd")
+const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
 
 static var _cache := {}
@@ -170,8 +171,11 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 	var elevation: float = s.get("sun_elevation", 40.0)
 	var photo_elevation := elevation
 	s.yaw = 0.0
-	if s.has("hdri") and ResourceLoader.exists(hdri_path):
-		s.panorama = res(hdri_path)
+	var panorama := RuntimeSkies.texture(str(s.get("hdri", "")))
+	if panorama == null and s.has("hdri") and ResourceLoader.exists(hdri_path):
+		panorama = res(hdri_path) as Texture2D
+	if panorama != null:
+		s.panorama = panorama
 		# Rotate the panorama so its photographed sun sits at the authored azimuth.
 		var sun_data := _hdri_sun(str(s.hdri))
 		photo_elevation = sun_data.get("elevation_deg", elevation)
@@ -183,7 +187,7 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 	if edits.has("sun_elevation"):
 		elevation = float(edits.sun_elevation)
 		# A sun moved off the photographed one: dim the photo's sun so only the drawn one shows.
-		if s.has("hdri") and absf(elevation - photo_elevation) > 1.0:
+		if panorama != null and not _hdri_sun(str(s.hdri)).is_empty() and absf(elevation - photo_elevation) > 1.0:
 			var hidden := _direction(s.sun_azimuth, photo_elevation)
 			hidden.w = 1.0
 			s.hide_photo_sun = hidden

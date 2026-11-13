@@ -37,8 +37,10 @@ static func valid(record: Variant) -> bool:
 		var rule: Variant = _data.common.get(key, fields.get(key, storage.get(key)))
 		if not rule is Dictionary or not Commands.valid_value(record[key], rule):
 			return false
-	if not storage.is_empty():
+	if not storage.is_empty() or definition.get("validate_record", false):
 		var script := factory(record.type)
+		if script and script.has_script_method("valid_record"):
+			return script.call("valid_record", record) == true
 		if script and script.has_script_method("valid_storage"):
 			return script.call("valid_storage", record) == true
 	return true
@@ -62,6 +64,8 @@ static func _valid_level(pieces: Variant, ids: Dictionary, count: Array, depth: 
 	for piece: Variant in pieces:
 		count[0] += 1
 		if count[0] > MAX_PIECES or not valid(piece) or ids.has(piece.id):
+			return false
+		if depth > 0 and _data.types[piece.type].get("fixed_transform", false):
 			return false
 		ids[piece.id] = true
 		if piece.has("children") and not _valid_level(piece.children, ids, count, depth + 1):

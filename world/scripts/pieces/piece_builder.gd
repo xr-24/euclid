@@ -2,6 +2,7 @@ extends RefCounted
 ## Builds a tree of piece records into nodes. A factory makes each piece's node; the builder owns
 ## its transform, visibility, children and the metadata that lets editors find it again.
 
+const Terrain = preload("res://scripts/pieces/terrain_node.gd")
 const Types = preload("res://scripts/pieces/piece_types.gd")
 const Effects = preload("res://scripts/rendering/zone_effects.gd")
 const LAYER := "EnvironmentPieces"
@@ -44,8 +45,20 @@ static func sync(parent: Node3D, before: Array, after: Array) -> void:
 			node.free()
 			node = replacement
 		else:
-			_apply(node, record)
+			_apply(node, record, old)
+			if node.has_meta("legacy_prop") and ["position", "rotation", "scale", "name", "hidden"].any(
+					func(key: String) -> bool: return old.get(key) != record.get(key)):
+				node.set_meta("piece_placement_changed", true)
+				node.get_meta("legacy_prop")["label"] = record.get("name", "")
 		sync(node, old.get("children", []), record.get("children", []))
+		if _placed(node, old, record):
+			Effects.make_constructible(node, false)
+		if node is Terrain and (old.get("terrain_surface") != record.get("terrain_surface") or old.get("terrain_size") != record.get("terrain_size")):
+			for child: Dictionary in record.get("children", []):
+				if child.type == "scatter" and child == _old_record(old.get("children", []), child.id):
+					var patch := node.get_node("Piece_" + child.id) as Node3D
+					if _placed(patch, {}, child):
+						Effects.make_constructible(patch, false)
 	for id in previous:
 		parent.get_node("Piece_" + id).free()
 
@@ -64,12 +77,23 @@ static func transform_of(record: Dictionary) -> Transform3D:
 
 static func _build(parent: Node3D, record: Dictionary, live := false) -> Node3D:
 	var node := _make(record)
+	parent.add_child(node)
+	_placed(node, {}, record)
 	if live:
 		Effects.make_constructible(node, false)
-	parent.add_child(node)
 	for child: Dictionary in record.get("children", []):
 		_build(node, child, live)
 	return node
+
+static func _old_record(records: Array, id: String) -> Dictionary:
+	for record: Dictionary in records:
+		if record.id == id:
+			return record
+	return {}
+
+static func _placed(node: Node3D, before: Dictionary, record: Dictionary) -> bool:
+	var factory := Types.factory(record.type)
+	return factory != null and factory.has_script_method("placed") and factory.call("placed", node, before, record) == true
 
 static func _make(record: Dictionary) -> Node3D:
 	var factory := Types.factory(str(record.type))
@@ -81,8 +105,10 @@ static func _make(record: Dictionary) -> Node3D:
 	_apply(node, record)
 	return node
 
-static func _apply(node: Node3D, record: Dictionary) -> void:
-	node.transform = transform_of(record)
+static func _apply(node: Node3D, record: Dictionary, before := {}) -> void:
+	if not node is RigidBody3D or before.is_empty() or ["position", "rotation", "scale"].any(
+			func(key: String) -> bool: return before.get(key) != record.get(key)):
+		node.transform = transform_of(record)
 	node.visible = not record.get("hidden", false)
 	node.process_mode = Node.PROCESS_MODE_INHERIT if node.visible else Node.PROCESS_MODE_DISABLED
 

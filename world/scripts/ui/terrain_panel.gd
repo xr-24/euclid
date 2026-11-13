@@ -86,9 +86,9 @@ func _refresh_materials() -> void:
 			_materials.select(_materials.item_count - 1)
 
 func _browse() -> void:
-	var browser := preload("res://scripts/ui/material_browser.gd").new()
+	var browser := preload("res://scripts/ui/poly_haven_browser.gd").new()
 	add_child(browser)
-	browser.setup(_client)
+	browser.setup("material", "materials", _client.search, _client.import_material)
 	browser.chosen.connect(func(id: String, title: String) -> void:
 		_refresh_materials()
 		for index in _materials.item_count:

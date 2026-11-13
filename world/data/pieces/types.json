@@ -5,7 +5,7 @@
     "id": { "type": "string", "description": "Unique within the environment", "pattern": "^[a-z0-9][a-z0-9_-]{0,47}$" },
     "type": { "type": "string", "maxLength": 32 },
     "name": { "type": "string", "maxLength": 64 },
-    "position": { "$ref": "#/$defs/position" },
+    "position": { "type": "array", "description": "Three coordinates in metres", "items": {"type":"number", "minimum":-8000, "maximum":8000}, "minItems":3, "maxItems":3 },
     "rotation": { "type": "array", "description": "Degrees about X, Y and Z", "items": { "type": "number", "minimum": -360, "maximum": 360 }, "minItems": 3, "maxItems": 3 },
     "scale": { "type": "array", "description": "Scale along X, Y and Z", "items": { "type": "number", "minimum": 0.01, "maximum": 100 }, "minItems": 3, "maxItems": 3 },
     "hidden": { "type": "boolean" }
@@ -46,6 +46,7 @@
         "energy": { "type": "number", "minimum": 0, "maximum": 100 },
         "range": { "type": "number", "minimum": 0.1, "maximum": 500 },
         "angle": { "type": "number", "minimum": 1, "maximum": 89 },
+        "attenuation": {"type":"number","minimum":0.01,"maximum":10},
         "shadows": { "type": "boolean" }
       }
     },
@@ -56,9 +57,18 @@
       "required": ["source", "asset_id"],
       "defaults": { "source": "library" },
       "fields": {
-        "source": { "type": "string", "enum": ["library", "runtime"] },
+        "source": { "type": "string", "enum": ["library", "runtime", "generated", "polyhaven"] },
         "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,96}$" },
-        "collision": { "type": "boolean" }
+        "collision": { "type": "boolean" },
+        "model_height": {"type": "number", "minimum": 0.01, "maximum": 200},
+        "model_lift": {"type": "number", "minimum": 0, "maximum": 100},
+        "named_collision": {"type": "boolean"},
+        "box_collision": {"type": "boolean"},
+        "trunk": {"type": "array", "items": {"type": "number", "minimum": 0.01, "maximum": 30}, "minItems": 2, "maxItems": 2},
+        "model_finish": {"type": "object", "properties": {"style": {"type": "string", "enum": ["pbr", "flat", "fresco", "foliage", "foliage_core", "coastal_terrain", "wet_sand"]}, "texture": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "textures": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "minItems": 3, "maxItems": 4}, "tint": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 4}, "minItems": 3, "maxItems": 3}, "fallback": {"$ref": "#/$defs/color"}, "tile": {"type": "number", "minimum": 0.05, "maximum": 100}, "roughness": {"type": "number", "minimum": 0, "maximum": 1}, "metallic": {"type": "number", "minimum": 0, "maximum": 1}, "frieze": {"type": "boolean"}, "period": {"type": "number", "minimum": 0.1, "maximum": 100}, "offset": {"type": "number", "minimum": -1000, "maximum": 1000}, "main_view_only": {"type": "boolean"}, "cast_shadow": {"type": "boolean"}, "hidden": {"type": "boolean"}, "sea_level": {"type": "number", "minimum": -1000, "maximum": 1000}, "beach_top": {"type": "number", "minimum": -1000, "maximum": 1000}}, "required": []},
+        "mesh_rules": {"type": "array", "items": {"type": "object", "properties": {"mesh": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "style": {"type": "string", "enum": ["pbr", "flat", "fresco", "foliage", "foliage_core", "coastal_terrain", "wet_sand"]}, "texture": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "textures": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "minItems": 3, "maxItems": 4}, "tint": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 4}, "minItems": 3, "maxItems": 3}, "fallback": {"$ref": "#/$defs/color"}, "tile": {"type": "number", "minimum": 0.05, "maximum": 100}, "roughness": {"type": "number", "minimum": 0, "maximum": 1}, "metallic": {"type": "number", "minimum": 0, "maximum": 1}, "frieze": {"type": "boolean"}, "period": {"type": "number", "minimum": 0.1, "maximum": 100}, "offset": {"type": "number", "minimum": -1000, "maximum": 1000}, "main_view_only": {"type": "boolean"}, "cast_shadow": {"type": "boolean"}, "hidden": {"type": "boolean"}, "sea_level": {"type": "number", "minimum": -1000, "maximum": 1000}, "beach_top": {"type": "number", "minimum": -1000, "maximum": 1000}}, "required": ["mesh"]}, "maxItems": 64},
+        "legacy_prop": {"type": "boolean"},
+        "placement_surface": {"type": "boolean"}
       }
     },
     "box_batch": {
@@ -94,6 +104,129 @@
         "material": {"$ref": "#/$defs/piece_material"},
         "height_scale": {"type": "number", "description": "Scale the batch and its offsets along its local Y axis", "minimum": 0.1, "maximum": 8},
         "cast_shadow": {"type": "boolean"}
+      }
+    },
+    "scatter": {
+      "label": "Vegetation scatter",
+      "description": "Place a seeded patch of plants or rocks, with optional height and slope filters. Put it under a terrain piece to follow its surface.",
+      "script": "res://scripts/pieces/scatter_piece.gd",
+      "required": ["asset_id", "scatter_size"],
+      "defaults": {"asset_id": "grass_medium_02", "scatter_size": [18, 18], "count": 32, "spacing": 1, "range": 90, "shadows": false, "follow_terrain": true},
+      "fields": {
+        "asset_id": {"type": "string", "catalog": "vegetation", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"},
+        "follow_terrain": {"type": "boolean", "description": "Use the parent terrain height when placed under terrain."},
+        "scatter_size": {"type": "array", "items": {"type": "number", "minimum": 0.1, "maximum": 6000}, "minItems": 2, "maxItems": 2},
+        "count": {"type": "number", "minimum": 0, "maximum": 3000},
+        "seed": {"type": "number", "minimum": 0, "maximum": 2147483647},
+        "plant_scale": {"type": "array", "items": {"type": "number", "minimum": 0.01, "maximum": 10}, "minItems": 2, "maxItems": 2},
+        "spacing": {"type": "number", "minimum": 0.1, "maximum": 200},
+        "range": {"type": "number", "minimum": 0, "maximum": 3000},
+        "shadows": {"type": "boolean"},
+        "align": {"type": "number", "minimum": 0, "maximum": 1},
+        "sink": {"type": "number", "minimum": 0, "maximum": 10},
+        "collider": {"type": "number", "minimum": 0, "maximum": 10},
+        "collider_height": {"type": "number", "minimum": 0.1, "maximum": 30},
+        "heightfield": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"},
+        "region": {"type": "array", "items": {"type": "number", "minimum": -8000, "maximum": 8000}, "minItems": 4, "maxItems": 4},
+        "y": {"type": "array", "items": {"type": "number", "minimum": -1000, "maximum": 1000}, "minItems": 2, "maxItems": 2},
+        "slope": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}, "minItems": 2, "maxItems": 2},
+        "noise": {"type": "object", "properties": {"scale": {"type": "number", "minimum": 0.1, "maximum": 3000}, "threshold": {"type": "number", "minimum": 0, "maximum": 1}}, "required": []},
+        "exclusions": {"type": "array", "items": {"type": "array", "items": {"type": "number", "minimum": -8000, "maximum": 8000}, "minItems": 4, "maxItems": 4}, "maxItems": 32}
+      }
+    },
+    "water": {
+      "label": "Water surface",
+      "description": "A pond, round pool, flowing stream or ocean. Place it over a basin or stream bed.",
+      "script": "res://scripts/pieces/water_piece.gd",
+      "required": ["water_kind", "water_size"],
+      "defaults": {"water_kind": "pool", "water_size": [6, 10], "mirror": false},
+      "fields": {
+        "water_kind": {"type": "string", "enum": ["pool", "round", "stream", "ocean"]},
+        "water_size": {"type": "array", "items": {"type": "number", "minimum": 0.1, "maximum": 8000}, "minItems": 2, "maxItems": 2},
+        "flow_speed": {"type": "number", "minimum": -10, "maximum": 10},
+        "detail": {"type": "number", "minimum": 0, "maximum": 240},
+        "mirror": {"type": "boolean"},
+        "water_id": {"type": "string", "maxLength": 96},
+        "water_look": {"type": "object", "properties": {"shallow_color": {"$ref": "#/$defs/color"}, "deep_color": {"$ref": "#/$defs/color"}, "foam_color": {"$ref": "#/$defs/color"}, "roughness_value": {"type": "number", "minimum": 0, "maximum": 1}, "reflection_strength": {"type": "number", "minimum": 0, "maximum": 1}, "ripple_strength": {"type": "number", "minimum": 0, "maximum": 1}, "clarity": {"type": "number", "minimum": 0.05, "maximum": 8}, "foam_amount": {"type": "number", "minimum": 0, "maximum": 2}, "refraction": {"type": "number", "minimum": 0, "maximum": 0.06}}, "required": []}
+      }
+    },
+    "spray": {
+      "label": "Water spray",
+      "description": "An aimable particle jet for fountains and waterfalls.",
+      "script": "res://scripts/pieces/spray_piece.gd",
+      "required": [],
+      "defaults": {"speed": 2.28, "lifetime": 0.42, "amount": 220},
+      "fields": {
+        "spray_direction": {"type": "array", "items": {"type": "number", "minimum": -1, "maximum": 1}, "minItems": 3, "maxItems": 3},
+        "speed": {"type": "number", "minimum": 0, "maximum": 30},
+        "lifetime": {"type": "number", "minimum": 0.1, "maximum": 5},
+        "amount": {"type": "number", "minimum": 1, "maximum": 1200},
+        "spread": {"type": "number", "minimum": 0, "maximum": 90},
+        "landing": {"$ref": "#/$defs/position"}
+      }
+    },
+    "prop": {
+      "label": "Physics prop",
+      "description": "A cone, pressure plate, sliding door or model with a physics body.",
+      "script": "res://scripts/pieces/prop_piece.gd",
+      "validate_record": true,
+      "required": ["prop_kind"],
+      "defaults": {"prop_kind": "traffic_cone", "color": "f27825", "prop_size": 1.0, "locked": false},
+      "storage": {
+        "behavior": {"$ref":"#/$defs/behavior"}
+      },
+      "fields": {
+        "prop_kind": {"type": "string", "enum": ["traffic_cone", "pressure_plate", "sliding_door", "library_model", "imported_model"]},
+        "asset_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"},
+        "color": {"$ref": "#/$defs/color"},
+        "prop_size": {"$ref": "#/$defs/scale"},
+        "locked": {"type": "boolean"},
+        "door_open": {"type": "number", "minimum": 0, "maximum": 1},
+        "stretch": {"$ref": "#/$defs/stretch"},
+        "animation": {"anyOf": [{"type":"null"}, {"$ref":"#/$defs/clip"}]}
+      }
+    },
+    "simulation_water": {
+      "label": "Baked water",
+      "description": "Load a baked pool or coastal domain, including its simulation and optional wet-sand landscape.",
+      "script": "res://scripts/pieces/simulation_water_piece.gd",
+      "validate_record": true,
+      "fixed_transform": true,
+      "required": ["simulation", "domain", "bake", "level"],
+      "defaults": {"simulation": "pool", "domain": [-3, -5, 6, 10], "level": 0},
+      "fields": {
+        "simulation": {"type": "string", "enum": ["pool", "coast"]},
+        "domain": {"type": "array", "items": {"type": "number", "minimum": -8000, "maximum": 8000}, "minItems": 4, "maxItems": 4},
+        "level": {"type": "number", "minimum": -1000, "maximum": 1000},
+        "bake": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"},
+        "water_id": {"type": "string", "maxLength": 96},
+        "landscape": {"type": "object", "properties": {"asset_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "model_finish": {"type": "object", "properties": {"style": {"type": "string", "enum": ["pbr", "flat", "fresco", "foliage", "foliage_core", "coastal_terrain", "wet_sand"]}, "texture": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "textures": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"}, "minItems": 3, "maxItems": 4}, "tint": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 4}, "minItems": 3, "maxItems": 3}, "fallback": {"$ref": "#/$defs/color"}, "tile": {"type": "number", "minimum": 0.05, "maximum": 100}, "roughness": {"type": "number", "minimum": 0, "maximum": 1}, "metallic": {"type": "number", "minimum": 0, "maximum": 1}, "frieze": {"type": "boolean"}, "period": {"type": "number", "minimum": 0.1, "maximum": 100}, "offset": {"type": "number", "minimum": -1000, "maximum": 1000}, "main_view_only": {"type": "boolean"}, "cast_shadow": {"type": "boolean"}, "hidden": {"type": "boolean"}, "sea_level": {"type": "number", "minimum": -1000, "maximum": 1000}, "beach_top": {"type": "number", "minimum": -1000, "maximum": 1000}}, "required": []}}, "required": ["asset_id"]},
+        "ocean_layers": {"type": "array", "maxItems": 3, "items": {"type": "object", "properties": {"size": {"type": "array", "items": {"type": "number", "minimum": 1, "maximum": 8000}, "minItems": 2, "maxItems": 2}, "center": {"type": "array", "items": {"type": "number", "minimum": -8000, "maximum": 8000}, "minItems": 2, "maxItems": 2}, "detail": {"type": "number", "minimum": 0, "maximum": 240}, "horizon": {"type": "boolean"}}, "required": ["size", "center", "detail"]}}
+      }
+    },
+    "buoyant": {
+      "label": "Buoyant model",
+      "description": "A Poly Haven model that floats and drifts with water.",
+      "script": "res://scripts/pieces/buoyant_piece.gd",
+      "required": ["asset_id"],
+      "defaults": {"asset_id": "wine_barrel_01", "model_height": 0.9, "mass": 60},
+      "fields": {
+        "asset_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"},
+        "model_height": {"type": "number", "minimum": 0.01, "maximum": 30},
+        "mass": {"type": "number", "minimum": 0.1, "maximum": 500}
+      }
+    },
+    "model_batch": {
+      "label": "Model batch",
+      "description": "Batch multiple copies of a library model with explicit transforms.",
+      "script": "res://scripts/pieces/model_batch_piece.gd",
+      "required": ["asset_id", "model_instances"],
+      "defaults": {"range": 90, "shadows": false},
+      "fields": {
+        "asset_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"},
+        "range": {"type": "number", "minimum": 0, "maximum": 3000},
+        "shadows": {"type": "boolean"},
+        "model_instances": {"type": "array", "maxItems": 512, "items": {"type": "object", "properties": {"position": {"$ref": "#/$defs/position"}, "rotation": {"type": "array", "items": {"type": "number", "minimum": -360, "maximum": 360}, "minItems": 3, "maxItems": 3}, "size": {"type": "array", "items": {"type": "number", "minimum": 0.01, "maximum": 20}, "minItems": 3, "maxItems": 3}}, "required": ["position", "rotation", "size"]}}
       }
     },
     "terrain": {

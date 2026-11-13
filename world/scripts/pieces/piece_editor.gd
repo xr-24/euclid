@@ -2,7 +2,9 @@ extends RefCounted
 ## One editor for the palette and registered commands. The document is committed before node changes.
 
 signal changed
+signal display_changed
 const Types = preload("res://scripts/pieces/piece_types.gd")
+const PieceWater = preload("res://scripts/pieces/piece_water.gd")
 const Builder = preload("res://scripts/pieces/piece_builder.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
@@ -40,13 +42,52 @@ func _sync_display() -> void:
 	var next: Array = _appearance.call(_document.pieces) if _appearance.is_valid() else _document.pieces
 	if next != _displayed:
 		Builder.sync(_layer, _displayed, next)
+		PieceWater.refresh(_layer)
 		_displayed = next
 		var side: float = _layer.get_parent().get_meta("construct_side", 0.0) if _layer.get_parent() else 0.0
 		if side != 0.0:
 			Effects.set_side(_layer, side)
+		display_changed.emit()
 
 func can_edit() -> bool:
 	return is_instance_valid(_layer) and _editable and _document.error.is_empty()
+
+func apply_prop(id: String, updates: Dictionary, remove := false) -> Dictionary:
+	return update_props({id: null if remove else updates})
+
+func update_props(updates: Dictionary, door_heights := {}) -> Dictionary:
+	if not can_edit():
+		return _failure("This environment does not allow piece edits.")
+	var next: Array = _document.pieces.duplicate(true)
+	for id in updates:
+		var entry := _find(next, id)
+		var values: Variant = updates[id]
+		if not entry.is_empty() and entry.piece.type != "prop":
+			return _failure("That ID belongs to another piece.")
+		if values == null:
+			if entry.is_empty():
+				return _failure("That prop no longer exists.")
+			entry.level.remove_at(entry.index)
+		elif entry.is_empty():
+			next.append(values)
+		else:
+			for key in values:
+				if values[key] == null:
+					entry.piece.erase(key)
+				else:
+					entry.piece[key] = values[key]
+	var undo := _document.history.duplicate()
+	var history_entry := {"pieces": _document.pieces, "time": Time.get_unix_time_from_system()}
+	if not door_heights.is_empty():
+		history_entry["door_heights"] = door_heights
+	undo.append(history_entry)
+	return _save(next, undo, updates.keys()[0] if updates.size() == 1 else "", "Prop saved.")
+
+func has_undo() -> bool:
+	return _document != null and not _document.history.is_empty()
+
+func undo_timestamp() -> float:
+	return float(_document.history[-1].get("time", 0.0)) if has_undo() else -INF
 
 func node_for(id: String) -> Node3D:
 	if not is_instance_valid(_layer) or id.is_empty():
@@ -89,17 +130,27 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 		"undo_piece":
 			if _document.history.is_empty():
 				return _failure("There are no piece edits to undo.")
-			return _save(_document.history[-1].pieces, _document.history.slice(0, -1), "", "Piece edit undone.")
+			var edit: Dictionary = _document.history[-1]
+			var result := _save(edit.pieces, _document.history.slice(0, -1), "", "Piece edit undone.")
+			if result.ok:
+				for door_id in edit.get("door_heights", {}):
+					var door := node_for(door_id)
+					var actuator := door.get_node_or_null("DoorActuator") if door else null
+					if actuator and actuator.has_method("set_opening_height"):
+						actuator.set_opening_height(float(edit.door_heights[door_id]))
+			return result
 	var next: Array = _document.pieces.duplicate(true)
 	var entry := _find(next, id)
 	var values: Dictionary = plan.get("piece_values", {})
 	match plan.tool:
 		"add_piece":
 			var type: String = id
-			id = "piece-" + Crypto.new().generate_random_bytes(8).hex_encode()
+			id = Crypto.new().generate_random_bytes(16).hex_encode() if type == "prop" else "piece-" + Crypto.new().generate_random_bytes(8).hex_encode()
 			var parent: String = plan.get("parent", "")
 			var level := next
 			if not parent.is_empty():
+				if Types.types()[type].get("fixed_transform", false):
+					return _failure("This baked piece belongs at environment level.")
 				var container := _find(next, parent)
 				if container.is_empty():
 					return _failure("The parent piece no longer exists.")
@@ -109,7 +160,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 			var piece: Dictionary = Types.types()[type].get("defaults", {}).duplicate(true)
 			piece.merge(values.duplicate(true), true)
 			piece.merge({"id": id, "type": type})
-			if parent.is_empty() and not piece.has("position"):
+			if parent.is_empty() and not piece.has("position") and not Types.types()[type].get("fixed_transform", false):
 				if placement.is_empty():
 					return _failure("Aim at a surface or provide a position.")
 				piece["position"] = placement
@@ -119,7 +170,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 		"edit_piece":
 			if entry.is_empty():
 				return _failure("That piece no longer exists.")
-			if values.has("position") and not _valid_position(values.position, entry.parent):
+			if values.has("position") and values.position != entry.piece.get("position") and not _valid_position(values.position, entry.parent):
 				return _failure("Place the piece inside this environment's bounds.")
 			var previous: Dictionary = entry.piece
 			var updated := previous.merged(values.duplicate(true), true)
@@ -132,7 +183,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 				return _failure("That piece no longer exists.")
 			entry.level.remove_at(entry.index)
 	var undo: Array[Dictionary] = _document.history.duplicate()
-	undo.append({"pieces": _document.pieces})
+	undo.append({"pieces": _document.pieces, "time": Time.get_unix_time_from_system()})
 	return _save(next, undo, id, {"add_piece": "Piece added.", "edit_piece": "Piece updated.", "remove_piece": "Piece removed."}[plan.tool])
 
 func _valid_position(position: Array, parent: String) -> bool:
@@ -161,7 +212,7 @@ func commit_storage(id: String, updates: Dictionary, expected_revision: int, mes
 		else:
 			entry.piece[key] = updates[key]
 	var undo: Array[Dictionary] = _document.history.duplicate()
-	undo.append({"pieces": _document.pieces})
+	undo.append({"pieces": _document.pieces, "time": Time.get_unix_time_from_system()})
 	return _save(next, undo, id, message)
 
 func _list(id: String, offset: int) -> Dictionary:
@@ -188,7 +239,8 @@ func _list(id: String, offset: int) -> Dictionary:
 		"can_undo": not _document.history.is_empty()}
 
 func _save(next: Array, undo: Array[Dictionary], id: String, message: String) -> Dictionary:
-	if next != _document.pieces:
+	var undo_changed := undo.size() < _document.history.size() or (not undo.is_empty() and undo[-1].has("door_heights"))
+	if next != _document.pieces or undo_changed:
 		if not Types.valid_tree(next):
 			return _failure("Check the selected piece type's required fields and field values.")
 		if not _document.save(next, undo):

@@ -31,6 +31,10 @@ func attach(root: Node3D, zone: String, tools) -> void:
 	_water.attach(root, zone)
 	clear()
 
+func refresh_water(root: Node3D, zone: String) -> void:
+	_water.attach(root, zone)
+	clear()
+
 func clear() -> void:
 	if not _selection.is_empty() or not _water_id.is_empty():
 		_preview.show_prop(null)

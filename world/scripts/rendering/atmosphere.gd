@@ -10,6 +10,7 @@ extends RefCounted
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
+const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
 const HDRI_DIR := "res://assets/thirdparty/polyhaven/hdri/"
 ## Field -> schema type in data/commands/schema.json.
 const FIELDS := {"sun_azimuth": "sun_azimuth", "sun_elevation": "sun_elevation", "sun_color": "color",
@@ -122,7 +123,7 @@ static func skies() -> Array:
 			var sky := file.trim_suffix(".import")
 			if sky.get_extension() in ["hdr", "exr"] and sky not in _skies:
 				_skies.append(sky)
-	return _skies.duplicate()
+	return _skies + RuntimeSkies.installed()
 
 ## Where the photographed sun sits in an HDRI (azimuth offset u, elevation), from sun.json.
 static func photo_sun(hdri: String) -> Dictionary:

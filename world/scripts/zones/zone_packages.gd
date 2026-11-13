@@ -67,13 +67,11 @@ static func valid(value: Variant) -> bool:
 			or value.get("workstation") not in ["grid", "villa", "beach"] or not _number(value.get("capture_warmup")) \
 			or value.capture_warmup < 0 or value.capture_warmup > 120:
 		return false
-	# An environment is a document of pieces; a code builder is legacy (see docs/environment-authoring.md).
-	if not value.has("builder") and not value.has("pieces"):
+	if not PieceTypes.valid_tree(value.get("pieces")) or value.has("builder"):
 		return false
-	if value.has("builder") and (not value.builder is String or not value.builder.begins_with("res://scripts/zones/") \
-			or ".." in value.builder or value.builder.get_extension() != "gd"):
-		return false
-	if value.has("pieces") and not PieceTypes.valid_tree(value.pieces):
+	var geometry: Variant = value.get("required_geometry", [])
+	if not geometry is Array or not geometry.all(func(id: Variant) -> bool:
+		return id is String and id.is_valid_identifier()):
 		return false
 	if not PieceDocument.valid_revision(value.get("piece_revision", 0)):
 		return false

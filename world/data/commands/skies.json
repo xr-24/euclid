@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "search_skies",
+      "description": "Search Poly Haven for HDRI panoramas.",
+      "service": "world",
+      "handler": "_sky_command",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "query": "material_query"
+      },
+      "required": [
+        "query"
+      ],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": false
+    },
+    {
+      "name": "import_sky",
+      "description": "Download a 2K HDRI by Poly Haven ID. Use the returned key with preview_atmosphere.",
+      "service": "world",
+      "handler": "_sky_command",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "terrain_paint"
+      },
+      "required": [
+        "target"
+      ],
+      "scope": "session",
+      "undo": "none",
+      "mutates_world": false
+    }
+  ]
+}

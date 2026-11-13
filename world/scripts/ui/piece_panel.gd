@@ -4,6 +4,7 @@ extends VBoxContainer
 const Registry = preload("res://scripts/workshop/command_registry.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
+const Library = preload("res://scripts/asset_library.gd")
 const Types = preload("res://scripts/pieces/piece_types.gd")
 
 var _editor: PieceEditor
@@ -108,7 +109,7 @@ func _show_fields(record: Dictionary) -> void:
 		return
 	var fields := _editor.fields(record.type)
 	for key in fields:
-		if key in ["id", "type"]:
+		if key in ["id", "type"] or (Types.types()[record.type].get("fixed_transform", false) and key in ["position", "rotation", "scale"]):
 			continue
 		_add_field(key, fields[key], record.get(key), _field_controls, _fields)
 
@@ -125,7 +126,20 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 		inputs[key] = {"children": group}
 		return
 	var control: Control
-	if field.has("enum") or field.get("type") == "boolean":
+	if field.get("catalog") == "vegetation":
+		var choices := OptionButton.new()
+		choices.fit_to_longest_item = false
+		choices.add_item("Choose a plant or rock")
+		for id: String in Library.ids():
+			var item := Library.info(id)
+			if item.category not in ["plant", "tree", "rock"] or not Library.has(id):
+				continue
+			choices.add_item(item.get("title", id))
+			choices.set_item_metadata(choices.item_count - 1, id)
+			if id == value:
+				choices.select(choices.item_count - 1)
+		control = choices
+	elif field.has("enum") or field.get("type") == "boolean":
 		var options := OptionButton.new()
 		if value == null:
 			options.add_item("Default")

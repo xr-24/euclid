@@ -5,6 +5,10 @@ extends VBoxContainer
 
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 
+const SkyClient = preload("res://scripts/agents/sky_client.gd")
+const Browser = preload("res://scripts/ui/poly_haven_browser.gd")
+const SkyCache = preload("res://scripts/assets/runtime_skies.gd")
+
 ## field, label, minimum, maximum, step, format
 const SLIDERS := {
 	"Sun": [["sun_azimuth", "Direction", 0.0, 360.0, 1.0, "%d°"], ["sun_elevation", "Height", -30.0, 90.0, 0.5, "%.1f°"],
@@ -19,6 +23,7 @@ const COLORS := {"Sun": [["sun_color", "Color"]], "Fog": [["fog_color", "Color"]
 
 var _atmosphere: Atmosphere
 var _zone := ""
+var _client: SkyClient
 var _sliders := {}
 var _readouts := {}
 var _formats := {}
@@ -26,8 +31,10 @@ var _colors := {}
 var _sky := OptionButton.new()
 var _notice := Label.new()
 var _loading := false
+var _options: Array = []
 
-func setup(atmosphere: Atmosphere, zone: String, close: Callable) -> void:
+func setup(atmosphere: Atmosphere, zone: String, close: Callable, client: SkyClient) -> void:
+	_client = client
 	_atmosphere = atmosphere
 	_zone = zone
 	add_theme_constant_override("separation", 8)
@@ -53,11 +60,13 @@ func setup(atmosphere: Atmosphere, zone: String, close: Callable) -> void:
 		header.add_theme_font_size_override("font_size", 18)
 		body.add_child(header)
 		if section == "Sky":
-			for sky in Atmosphere.skies():
-				_sky.add_item("Painted gradient" if sky == "gradient" else str(sky).get_basename().replace("_", " "))
-				_sky.set_item_metadata(_sky.item_count - 1, sky)
+			var sky_row := HBoxContainer.new()
+			_sky.size_flags_horizontal = SIZE_EXPAND_FILL
+			_sky.fit_to_longest_item = false
 			_sky.item_selected.connect(func(index: int) -> void: _change("sky", _sky.get_item_metadata(index)))
-			body.add_child(_sky)
+			sky_row.add_child(_sky)
+			_button(sky_row, "Import…", _browse_sky)
+			body.add_child(sky_row)
 		for spec in SLIDERS.get(section, []):
 			_slider(body, spec)
 		for spec in COLORS.get(section, []):
@@ -117,7 +126,15 @@ func _load() -> void:
 	if not is_inside_tree():
 		return
 	_loading = true
-	var values: Dictionary = _atmosphere.inspect(_zone).values
+	var summary := _atmosphere.inspect(_zone)
+	var values: Dictionary = summary.values
+	if _options != summary.skies:
+		_options = summary.skies
+		_sky.clear()
+		for sky: String in _options:
+			var label := "Painted gradient" if sky == "gradient" else sky.trim_prefix(SkyCache.PREFIX).get_basename().capitalize()
+			_sky.add_item(label)
+			_sky.set_item_metadata(_sky.item_count - 1, sky)
 	for field in _sliders:
 		var slider: HSlider = _sliders[field]
 		slider.set_value_no_signal(float(values.get(field, slider.min_value)))
@@ -128,6 +145,13 @@ func _load() -> void:
 		if _sky.get_item_metadata(index) == values.get("sky"):
 			_sky.select(index)
 	_loading = false
+
+func _browse_sky() -> void:
+	var browser := Browser.new()
+	add_child(browser)
+	browser.setup("sky", "skies", _client.search, _client.import_sky)
+	browser.chosen.connect(func(key: String, _title: String) -> void: _change("sky", key))
+	browser.popup_centered(Vector2i(450, 330))
 
 func _change(field: String, value: Variant) -> void:
 	if _loading:

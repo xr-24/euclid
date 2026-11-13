@@ -411,10 +411,10 @@ rule and the roadmap. To add one:
    factory in `world/scripts/pieces/` with `static func build(record: Dictionary) -> Node3D`.
    The factory makes the node; `pieces/piece_builder.gd` owns its transform, visibility,
    children and `piece_id` metadata. Nothing may name a specific environment.
-3. Do not add a code builder. The three packages that still have one (`construct`, `villa`,
-   `beach`) are recorded in `scripts/open-engine-debt.json`, and `npm test` fails if the list grows.
-4. Graphics cost budgets belong in `GraphicsSettings`. Water metadata follows the existing
-   WaterSystem contract until water becomes a piece type.
+3. Declare every environment as a piece document. Model and baked-water pieces reference
+   installed assets by ID. The open-engine tests check packages and their registered fields.
+4. Graphics cost budgets belong in `GraphicsSettings`. The piece layer registers surfaces,
+   baked domains, spray sources and buoyant objects with the existing WaterSystem contract.
 5. Run `scripts/check.ps1`, inspect rendered views, and run `scripts/benchmark.ps1` before
    accepting new art or rendering features.
 

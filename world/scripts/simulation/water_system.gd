@@ -6,7 +6,6 @@ const PoolReflection = preload("res://scripts/rendering/pool_reflection.gd")
 const WaterEdits = preload("res://scripts/workshop/water_edits.gd")
 const SEA_LEVEL := -0.55
 const SIM_DIR := "res://thirdparty/shorewaves/"
-const SIM_META := "res://assets/generated/shore_sim.json"
 
 static func water_material(sea: bool) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
@@ -27,11 +26,11 @@ static func water_material(sea: bool) -> ShaderMaterial:
 	return mat
 
 
-static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
+static func build_pool_surface(root: Node3D, layout: Dictionary, bake: String, id := "reflecting_pool", label := "Reflecting pool") -> Dictionary:
 	var p: Array = layout.pool
 	var water_y := float(layout.water_y)
 	var rect := Rect2(float(p[0]), float(p[2]), float(p[1]) - float(p[0]), float(p[3]) - float(p[2]))
-	var meta_path := "res://assets/generated/villa_pool.json"
+	var meta_path := bake + ".json"
 	var body := {}
 	if Assets.has_rd and FileAccess.file_exists(meta_path) and ResourceLoader.exists(SIM_DIR + "sim_controller.gd"):
 		var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(meta_path))
@@ -43,8 +42,8 @@ static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
 		sim.custom_cfg = {"n": n, "dx": dx, "dt": 0.002, "sub": 16, "depth0": 0.5, "mode": 0.0, "closed_walls":true,
 			"kappa": 0.012, "amp": 0.0, "period": 5.0, "solo_h": 0.05, "solo_x0": 1.0}
 		sim.custom_initial = {
-			"bottom": FileAccess.get_file_as_bytes("res://assets/generated/villa_pool_bottom.bin"),
-			"state": FileAccess.get_file_as_bytes("res://assets/generated/villa_pool_state.bin"),
+			"bottom": FileAccess.get_file_as_bytes(bake + "_bottom.bin"),
+			"state": FileAccess.get_file_as_bytes(bake + "_state.bin"),
 		}
 		sim.name = "PoolSim"
 		sim.verbose = OS.has_environment("CONSTRUCT_SIM_VERBOSE")
@@ -84,79 +83,26 @@ static func build_pool_surface(root: Node3D, layout: Dictionary) -> Dictionary:
 		reflection.name = "PoolReflection"
 		reflection.configure(wmat,water,water_y)
 		root.add_child(reflection)
-		WaterEdits.register(root, "reflecting_pool", "Reflecting pool", rect, water_y, [wmat])
+		WaterEdits.register(root, id, label, rect, water_y, [wmat])
 		body = {"sim": sim, "origin": origin, "dx": dx, "n": n, "sea_level": water_y, "profile":"pool", "player_wet":false}
 	else:
 		var still := MeshInstance3D.new()
 		var plane := PlaneMesh.new()
 		plane.size = Vector2(float(p[1]) - float(p[0]), float(p[3]) - float(p[2]))
 		still.mesh = plane
-		still.position = Vector3(0, water_y, (float(p[2]) + float(p[3])) * 0.5)
+		still.position = Vector3(rect.get_center().x, water_y, rect.get_center().y)
 		still.material_override = water_material(false)
 		root.add_child(still)
-		WaterEdits.register(root, "reflecting_pool", "Reflecting pool", rect, water_y, [still.material_override])
+		WaterEdits.register(root, id, label, rect, water_y, [still.material_override])
 	return body
 
 
-static func build_pool(root: Node3D, layout: Dictionary) -> Dictionary:
-	var body := build_pool_surface(root, layout)
-	var p: Array = layout.pool
-	var water_y := float(layout.water_y)
-	# The earlier villa builder supplies its own fixed fountain layout here.
-	var sources := []
-	for x in [-1.1, 1.1]:
-		var base := Vector3(x, 0.06, float(p[2]) - 0.32)
-		var ped := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(0.55, 0.62, 0.5)
-		ped.mesh = box
-		ped.position = base + Vector3(0, 0.31, 0)
-		ped.material_override = Assets.pbr("marble_rock_02", 1.2, Color(1.07, 1.03, 0.96))
-		root.add_child(ped)
-		Assets.place(root, "lion_head", base + Vector3(0, 0.62, 0), 180.0, 0.48)
-		var mouth := base + Vector3(0, 0.78, 0.2)
-		root.add_child(_spout(mouth))
-		var landing := mouth + Vector3(0, water_y - mouth.y, 0.62)
-		sources.append(landing)
-	var water_meta := {"sims": [body] if not body.is_empty() else [], "floaters": [], "sources": sources}
-	root.set_meta("water", water_meta)
-	return body
-
-## A thin arcing jet of water from a fountain mouth.
-
-static func _spout(at: Vector3) -> GPUParticles3D:
-	var jet := GPUParticles3D.new()
-	jet.position = at
-	jet.amount = 220
-	jet.lifetime = 0.42
-	jet.preprocess = 1.0
-	jet.local_coords = false
-	var pm := ParticleProcessMaterial.new()
-	pm.direction = Vector3(0, 0.55, 1)
-	pm.spread = 2.5
-	pm.initial_velocity_min = 2.2
-	pm.initial_velocity_max = 2.35
-	pm.gravity = Vector3(0, -9.8, 0)
-	pm.scale_min = 0.6
-	pm.scale_max = 1.0
-	jet.process_material = pm
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.035, 0.07)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.85, 0.95, 1.0, 0.55)
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	quad.material = mat
-	jet.draw_pass_1 = quad
-	jet.visibility_aabb = AABB(Vector3(-1, -2, -1), Vector3(2, 3, 3))
-	return jet
-
-static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_materials: Array[ShaderMaterial]) -> Dictionary:
-	if not Assets.has_rd or not FileAccess.file_exists(SIM_META) \
+static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_materials: Array[ShaderMaterial],
+		bake: String, sea_level: float, ocean_bounds: Rect2) -> Dictionary:
+	if not Assets.has_rd or not FileAccess.file_exists(bake + ".json") \
 			or not ResourceLoader.exists(SIM_DIR + "sim_controller.gd"):
 		return {}
-	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SIM_META))
+	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(bake + ".json"))
 	var n := int(meta.n)
 	var dx := float(meta.dx)
 	var size := n * dx
@@ -166,8 +112,8 @@ static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_material
 	sim.custom_cfg = {"n": n, "dx": dx, "dt": 0.0032, "sub": 12, "depth0": meta.depth0, "mode": 2.0,
 		"kappa": 0.012, "amp": 0.14, "period": 6.0, "solo_h": 0.5, "solo_x0": 4.0}
 	sim.custom_initial = {
-		"bottom": FileAccess.get_file_as_bytes("res://assets/generated/shore_sim_bottom.bin"),
-		"state": FileAccess.get_file_as_bytes("res://assets/generated/shore_sim_state.bin"),
+		"bottom": FileAccess.get_file_as_bytes(bake + "_bottom.bin"),
+		"state": FileAccess.get_file_as_bytes(bake + "_state.bin"),
 	}
 	sim.wave_amp = 0.14     # one dominant incoming swell, shared with the ocean surface
 	sim.wave_period = 6.0   # seconds
@@ -194,7 +140,8 @@ static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_material
 	wmat.set_shader_parameter("DOMAIN_SIZE", size)
 	wmat.set_shader_parameter("GRID_RES", float(n))
 	wmat.set_shader_parameter("sim_origin", origin)
-	wmat.set_shader_parameter("sea_level", SEA_LEVEL)
+	wmat.set_shader_parameter("sea_level", sea_level)
+	wmat.set_shader_parameter("ocean_patch_bounds", Vector4(ocean_bounds.position.x, ocean_bounds.position.y, ocean_bounds.end.x, ocean_bounds.end.y))
 	wmat.set_shader_parameter("detail_normal_strength", 0.08)
 	wmat.set_shader_parameter("detail_normal_a", Assets.noise_texture(73,0.025,true,256))
 	wmat.set_shader_parameter("detail_normal_b", Assets.noise_texture(97,0.037,true,256))
@@ -225,24 +172,24 @@ static func build_surf(root: Node3D, terrain_mat: ShaderMaterial, ocean_material
 			# interpolates a different height and leaves a visible rectangular crack.
 			for mesh in root.find_children("*","MeshInstance3D",true,false):
 				if mesh.material_override == ocean:
-					mesh.mesh = _ocean_ring(origin,size,n)
+					mesh.mesh = _ocean_ring(origin,size,n,ocean_bounds)
 					mesh.position = Vector3.ZERO
 		# A single shader and wave clock across all three meshes: same colour, height and normals.
 		ocean.shader = wmat.shader
 		for uniform in ["tx_state","tx_bottom","tx_derived","lace_tex","flow_noise_tex",
 				"DOMAIN_SIZE","GRID_RES","sim_origin","sea_level","detail_normal_strength",
-				"detail_normal_a","detail_normal_b","wave_amp","wave_period","wave_depth","shore_edge_smoothing","refraction_strength","column_optics"]:
+				"detail_normal_a","detail_normal_b","wave_amp","wave_period","wave_depth","shore_edge_smoothing","refraction_strength","column_optics","ocean_patch_bounds"]:
 			ocean.set_shader_parameter(uniform,wmat.get_shader_parameter(uniform))
 		ocean.set_shader_parameter("surface_role",2 if horizon else 1)
 	var surfaces: Array[ShaderMaterial] = [wmat]
 	surfaces.append_array(ocean_materials)
-	return {"sim": sim, "origin": origin, "dx": dx, "n": n, "sea_level": SEA_LEVEL,
+	return {"sim": sim, "origin": origin, "dx": dx, "n": n, "sea_level": sea_level,
 		"profile":"shore", "player_wet":false, "surfaces":surfaces, "terrain":terrain_mat}
 
-static func _ocean_ring(origin: Vector2, size: float, n: int) -> ArrayMesh:
+static func _ocean_ring(origin: Vector2, size: float, n: int, bounds: Rect2) -> ArrayMesh:
 	var inner := [origin+Vector2(0.5,0.5),origin+Vector2(size-0.5,0.5),
 		origin+Vector2(size-0.5,size-0.5),origin+Vector2(0.5,size-0.5)]
-	var outer := [Vector2(-130,-170),Vector2(130,-170),Vector2(130,30),Vector2(-130,30)]
+	var outer := [bounds.position, Vector2(bounds.end.x, bounds.position.y), bounds.end, Vector2(bounds.position.x, bounds.end.y)]
 	var rings := [0.0,0.03,0.08,0.18,0.4,1.0]
 	var count := 4*(n-1)
 	var vertices := PackedVector3Array()
@@ -303,11 +250,10 @@ static func _sim_cell(body: Dictionary, p: Vector3) -> Vector2:
 ## splashes back into the simulation. Returns the water surface height at the player.
 
 static func tick(root: Node3D, player: CharacterBody3D, delta: float) -> Dictionary:
-	if root == null or not root.has_meta("water"):
+	if root == null or (not root.has_meta("water") and not root.has_meta("water_surfaces")):
 		return {"has": false, "level": -INF}
-	var w: Dictionary = root.get_meta("water")
+	var w: Dictionary = root.get_meta("water", {})
 	w["time"] = float(w.get("time",0.0))+delta
-	var result := {"has": w.has("sea_level"), "level": w.get("sea_level", -INF)}
 	var floaters: Array = w.get("floaters", [])
 	var points: Array[Vector3] = [player.global_position]
 	for f in floaters:
@@ -315,7 +261,7 @@ static func tick(root: Node3D, player: CharacterBody3D, delta: float) -> Diction
 	var levels := []
 	var flows := []
 	for p in points:
-		levels.append(w.get("sea_level", -INF))
+		levels.append(_surface_level(root, p, w.get("sea_level", -INF)))
 		flows.append(Vector3.ZERO)
 	for body in w.get("sims", []):
 		var sim: Node = body.sim
@@ -354,10 +300,30 @@ static func tick(root: Node3D, player: CharacterBody3D, delta: float) -> Diction
 			if cs.x >= 0.0 and cs.y >= 0.0 and cs.x < body.n and cs.y < body.n:
 				var impulse := Interactions.fountain(w.time,delta,src.x*3.0)
 				sim.poke(cs.x, cs.y, 0.18 / body.dx, impulse.x, impulse.y, 0.0)
-	result = {"has": levels[0] > -INF, "level": levels[0]}
+	var result := {"has": levels[0] > -INF, "level": levels[0]}
 	for k in floaters.size():
 		_float(floaters[k], levels[k + 1], flows[k + 1])
 	return result
+
+static func _surface_level(root: Node3D, point: Vector3, base: float) -> float:
+	for surface: Dictionary in root.get_meta("water_surfaces", []):
+		var node: Node3D = surface.surface
+		if not node.is_visible_in_tree():
+			continue
+		var basis := node.global_basis
+		var normal := basis.x.cross(basis.z).normalized()
+		if absf(normal.y) < 0.01:
+			continue
+		var origin := node.global_position
+		var height := origin.y - (normal.x * (point.x - origin.x) + normal.z * (point.z - origin.z)) / normal.y
+		if height < base or (surface.kind != "ocean" and point.y < height - 30.0):
+			continue
+		var local := node.to_local(Vector3(point.x, height, point.z))
+		var at := Vector2(local.x, local.z)
+		var size: Vector2 = surface.size
+		if (at.length() <= size.x * 0.5 if surface.kind == "round" else Rect2(-size * 0.5, size).has_point(at)):
+			base = height
+	return base
 
 static func _float(body: RigidBody3D, level: float, flow: Vector3) -> void:
 	if level == -INF or body.freeze:

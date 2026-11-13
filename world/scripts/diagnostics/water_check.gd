@@ -29,7 +29,7 @@ func start(target: Node3D) -> void:
 	raw.store_buffer(resting_pool.get_data())
 	raw.close()
 	await _capture("pool_rest")
-	var reflection: Node = world.zone_root.get_node_or_null("PoolReflection")
+	var reflection: Node = world.zone_root.find_child("PoolReflection", true, false)
 	assert(reflection != null and reflection.reflected_frames > 0)
 	results["reflection_frames"] = reflection.reflected_frames
 	var mirror_image: Image = reflection.viewport.get_texture().get_image()

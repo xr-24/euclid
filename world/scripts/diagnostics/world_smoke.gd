@@ -10,11 +10,11 @@ static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
 	await _check_grid_pieces(world, tree)
 	await _check_prop_lock(world, tree)
+	await _check_prop_lock(world, tree, true)
+	await _check_piece_water(world, tree)
 	for zone in world.manifest.zones:
 		world._load_zone(zone.id)
 		var package := Packages.definition(zone.id)
-		if package.has("builder"):
-			assert(world.zone_root.get_child_count() > 5)
 		for piece: Dictionary in package.get("pieces", []):
 			var node: Node = world.zone_root.get_node_or_null(PieceBuilder.LAYER + "/Piece_" + str(piece.id))
 			assert(node != null and node.get_meta("piece_type") == piece.type)
@@ -51,7 +51,7 @@ static func run(world: Node3D) -> void:
 	var old_root: Node = world.zone_root
 	await world._shift("beach", 0.5)
 	await tree.process_frame # the old zone is queued for deletion
-	assert(world.zone_id == "beach" and not is_instance_valid(old_root) and world.zone_root.get_child_count() > 5)
+	assert(world.zone_id == "beach" and not is_instance_valid(old_root) and world.zone_root.get_node(PieceBuilder.LAYER).get_child_count() > 5)
 	assert(not world.interactables.is_empty() and not world.shifting)
 	var after: Vector3 = world.player.position
 	assert(Vector2(after.x, after.z).distance_to(Vector2(before.x, before.z)) < 0.5)
@@ -100,10 +100,13 @@ static func _check_grid_pieces(world: Node3D, tree: SceneTree) -> void:
 	assert(world.pieces.execute({"tool": "undo_piece"}).ok)
 	print("CONSTRUCT_GRID_PIECES_OK")
 
-static func _check_prop_lock(world: Node3D, tree: SceneTree) -> void:
+static func _check_prop_lock(world: Node3D, tree: SceneTree, as_piece := false) -> void:
 	world.set_physics_process(false)
 	var tools = world.world_tools
 	var spawned: Dictionary = tools.execute("spawn", {"type": "traffic_cone", "position": [0.65, 0.4, -2.6]})
+	if as_piece:
+		assert(tools.execute("delete", {"id": spawned.id}).ok)
+		spawned = world.pieces.execute({"tool": "add_piece", "target": "prop", "piece_values": {"position": [0.65, 0.4, -2.6]}})
 	assert(spawned.ok)
 	var body: RigidBody3D = tools.scene_node(spawned.id)
 	var grab := InputEventMouseButton.new()
@@ -139,3 +142,20 @@ static func _check_prop_lock(world: Node3D, tree: SceneTree) -> void:
 	assert(tools.execute("delete", {"id": spawned.id}).ok)
 	grabber.cancel()
 	world.set_physics_process(true)
+
+static func _check_piece_water(world: Node3D, tree: SceneTree) -> void:
+	world._load_zone("open_ground")
+	var water: Dictionary = await world._execute_world_tool({"tool": "add_piece", "target": "water",
+		"piece_values": {"water_kind": "stream", "position": [6, 1, -8], "water_size": [4, 10], "flow_speed": 2}})
+	assert(water.ok)
+	var player: CharacterBody3D = world.player
+	player.position = Vector3(6, 0.2, -8)
+	await tree.physics_frame
+	assert(is_equal_approx(world.zone_root.get_meta("water_surfaces")[0].surface.global_position.y, 1.0))
+	assert(not world.scanner._water.inspect(water.id).is_empty())
+	var planted: Dictionary = await world._execute_world_tool({"tool": "add_piece", "target": "scatter", "parent": "ground",
+		"piece_values": {"count": 6, "position": [6, 0, -8], "scatter_size": [10, 10]}})
+	assert(planted.ok and world.pieces.node_for(planted.id).get_meta("scatter_count") == 6)
+	assert((await world._execute_world_tool({"tool": "undo_piece"})).ok)
+	assert((await world._execute_world_tool({"tool": "undo_piece"})).ok)
+	assert(world.zone_root.get_meta("water_surfaces").is_empty())

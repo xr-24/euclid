@@ -49,6 +49,18 @@ func _material_command(plan: Dictionary) -> Dictionary:
 		imported["message"] = "%s is ready to paint." % imported.material.name
 	return imported
 
+func _sky_command(plan: Dictionary) -> Dictionary:
+	if plan.tool == "search_skies":
+		var result: Dictionary = await _world.sky_client.search(plan.query)
+		if result.ok:
+			result["message"] = ", ".join(result.skies.map(func(item: Dictionary) -> String:
+				return "%s (%s)" % [item.name, item.id])) if not result.skies.is_empty() else "No skies matched that search."
+		return result
+	var imported: Dictionary = await _world.sky_client.import_sky(plan.target)
+	if imported.ok:
+		imported["message"] = "%s is ready. Preview it using sky %s." % [imported.sky.name, imported.sky.key]
+	return imported
+
 func _inspect_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.inspect(plan.get("target", ""))
 

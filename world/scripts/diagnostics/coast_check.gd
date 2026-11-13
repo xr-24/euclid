@@ -26,7 +26,7 @@ func start(target: Node3D) -> void:
 		world.camera.global_position = Vector3(3.4,1.75,19)
 		world.camera.look_at(Vector3(0,0,10))
 		await get_tree().create_timer(3.0).timeout
-		var reflection: Node = world.zone_root.get_node("PoolReflection")
+		var reflection: Node = world.zone_root.find_child("PoolReflection", true, false)
 		assert(reflection.reflected_frames>0 and reflection.material.get_shader_parameter("pool_reflection_enabled"))
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(output.path_join("pool_current.png"))

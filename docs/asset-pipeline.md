@@ -59,7 +59,7 @@ Avoid running arbitrary Python from downloaded theme packs. Review processing sc
 - `world/assets/generated/villa_estate.glb`: architecture and garden, joined by material. `COL_` meshes get trimesh collision in Godot; `ART_` meshes are visual only. Godot maps the material names (Limestone, Marble floor, Plaster, Fresco, Fresco frieze, Roof tiles, Timber, Gravel, Soil, Hedge, Pool basin, Window) to Poly Haven texture sets, and the frescoes to `fresco.gdshader`, a procedural Pompeian wall over `red_plaster_weathered`.
 - `world/assets/generated/villa_hills.glb`: the surrounding hills (`hillside.gdshader`, grass and dry ground blended by slope and noise), falling steeply below the terrace to a distant sea.
 - `world/assets/generated/villa_pool_bottom.bin`, `villa_pool_state.bin` and `villa_pool.json`: seabed and initial state for the reflecting pool's shallow-water solver.
-- `world/assets/generated/villa_layout.json`: court, pool and bed rectangles, used by Godot to place planting and statuary.
+- `world/assets/generated/villa_layout.json`: court, pool and bed rectangles, used to derive the villa package placements.
 
 Extra Poly Haven assets fetched for it: textures `red_plaster_weathered`, `gravel_ground_01`, `forest_leaves_02`, `aerial_grass_rock`, `dry_ground_01`, `marble_01`, `white_plaster_02`, `dark_wooden_planks`; models `lion_head`, `horse_statue_01`, `jacaranda_tree`, `island_tree_01`, `searsia_lucida`, `shrub_01`, `shrub_03`, and for the shore's floating props `wine_barrel_01`, `wooden_crate_01` and `ocean_buoy`.
 
@@ -85,7 +85,7 @@ how to add a model. The pieces, each with one job:
   included), `CREDITS.md` and a README per licence folder.
 - `world/scripts/asset_library.gd`: loads the catalog; zones ask it for models by id.
 - `world/scripts/scene_dressing.gd` and `world/data/dressing/*.json`: where models stand in a zone,
-  as data. The villa's statuary is `world/data/dressing/villa.json`.
+  as data. The villa's statuary is in `world/data/zones/villa/zone.json`.
 
 Non-commercial models (`cc-by-nc*` folders) are fine while Euclid is free and not monetised.
 Delete those folders and rebuild the catalog before selling it, monetising it or publishing it
@@ -108,11 +108,10 @@ The villa is now a whole estate on a bluff, built by small single-purpose script
   villa), `villa_coast_far.glb` (horizon ring to 2 km) and the height field
   `villa_coast_height.bin/.json` used for placing plants and rocks.
 
-In the game, `world/scripts/zones/villa.gd` assembles the zone; `world/shaders/coast_terrain.gdshader`
-paints the coast (grassland, chaparral, ice plant, earth, sandstone, sand); `world/scripts/scatter.gd`
-places the wild planting and rocks from `world/data/vegetation/villa_coast.json` as tiled multimeshes
-with distance culling, using `world/scripts/terrain_field.gd` to read the height field. Statues and
-furnishings stay in `world/data/dressing/villa.json`.
+In the game, the villa package in `world/data/zones/villa/zone.json` specifies the
+generated geometry, water bakes, and placements. The coastal terrain shader shades the
+bluff and tiled multimeshes render the wild planting and rocks. Statuary and garden
+furnishings use the same model pieces as the in-world editor.
 
 Extra Poly Haven assets for this pass: textures `cliff_side`, `rocky_terrain_02`, `sparse_grass`,
 `coast_sand_01`, `old_mosaic_floor`, `marble_mosaic_tiles`, `sandstone_blocks_08`, `leafy_grass`;

@@ -89,11 +89,11 @@ static func apply(root: Node3D, path: String, field: RefCounted, keep_clear: Arr
 		index += 1
 		if not rule is Dictionary or not AssetLibrary.has(str(rule.get("asset", ""))):
 			continue
-		var placed := _rule(root, rule, field, keep_clear, int(data.get("seed", 1)) * 7919 + index)
+		var placed := plant(root, rule, field, keep_clear, int(data.get("seed", 1)) * 7919 + index)
 		total += placed
 	return total
 
-static func _rule(root: Node3D, rule: Dictionary, field: RefCounted, keep_clear: Array, seed: int) -> int:
+static func plant(root: Node3D, rule: Dictionary, field: RefCounted, keep_clear: Array, seed: int) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var noise: FastNoiseLite = null
@@ -102,7 +102,9 @@ static func _rule(root: Node3D, rule: Dictionary, field: RefCounted, keep_clear:
 		noise.seed = seed
 		noise.frequency = 1.0 / float(rule.noise.get("scale", 30.0))
 		noise.fractal_octaves = 3
-	var region: Array = rule.get("region", [field.x0, field.x0 + (field.nx - 1) * field.step, field.z0, field.z0 + (field.nz - 1) * field.step])
+	var region: Array = rule.get("region", [])
+	if region.is_empty():
+		region = [field.x0, field.x0 + (field.nx - 1) * field.step, field.z0, field.z0 + (field.nz - 1) * field.step]
 	var y_band: Array = rule.get("y", [-INF, INF])
 	var slope: Array = rule.get("slope", [0.0, 1.0])  # range of normal.y
 	var spacing := float(rule.get("spacing", 1.0))

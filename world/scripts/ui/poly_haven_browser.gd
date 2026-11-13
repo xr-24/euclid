@@ -1,20 +1,25 @@
 extends AcceptDialog
-## Material search and import. The selected result becomes the active paint brush.
+## Shared Poly Haven search and import dialog.
 
-const Client = preload("res://scripts/agents/material_client.gd")
 const Look = preload("res://scripts/ui/terminal_theme.gd")
 signal chosen(id: String, title: String)
 
-var _client: Client
+var _search_catalog: Callable
+var _import_asset: Callable
+var _kind: String
+var _catalog: String
 var _query := LineEdit.new()
 var _results := ItemList.new()
 var _status := Label.new()
 var _search: Button
 var _busy := false
 
-func setup(client: Client) -> void:
-	_client = client
-	title = "Import material"
+func setup(kind: String, catalog: String, search_catalog: Callable, import_asset: Callable) -> void:
+	_kind = kind
+	_catalog = catalog
+	_search_catalog = search_catalog
+	_import_asset = import_asset
+	title = "Import " + kind
 	exclusive = true
 	var style := Look.frame_style()
 	add_theme_stylebox_override("embedded_border", style)
@@ -55,17 +60,17 @@ func _find() -> void:
 		return
 	_set_busy(true, "Searching…")
 	_results.clear()
-	var result := await _client.search(query)
+	var result: Dictionary = await _search_catalog.call(query)
 	if not result.ok:
 		_set_busy(false, result.message)
 		return
-	for item: Dictionary in result.materials:
+	for item: Dictionary in result[_catalog]:
 		var index := _results.add_item(item.name)
 		_results.set_item_metadata(index, item.id)
 		_results.set_item_tooltip(index, item.author)
 	if _results.item_count > 0:
 		_results.select(0)
-	_set_busy(false, "Powered by Poly Haven" if _results.item_count > 0 else "No matching materials.")
+	_set_busy(false, "Powered by Poly Haven" if _results.item_count > 0 else "No matching results.")
 
 func _import() -> void:
 	var selected := _results.get_selected_items()
@@ -73,11 +78,12 @@ func _import() -> void:
 		return
 	var id: String = _results.get_item_metadata(selected[0])
 	_set_busy(true, "Downloading material…")
-	var result := await _client.import_material(id)
+	var result: Dictionary = await _import_asset.call(id)
 	if not result.ok:
 		_set_busy(false, result.message)
 		return
-	chosen.emit(result.material.id, result.material.name)
+	var asset: Dictionary = result[_kind]
+	chosen.emit(asset.get("key", asset.id), asset.name)
 	hide()
 	queue_free()
 

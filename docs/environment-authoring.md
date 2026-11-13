@@ -5,19 +5,18 @@ possible, from inside the game.** Anything a shipped environment can do, an agen
 can do too, with the same tools, in the build menu and through the agent command registry,
 previewed, saved and undoable.
 
-## Why features kept getting hardcoded
+## Environment packages
 
-Each shipped environment is a GDScript builder (`zones/villa.gd` is 400 lines) that makes its
-own pool, hedges and lights. When a scene needs something new, the cheapest change is another
-builder function, and agents can never reach it because agents only have registered commands.
-The fix is structural: the shipped environments must be made from the same parts agents use.
+The Grid, Open Ground, villa and shore all load from piece documents. The villa and shore
+reference the existing generated geometry and water bakes. Their vegetation, lights, water,
+scenery, furniture and collisions are declared in their packages.
 
 ## The model
 
 - **Environments are documents.** An environment package (`world/data/zones/<id>/zone.json`)
   lists its sky and atmosphere, spawn and views, and a tree of **pieces**. Building it means
   loading that document; saving what an agent or the player made writes the same format. A
-  code `builder` is legacy and is being retired package by package.
+  code `builder` is no longer accepted in an environment package.
 - **Pieces are small, general and combinable.** A piece is a record with an id, a type, a
   transform and its type's fields. Types are registered in `world/data/pieces/types.json`, each
   with a field schema and a trusted factory in `world/scripts/pieces/`. Nothing in the engine
@@ -29,15 +28,15 @@ The fix is structural: the shipped environments must be made from the same parts
 - **New abilities are plug-ins.** When the toolkit lacks something, the answer is a new piece
   type, behavior or material registered through the extension system, never a branch inside one
   environment's code.
-- **Props become pieces.** Today's props (`workshop/entity_types.gd`) are pieces with a physics
-  body. Their factories move into the piece registry so there is one record system, not two.
+- **Props use the piece document.** The workshop and Pieces panel share the physical prop
+  factories. Existing spawned props are copied into the piece document with their IDs,
+  bindings and available undo history. Older authored dressing overrides remain readable.
 
 ## Rules (checked by `scripts/open-engine.test.mjs`, part of `npm test`)
 
 1. Shared code (everything in `world/scripts` outside `zones/` and `diagnostics/`) does not
    name a specific environment package. Behaviour an environment needs is data in its package.
-2. New environment packages are documents: no code `builder`. The packages that still have one
-   are listed in `scripts/open-engine-debt.json` and the list may only shrink.
+2. Environment packages are documents. The checks reject a code `builder`.
 3. Every piece in a package uses a registered piece type.
 
 The debt file records today's exceptions with a reason each. The check fails when an exception
@@ -76,7 +75,8 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   the target and its children. `undo_piece` uses the same history as the panel.
 - **Saves** live in `user://environment-pieces-<id>.json` with the piece tree and its undo
   history. Creating an environment from a template copies its current piece tree into a new
-  document. Existing prop saves and package files use their own storage.
+  document. Legacy prop saves remain on disk for recovery. Authored prop and water appearance
+  overrides retain their existing IDs.
 - **Terrain** is a registered piece. Open Ground starts with one, and any editable environment
   can add one through **Pieces**. Open **Build → Terrain** for five brushes and a three-material
   palette. Left-drag to brush and hold middle mouse to look and move. Flatten uses the height
@@ -92,19 +92,23 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   built-in palette. Material IDs, paint, and undo persist with the terrain. Agents use
   `search_materials` and `import_material`, then pass the material ID to `terrain_brush`.
 
+- **Vegetation scatter** uses the registered piece editor and agent commands. Choose a model,
+  patch size, count, spacing and seed. A scatter attached directly to sculptable terrain follows
+  that surface. Scatter supports slope filters, exclusions, collision and render distance.
+- **Live sky imports** are available under **Atmosphere → Sky → Import…**. Imported 2K panoramas
+  preview immediately and remain available offline. Use `search_skies`, `import_sky`, and
+  `preview_atmosphere` for the same workflow through agent tools.
+- **Water pieces** include pools, round basins, streams, oceans and spray. Place water over
+  existing basin or stream geometry. The shipped reflecting pool and shore retain their GPU
+  solvers through baked-water pieces. Generated terrain and water bakes are prepared offline.
+- **Villa and shore** use those pieces along with editable models, shapes, lights and buoyant
+  props. Their Blender-generated meshes remain reusable model assets.
+
 ## Next, in order
 
-1. **Planting and HDRI imports.** Add scatter pieces that control what grows where and how densely.
-   Bring additional Poly Haven skies into the atmosphere picker.
-2. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
-   a flowing surface for streams and waterfalls; spray emitters.
-3. **One record system.** Move the prop factories (cone, box, door, model) into the piece
-   registry; props become pieces with a body.
-4. **Villa and Shore as documents.** Their builders become pieces. The villa looking the same
-   from its document is the test that the toolkit is general enough.
-5. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
+1. **Building.** Floors, walls, stairs and roofs from a plan, with openings that take working
    doors and windows (hinge and slide behaviors).
-6. **Screens.** A video surface piece (local video first; web video needs a browser engine).
-7. **Time and weather.** Time of day driving the sun, cloud cover, rain.
-8. **Sharing.** Turn an edited environment into a package that passes the checks (including
+2. **Screens.** A video surface piece (local video first; web video needs a browser engine).
+3. **Time and weather.** Time of day driving the sun, cloud cover, rain.
+4. **Sharing.** Turn an edited environment into a package that passes the checks (including
     `check.ps1 -Performance`).

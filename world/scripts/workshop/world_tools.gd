@@ -15,6 +15,9 @@ const BehaviorHost = preload("res://scripts/plugins/behavior_host.gd")
 const DoorLinks = preload("res://scripts/plugins/door_links.gd")
 const DoorActuator = preload("res://scripts/plugins/door_actuator.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
+const PieceProps = preload("res://scripts/pieces/prop_piece.gd")
+const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
+const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const DressingLayer = preload("res://scripts/workshop/dressing_layer.gd")
 const MAX_ENTITIES := SceneStore.MAX_ENTITIES
 
@@ -22,6 +25,8 @@ var _path := ""
 var _prefabs: PrefabLibrary
 var _behaviors: BehaviorRuntime
 var _links: DoorLinks
+var _pieces: PieceEditor
+var _piece_props := {}
 var _preview := {}
 var _entities := {}
 var _dressing := DressingLayer.new()
@@ -43,7 +48,9 @@ func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime
 	_overrides = state.get("dressing", {})
 	_history.assign(state.get("undo", []))
 
-func attach(zone: Node3D) -> void:
+func attach(zone: Node3D, pieces: PieceEditor = null) -> void:
+	_pieces = pieces
+	_piece_props.clear()
 	_nodes.clear()
 	_root = null
 	_preview = {}
@@ -56,6 +63,52 @@ func attach(zone: Node3D) -> void:
 	zone.add_child(_root)
 	for record in _entities.values():
 		_show(record)
+	refresh_piece_props(zone)
+
+func migrate_saved_props(document: PieceDocument) -> void:
+	if _path.is_empty() or (_entities.is_empty() and _history.is_empty()) or not _load_error.is_empty() or not document.error.is_empty():
+		return
+	var active: Dictionary = _entities.duplicate()
+	var records := _piece_records(active)
+	var edits: Array[Dictionary] = []
+	var kept: Array[Dictionary] = []
+	for entry: Dictionary in _history:
+		if entry.previous.is_empty() and entry.get("doors", {}).is_empty():
+			kept.append(entry)
+	for index in range(_history.size() - 1, -1, -1):
+		var entry: Dictionary = _history[index]
+		active = _updated(active, entry.previous)
+		if not entry.previous.is_empty() or not entry.get("doors", {}).is_empty():
+			edits.push_front({"records": _piece_records(active), "door_heights": entry.get("doors", {}), "time": entry.get("time", 0.0)})
+	if (not records.is_empty() or not edits.is_empty()) and document.import_scene_props(records, edits):
+		_entities.clear()
+		_history = kept
+
+static func _piece_records(entities: Dictionary) -> Array:
+	return entities.values().map(func(record: Dictionary) -> Dictionary:
+		return _to_piece(record, [0, record.yaw, 0]))
+
+func refresh_piece_props(zone: Node3D) -> void:
+	if is_instance_valid(_root) and _root.get_parent() == zone:
+		_dressing.refresh(zone, _overrides)
+	if _pieces == null:
+		return
+	_piece_props.clear()
+	for entry: Dictionary in _pieces.summaries():
+		if entry.type != "prop" or not entry.parent.is_empty():
+			continue
+		var node := _pieces.node_for(entry.id)
+		_piece_props[entry.id] = node
+		var piece := _pieces.record(entry.id)
+		var record := _effective(PieceProps.entity_record(piece))
+		var door := node.get_node_or_null("DoorActuator") as DoorActuator
+		if door:
+			door.links = _links
+			door.links.drive("piece", entry.id, float(piece.get("door_open", 0.0)), 2.0)
+		var behavior: Variant = record.get("behavior")
+		if node.get_meta("bound_behavior", {}) != (behavior if behavior != null else {}):
+			_sync_behavior(node, record)
+			node.set_meta("bound_behavior", behavior if behavior != null else {})
 
 func execute(tool: String, args := {}) -> Dictionary:
 	if not is_instance_valid(_root):
@@ -70,7 +123,7 @@ func execute(tool: String, args := {}) -> Dictionary:
 	return call(definition.handler, args)
 
 func _list_records(_args: Dictionary) -> Dictionary:
-	return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty()}
+	return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty() or (_pieces != null and _pieces.has_undo())}
 
 func _list_entities(_args: Dictionary) -> Dictionary:
 	var entities: Array[Dictionary] = []
@@ -123,7 +176,7 @@ func _spawn(args: Dictionary) -> Dictionary:
 		return _error("Import the model before spawning it.")
 	if source == "library" and not EntityTypes.library_available(asset_id):
 		return _error("Choose an installed model from the scene asset library.")
-	if _entities.size() >= MAX_ENTITIES:
+	if _entities.size() + _piece_prop_count() >= MAX_ENTITIES:
 		return _error("This scene is at its prop limit.")
 	var id := Crypto.new().generate_random_bytes(16).hex_encode()
 	var proposed := {"id": id, "type": type, "position": args.get("position"), "yaw": args.get("yaw", 0.0),
@@ -140,7 +193,15 @@ func _spawn(args: Dictionary) -> Dictionary:
 		if _behaviors and args.behavior is Dictionary and _behaviors.is_provisional(str(args.behavior.get("id", ""))):
 			return _error("Commit the plugin before duplicating its preview.")
 		proposed["behavior"] = args.behavior
+	if _pieces != null:
+		if not _valid_record(proposed):
+			return _error("Use a position inside this scene, a scale from 0.25 to 4, and a six-digit color.")
+		var added := _pieces.apply_prop(id, _to_piece(proposed, [0, proposed.yaw, 0]))
+		return {"ok": true, "id": id, "entity": _record(id)} if added.ok else _error(added.message)
 	return _edit(id, {}, proposed)
+
+func _piece_prop_count() -> int:
+	return _piece_props.size()
 
 func _edit_entity(args: Dictionary) -> Dictionary:
 	var id: Variant = args.get("id")
@@ -202,6 +263,10 @@ func _restore_dressing(args: Dictionary) -> Dictionary:
 	return result
 
 func _undo(_args: Dictionary) -> Dictionary:
+	var last_prop_edit := float(_history[-1].get("time", 0.0)) if not _history.is_empty() else -INF
+	if _pieces != null and _pieces.has_undo() and _pieces.undo_timestamp() >= last_prop_edit:
+		var result := _pieces.execute({"tool": "undo_piece"})
+		return {"ok": true, "id": "", "entity": {}} if result.ok else _error(result.message)
 	if _history.is_empty():
 		return _error("There are no edits to undo.")
 	var edit: Dictionary = _history.back()
@@ -221,6 +286,21 @@ func run_action(targets: Array) -> Dictionary:
 		return edit
 	if edit.next.is_empty() and edit.doors == edit.openings:
 		return {"ok": true}
+	var piece_targets: Array = edit.next.keys() + edit.doors.keys()
+	if _pieces != null and piece_targets.any(func(id: String) -> bool: return _piece_props.has(id)):
+		if not piece_targets.all(func(id: String) -> bool: return _piece_props.has(id)):
+			return _error("This action needs the remaining older props moved into Pieces.")
+		var updates := {}
+		for id in edit.next:
+			var piece := _prop_piece(id)
+			var rotation: Array = piece.get("rotation", [0, 0, 0]).duplicate()
+			rotation[1] = edit.next[id].yaw
+			updates[id] = _to_piece(edit.next[id], rotation)
+		var result := _pieces.update_props(updates, edit.doors)
+		if not result.ok:
+			return _error(result.message)
+		_restore_door_heights(edit.openings)
+		return {"ok": true}
 	var history := _with_undo({"id": "", "previous": edit.previous, "doors": edit.doors})
 	if not _commit(edit.next, {}, history):
 		return _error("The scene prop save could not be written.")
@@ -238,8 +318,8 @@ func _prepare_action(targets: Array) -> Dictionary:
 	var openings := {}
 	for target in targets:
 		var id: String = target.id
-		var record: Dictionary = _entities.get(id, {})
-		if record.is_empty() or not is_instance_valid(_nodes.get(id)):
+		var record := _record(id)
+		if record.is_empty() or not is_instance_valid(scene_node(id)) or _dressing.has(id):
 			return _error("A workshop action target is missing. Restore it before running this action.")
 		var proposed := record.duplicate(true)
 		proposed.merge(target.changes, true)
@@ -257,7 +337,7 @@ func _prepare_action(targets: Array) -> Dictionary:
 	return {"ok": true, "previous": previous, "next": next, "doors": doors, "openings": openings}
 
 func _door(id: String) -> DoorActuator:
-	var node := _nodes.get(id) as Node3D
+	var node := scene_node(id)
 	return node.get_node_or_null("DoorActuator") as DoorActuator if is_instance_valid(node) else null
 
 func _restore_door_heights(doors: Dictionary) -> void:
@@ -292,13 +372,14 @@ func _configure_behavior(record: Dictionary, request: Variant) -> Dictionary:
 	if configured.is_empty() or not _behaviors.available(record.type).any(func(item: Dictionary) -> bool: return item.id == configured.id):
 		return {}
 	if _behaviors.registry.definition(configured.id).output == "door_open" \
-			and EntityTypes.TYPES.get(_entities.get(configured.get("target", ""), {}).get("type"), {}).get("factory") != "door":
+			and EntityTypes.TYPES.get(_record(configured.get("target", "")).get("type"), {}).get("factory") != "door":
 		return {}
 	return configured
 
 func preview_behavior(draft_id: String, id: String, request: Dictionary) -> Dictionary:
-	var record: Dictionary = _entities.get(id, {})
-	if record.is_empty() or not is_instance_valid(_nodes.get(id)):
+	var record := _record(id)
+	var node := scene_node(id)
+	if record.is_empty() or node == null:
 		return _error("The source entity is unavailable in this Grid space.")
 	var configured := _configure_behavior(record, request)
 	if configured.is_empty():
@@ -306,7 +387,7 @@ func preview_behavior(draft_id: String, id: String, request: Dictionary) -> Dict
 	if not _preview.is_empty() and (_preview.draft != draft_id or _preview.entity != id):
 		return _error("Finish the current behavior binding preview first.")
 	_preview = {"draft": draft_id, "entity": id, "behavior": configured}
-	_sync_behavior(_nodes[id], _effective(record))
+	_sync_behavior(node, _effective(record))
 	return {"ok": true, "id": id, "entity": _effective(record).duplicate(true), "preview": true}
 
 func behavior_preview_id() -> String:
@@ -317,8 +398,9 @@ func finish_behavior_preview(draft_id: String, keep: bool) -> Dictionary:
 		return {"ok": true}
 	var pending := _preview
 	_preview = {}
-	var record: Dictionary = _entities.get(pending.entity, {})
-	if record.is_empty() or not is_instance_valid(_nodes.get(pending.entity)):
+	var record := _record(pending.entity)
+	var node := scene_node(pending.entity)
+	if record.is_empty() or node == null:
 		return {"ok": true}
 	if keep and not _configure_behavior(record, pending.behavior).is_empty():
 		var proposed := record.duplicate()
@@ -326,7 +408,7 @@ func finish_behavior_preview(draft_id: String, keep: bool) -> Dictionary:
 		var result := _edit(pending.entity, record, proposed)
 		if result.ok:
 			return result
-	_sync_behavior(_nodes[pending.entity], record)
+	_sync_behavior(node, record)
 	return _error("The plugin was committed, but its test link could not be saved.") if keep else {"ok": true}
 
 func _effective(record: Dictionary) -> Dictionary:
@@ -361,6 +443,9 @@ func _spawn_prefab(args: Dictionary) -> Dictionary:
 	return execute("spawn", placement)
 
 func _edit(id: String, previous: Dictionary, proposed: Dictionary, from_grab := false) -> Dictionary:
+	var piece := _prop_piece(id)
+	if not piece.is_empty():
+		return _edit_prop_piece(piece, proposed, from_grab)
 	if _dressing.has(id):
 		return _edit_dressing(id, _dressing.changes_for(id, proposed, _overrides.get(id, {})), from_grab)
 	if not proposed.is_empty() and not _valid_record(proposed):
@@ -382,15 +467,62 @@ func _edit_dressing(id: String, proposed: Dictionary, from_grab := false) -> Dic
 			return _error("The scene prop save could not be written.")
 	return {"ok": true, "id": id, "entity": _record(id)}
 
+func _prop_piece(id: Variant) -> Dictionary:
+	return _pieces.record(id) if _piece_props.has(id) else {}
+
+func _edit_prop_piece(piece: Dictionary, proposed: Dictionary, from_grab: bool) -> Dictionary:
+	var id: String = piece.id
+	if proposed.is_empty():
+		var removed := _pieces.apply_prop(id, {}, true)
+		return {"ok": true, "id": id, "entity": {}} if removed.ok else _error(removed.message)
+	if not _valid_record(proposed):
+		return _error("Use a position inside this scene, a scale from 0.25 to 4, and a six-digit color.")
+	var rotation: Array = piece.get("rotation", [0, 0, 0]).duplicate()
+	rotation[1] = proposed.yaw
+	if from_grab:
+		var body := _pieces.node_for(id) as RigidBody3D
+		if body:
+			var turn := body.rotation_degrees
+			rotation = [turn.x, turn.y, turn.z]
+	var updates := _to_piece(proposed, rotation)
+	# Optional fields cleared by the workshop must be removed from the same piece record.
+	for key in ["name", "stretch", "animation", "behavior"]:
+		if not updates.has(key) and piece.has(key):
+			updates[key] = null
+	var result := _pieces.apply_prop(id, updates)
+	return {"ok": true, "id": id, "entity": _record(id)} if result.ok else _error(result.message)
+
+static func _to_piece(entity: Dictionary, rotation: Array) -> Dictionary:
+	var record := {"id": entity.id, "type": "prop", "prop_kind": entity.type, "position": entity.position,
+		"rotation": rotation, "prop_size": entity.scale, "color": entity.color, "locked": entity.get("locked", false)}
+	for key in ["asset_id", "name", "stretch", "animation"]:
+		if entity.has(key):
+			record[key] = entity[key]
+	if entity.has("behavior"):
+		var binding: Dictionary = entity.behavior
+		var settings := []
+		for key in binding.settings:
+			settings.append({"key": key, "value": binding.settings[key]})
+		record["behavior"] = {"id": binding.id, "settings": settings}
+		if binding.has("target"):
+			record.behavior["target_entity"] = binding.target
+	return record
+
 func _record(id: Variant) -> Dictionary:
+	var piece := _prop_piece(id)
+	if not piece.is_empty():
+		return PieceProps.entity_record(piece)
 	return _dressing.record(id, _overrides.get(id, {})) if _dressing.has(id) else _entities.get(id, {})
 
 func _records() -> Array:
-	return _entities.values() + _dressing.records(_overrides)
+	var records := _entities.values() + _dressing.records(_overrides)
+	for id: String in _piece_props:
+		records.append(PieceProps.entity_record(_pieces.record(id)))
+	return records
 
 func _with_undo(edit: Dictionary) -> Array[Dictionary]:
 	var history := _history.duplicate()
-	history.append(edit)
+	history.append(edit.merged({"time": Time.get_unix_time_from_system()}))
 	return SceneStore.trimmed(history)
 
 static func _updated(layer: Dictionary, updates: Dictionary) -> Dictionary:
@@ -499,7 +631,7 @@ func _sync_behavior(entity: Node3D, record: Dictionary) -> void:
 func animation_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
 	if is_instance_valid(_root):
-		for record in _entities.values():
+		for record in _records():
 			var player := animation_player(record.id)
 			if player:
 				var channels := ["offset", "rotation"]
@@ -509,9 +641,9 @@ func animation_targets() -> Array[Dictionary]:
 	return targets
 
 func animation_player(id: String) -> Node:
-	var entity := _nodes.get(id) as Node3D
+	var entity := scene_node(id)
 	if is_instance_valid(entity) and not entity.has_meta("asset_unavailable"):
-		return entity.get_node("PropMotion")
+		return entity.get_node_or_null("PropMotion")
 	return null
 
 func _valid_record(record: Dictionary) -> bool:
@@ -520,6 +652,8 @@ func _valid_record(record: Dictionary) -> bool:
 		and Placement.valid_coordinates(bounds, record.get("position"))
 
 func scene_node(id: String) -> Node3D:
+	if _piece_props.has(id):
+		return _piece_props[id]
 	return _dressing.scene_node(id) if _dressing.has(id) else _nodes.get(id) as Node3D
 
 ## A prop's absolute yaw as it stands now, for tools that turn it from where it is.

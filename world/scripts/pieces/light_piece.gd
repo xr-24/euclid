@@ -11,8 +11,10 @@ static func build(record: Dictionary) -> Node3D:
 	else:
 		var omni := OmniLight3D.new()
 		omni.omni_range = float(record.get("range", 10.0))
+		omni.omni_attenuation = float(record.get("attenuation", 1.0))
 		light = omni
 	light.light_color = Color.html(str(record.get("color", "ffffff")))
 	light.light_energy = float(record.get("energy", 1.0))
+	light.light_bake_mode = Light3D.BAKE_DYNAMIC
 	light.shadow_enabled = bool(record.get("shadows", false))
 	return light

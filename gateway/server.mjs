@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
 import { createAssetService, validAssetId } from './assets.mjs';
-import { createMaterialService } from './materials.mjs';
+import { createMaterialService, createSkyService } from './materials.mjs';
 import { planWorld, validGridPlan } from './world-planner.mjs';
 import { createWorldBridge, validContext, validWorldPlan } from './world-tools.mjs';
 import { createWorkbench } from './workbench.mjs';
@@ -68,6 +68,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   let gridBusy = false;
   const assets = createAssetService(path.join(dataDir, 'runtime-assets'));
   const materials = createMaterialService(path.join(dataDir, 'runtime-materials'));
+  const skies = createSkyService(path.join(dataDir, 'runtime-skies'));
   const bridge = createWorldBridge(assets);
   const agentSeen = new Map();
   for (const { id } of tasks.working().filter(item => isLocalWorker(item.id))) {
@@ -103,7 +104,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 30 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 31 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
@@ -238,22 +239,27 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         catch (error) { if (!res.destroyed) return reply(res, 400, { error: error.message }); return; }
       }
       const materialMap = /^\/v1\/materials\/([a-z0-9_]{1,64})\/(albedo|normal|orm)\.jpg$/.exec(req.url);
-      if (req.method === 'GET' && materialMap) {
-        const file = await materials.map(materialMap[1], materialMap[2]).catch(() => null);
+      const skyMap = /^\/v1\/skies\/([a-z0-9_]{1,64})\/panorama\.hdr$/.exec(req.url);
+      if (req.method === 'GET' && (materialMap || skyMap)) {
+        const file = await (skyMap ? skies.map(skyMap[1], 'panorama') :
+          materials.map(materialMap[1], materialMap[2])).catch(() => null);
         if (!file) return reply(res, 404, { error: 'Material map unavailable.' });
         const stream = createReadStream(file);
         stream.once('error', () => res.destroy());
         res.once('close', () => stream.destroy());
-        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff' });
+        res.writeHead(200, { 'Content-Type': skyMap ? 'application/octet-stream' : 'image/jpeg', 'X-Content-Type-Options': 'nosniff' });
         stream.pipe(res);
         return;
       }
-      if (req.method === 'POST' && ['/v1/materials/search', '/v1/materials/import'].includes(req.url)) {
+      const importRoute = /^\/v1\/(materials|skies)\/(search|import)$/.exec(req.url);
+      if (req.method === 'POST' && importRoute) {
+        const sky = importRoute[1] === 'skies';
+        const service = sky ? skies : materials;
         const body = await readJson(req, res, 1024);
         if (body === undefined) return;
         try {
-          if (req.url.endsWith('/search')) return reply(res, 200, { ok: true, materials: await materials.search(body?.query) });
-          return reply(res, 200, { ok: true, material: await materials.importMaterial(body?.id) });
+          if (importRoute[2] === 'search') return reply(res, 200, { ok: true, [importRoute[1]]: await service.search(body?.query) });
+          return reply(res, 200, { ok: true, [sky ? 'sky' : 'material']: await service.importMaterial(body?.id) });
         } catch (error) { return reply(res, 400, { error: error.message }); }
       }
       const assetRoute = /^\/v1\/assets\/([^/]+)(\/model\.glb)?$/.exec(req.url);

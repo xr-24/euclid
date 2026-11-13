@@ -65,6 +65,11 @@ static func register(root: Node3D, id: String, label: String, rect: Rect2, heigh
 		"defaults": defaults, "bindings": bindings, "radius": radius, "sim": sim}
 	root.set_meta("editable_water", bodies)
 
+static func register_surface(root: Node3D, id: String, label: String, mesh: MeshInstance3D,
+		size: Vector2, round: bool) -> void:
+	register(root, id, label, Rect2(-size * 0.5, size), 0.0, [mesh.material_override], size.x * 0.5 if round else 0.0)
+	root.get_meta("editable_water")[id]["surface_node"] = mesh
+
 static func _binding(material: ShaderMaterial, uniform_name: String, sim: bool) -> Dictionary:
 	return {"material": material, "uniform": uniform_name, "base": material.get_shader_parameter(uniform_name), "linear_color": sim}
 
@@ -84,12 +89,18 @@ func pick(aim: Dictionary) -> String:
 	var selected := ""
 	for id in _bodies:
 		var body: Dictionary = _bodies[id]
-		if is_equal_approx(start.y, end.y):
+		var origin := start
+		var target := end
+		var mesh: Node3D = body.get("surface_node")
+		if is_instance_valid(mesh):
+			origin = mesh.to_local(aim.from)
+			target = mesh.to_local(aim.point)
+		if is_equal_approx(origin.y, target.y):
 			continue
-		var t := (float(body.height) - start.y) / (end.y - start.y)
+		var t := (float(body.height) - origin.y) / (target.y - origin.y)
 		if t < 0 or t >= closest:
 			continue
-		var point := start.lerp(end, t)
+		var point := origin.lerp(target, t)
 		var xz := Vector2(point.x, point.z)
 		if body.rect.has_point(xz) and (body.radius <= 0 or xz.distance_to(body.rect.get_center()) <= body.radius):
 			selected = id

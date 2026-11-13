@@ -227,6 +227,7 @@ func _run() -> void:
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
+	_check_prop_migration(path + ".piece-migration")
 	_check_piece_upgrade()
 	await _check_terrain()
 	_check_data_entity_type()
@@ -812,6 +813,32 @@ func _check_pieces(manifest: Dictionary) -> void:
 	_check((built.root as Node3D).get_node_or_null(PieceBuilder.LAYER + "/Piece_ground") is StaticBody3D,
 		"build the Open Ground package from pieces alone")
 	(built.root as Node3D).free()
+
+func _check_prop_migration(path: String) -> void:
+	var old_path := path + ".old"
+	var zone := Node3D.new()
+	var legacy := WorldTools.new(old_path)
+	legacy.attach(zone)
+	var placed := legacy.execute("spawn", {"type": "traffic_cone", "position": [1, 0, 2]})
+	_check(placed.ok, "legacy prop fixture saves")
+	var id: String = placed.id
+	var before := FileAccess.get_file_as_string(old_path)
+	var document := PieceDocument.new(path, [])
+	legacy.migrate_saved_props(document)
+	_check(document.pieces.size() == 1 and document.pieces[0].id == id and document.history.size() == 1,
+		"migrate legacy prop IDs and undo into the piece document")
+	_check(FileAccess.get_file_as_string(old_path) == before, "preserve the old prop save during migration")
+	var reopened := PieceDocument.new(path, [])
+	var retry := WorldTools.new(old_path)
+	retry.migrate_saved_props(reopened)
+	_check(reopened.pieces.size() == 1, "retrying prop migration does not duplicate props")
+	_check(reopened.save([], []), "save a removal of a migrated prop")
+	var removed := PieceDocument.new(path, [])
+	WorldTools.new(old_path).migrate_saved_props(removed)
+	_check(removed.pieces.is_empty(), "deleted migrated props stay deleted after restart")
+	zone.free()
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(old_path)
 
 func _check_piece_edits(manifest: Dictionary) -> void:
 	var directory := "user://piece-test-%d" % Time.get_ticks_usec()

@@ -14,6 +14,13 @@ func attach(zone: Node3D, overrides: Dictionary) -> void:
 		if has(id):
 			apply(id, overrides[id])
 
+func refresh(zone: Node3D, overrides: Dictionary) -> void:
+	var previous := _entries
+	_entries = zone.get_meta("authored_dressing", {})
+	for id in overrides:
+		if has(id) and previous.get(id) != _entries[id]:
+			apply(id, overrides[id])
+
 func has(id: Variant) -> bool:
 	return _entries.has(id)
 
@@ -91,7 +98,7 @@ func apply(id: String, override: Dictionary, previous := {}, keep_pose := false)
 		var facing := Basis(Vector3.UP, deg_to_rad(float(value.yaw)))
 		var stretch := facing * Basis.from_scale(EntityTypes.stretch_of(value)) * facing.inverse()
 		node.basis = stretch * Basis(Vector3.UP, yaw) * authored_basis.scaled(Vector3.ONE * float(value.scale))
-	node.visible = not value.hidden
+	node.visible = not value.hidden and node.process_mode != Node.PROCESS_MODE_DISABLED
 	for shape in entry.shapes:
 		shape.disabled = value.hidden or entry.shapes[shape]
 	if override.get("color") != previous.get("color"):
@@ -135,7 +142,12 @@ static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	var model_basis: Basis = facing.inverse() * (entry.basis as Basis)
 	var box: AABB = Transform3D(model_basis, Vector3.ZERO) * entry.physics_bounds
 	var body := RigidBody3D.new()
-	body.name = "Dressing_" + id
+	body.name = model.name if model.has_meta("piece_id") else "Dressing_" + id
+	if model.has_meta("piece_id"):
+		for key in ["piece_id", "piece_type", "legacy_prop"]:
+			if model.has_meta(key):
+				body.set_meta(key, model.get_meta(key))
+				model.remove_meta(key)
 	body.freeze = true
 	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	body.mass = clampf(box.get_volume() * 7.0, 3.0, 90.0)

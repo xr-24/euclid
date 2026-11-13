@@ -14,11 +14,11 @@ static func place(root: Node3D, scope: String, key: String, asset: String, at: V
 		register(root, stable_id(scope, key), model, asset, yaw, {"label": label})
 	return model
 
-## The node is a direct child of the zone root. Add all parts before registering it.
+## Add all model parts and colliders before registering it.
 static func register(root: Node3D, id: String, node: Node3D, asset: String, yaw: float, options := {}) -> void:
 	var entries: Dictionary = root.get_meta("authored_dressing", {})
-	if node.get_parent() != root or entries.has(id):
-		push_warning("Authored prop needs a unique ID and must be a direct child of the zone: " + id)
+	if node.get_parent() == null or entries.has(id):
+		push_warning("Authored prop needs a unique ID and a parent: " + id)
 		return
 	var point: Array = options.get("position", [node.position.x, node.position.y, node.position.z])
 	var record := {"id": id, "type": "authored_dressing", "asset_id": asset, "authored": true,

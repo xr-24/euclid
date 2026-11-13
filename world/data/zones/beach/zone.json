@@ -1,7 +1,6 @@
 {
   "schema_version": 1,
   "id": "beach",
-  "builder": "res://scripts/zones/shore_zone.gd",
   "spawn": {
     "position": [
       0,
@@ -128,5 +127,61 @@
   "capture_warmup": 14,
   "graphics": {
     "balanced_reconstruction": false
-  }
+  },
+  "required_geometry": [
+    "shore_terrain"
+  ],
+  "piece_revision": 1,
+  "pieces": [
+    {"id": "ocean", "type": "simulation_water", "name": "Coastal water", "simulation": "coast", "bake": "shore_sim", "level": -0.55, "domain": [-130, -170, 260, 200], "landscape": {"asset_id": "shore_terrain", "model_finish": {"style": "wet_sand", "textures": ["aerial_beach_01", "damp_beach_sand", "coast_sand_rocks_02"], "sea_level": -0.55}}, "ocean_layers": [{"size": [260, 200], "center": [0, -70], "detail": 200}, {"size": [3000, 3000], "center": [0, -1300], "detail": 24, "horizon": true}]},
+    {"id": "boundary-1", "type": "shape", "shape": "box", "position": [0.0, 10.0, -95.0], "size": [160, 40, 2], "render": false, "name": "Cove boundary"},
+    {"id": "boundary-2", "type": "shape", "shape": "box", "position": [0.0, 10.0, 50.0], "size": [160, 40, 2], "render": false, "name": "Cove boundary"},
+    {"id": "boundary-3", "type": "shape", "shape": "box", "position": [-75.0, 10.0, -20.0], "size": [2, 40, 150], "render": false, "name": "Cove boundary"},
+    {"id": "boundary-4", "type": "shape", "shape": "box", "position": [75.0, 10.0, -20.0], "size": [2, 40, 150], "render": false, "name": "Cove boundary"},
+    {"id": "01a7dd7f0ec6be589e195431a84eaf89", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-42.44956, 4.2892, -3.84091], "rotation": [-5.36723, -121.7379, -2.33056], "scale": [1.05778, 1.05778, 1.05778], "legacy_prop": true},
+    {"id": "0e84905f1427d3cdca6cd0b6fe5a7142", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [34.73585, 2.49118, -8.30342], "rotation": [29.31825, -38.96337, 12.87762], "scale": [1.09998, 1.09998, 1.09998], "legacy_prop": true},
+    {"id": "0ffaee713b6094d6458f9f4dd8a1adfb", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [40.79264, 5.77462, -20.49792], "rotation": [31.85612, -151.20863, 10.98248], "scale": [1.04469, 1.04469, 1.04469], "legacy_prop": true},
+    {"id": "11fc9f410a4c8ef5038dcdd0579427be", "type": "model", "asset_id": "island_tree_02", "source": "polyhaven", "name": "Island Tree 02", "position": [17.5, -0.09923, 7.0], "rotation": [0.0, -160.0, 0.0], "scale": [1.3, 1.3, 1.3], "legacy_prop": true},
+    {"id": "185593d363dfb04e6364244784539b9d", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-39.65162, 2.05992, -31.68865], "rotation": [-21.58593, 109.75976, -27.17422], "scale": [1.41198, 1.41198, 1.41198], "legacy_prop": true},
+    {"id": "21f842e93efb985d5ee3ab9310c045e7", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-24.7868, 0.94972, -7.06773], "rotation": [20.02352, 108.95194, 9.07132], "scale": [0.92632, 0.92632, 0.92632], "legacy_prop": true},
+    {"id": "26831eb56ab989f2d6ce9b47fc2fcef5", "type": "model", "asset_id": "wooden_lantern_01", "source": "polyhaven", "name": "Beach lantern", "position": [-1.4, -0.00407, -3.4], "rotation": [0.0, 20.0, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true, "children": [{"id": "lantern-flame", "type": "light", "kind": "omni", "position": [0, 0.25, 0], "color": "ffa24a", "energy": 1.2, "range": 3.5, "shadows": true}]},
+    {"id": "2b8aa9df9b1b6fa9005eea843636bf01", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [22.47099, -3.43847, -32.99939], "rotation": [15.16168, -157.67729, -3.27512], "scale": [1.24175, 1.24175, 1.24175], "legacy_prop": true},
+    {"id": "2ce2452f167f92c3d73e92a8317d66c7", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-21.0, -0.58558, -13.0], "rotation": [0.0, 110.0, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "30bcf2e2b1c744053d348c3832146f59", "type": "model", "asset_id": "lambis_shell", "source": "polyhaven", "name": "Lambis Shell", "position": [4.2, -0.15361, -11.0], "rotation": [0.0, 62.0757, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "31455a8d38e2c10da2b1db11dac23530", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [31.86197, 0.70519, -6.51449], "rotation": [-25.11789, 73.60999, 8.05819], "scale": [1.1157, 1.1157, 1.1157], "legacy_prop": true},
+    {"id": "42674714ba0ac96b61a9f0609ba14fab", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [22.0, -0.57686, -11.0], "rotation": [0.0, -60.00001, 0.0], "scale": [1.2, 1.2, 1.2], "legacy_prop": true},
+    {"id": "42ef0e4c1f1edc7eb1f235216277f601", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-34.99536, 3.18805, -9.49301], "rotation": [-10.12552, -80.77577, -26.49484], "scale": [1.49494, 1.49494, 1.49494], "legacy_prop": true},
+    {"id": "4466cdf261493a9589880fa5371baab3", "type": "model", "asset_id": "sand_rocks_small_01", "source": "polyhaven", "name": "Sand Rocks Small 01", "position": [-9.0, -0.27681, -10.5], "rotation": [0.0, 10.0, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "447014e5202d5bdb0c8ccdda27ef3f71", "type": "buoyant", "name": "Floating crate", "asset_id": "wooden_crate_01", "position": [4.5, -0.55, -19.5], "model_height": 0.6, "mass": 25},
+    {"id": "46d11e5a03bc0a7ae54a663f9ab6df6a", "type": "model", "asset_id": "modular_wooden_pier", "source": "polyhaven", "name": "Wooden pier", "position": [9.0, -3.15, -26.0], "rotation": [0.0, -179.99998, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true, "collision": true, "placement_surface": true},
+    {"id": "499e4e067929221a2b8d587d0723fc2a", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-33.71763, 2.5685, 8.6352], "rotation": [-11.16165, -125.92316, -0.00664], "scale": [1.21016, 1.21016, 1.21016], "legacy_prop": true},
+    {"id": "4d4bd620526b347fe7b3ad1a6d97a110", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-26.03867, -0.33139, 8.39668], "rotation": [6.15342, 20.8774, -8.79125], "scale": [0.94017, 0.94017, 0.94017], "legacy_prop": true},
+    {"id": "525be0331ce47c6fae4b2d9de579c1f0", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-24.12516, 0.37784, -17.98208], "rotation": [-18.69559, -43.70429, -30.53446], "scale": [1.4018, 1.4018, 1.4018], "legacy_prop": true},
+    {"id": "5a0b1a693e6e29b538fe1ed379b8f98b", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [33.14811, 1.71363, -9.26224], "rotation": [-31.2841, 94.43668, 2.51676], "scale": [1.03848, 1.03848, 1.03848], "legacy_prop": true},
+    {"id": "5a12e8bcbeff79c0cf56305b7829b435", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-22.42, -0.5467, -2.92302], "rotation": [-6.47773, -55.1804, -8.53889], "scale": [1.22184, 1.22184, 1.22184], "legacy_prop": true},
+    {"id": "62c1e593ad5b6afbbd393462311e4bda", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [36.98883, 4.04109, -8.93144], "rotation": [-19.31975, 67.95409, 29.56035], "scale": [1.13558, 1.13558, 1.13558], "legacy_prop": true},
+    {"id": "6b8c2231843961b4f3df57023a05765d", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-32.44444, 0.41092, -35.34983], "rotation": [-3.95183, 66.96528, -19.56548], "scale": [0.9562, 0.9562, 0.9562], "legacy_prop": true},
+    {"id": "6ef525f2964088d052d44ea0eb0ebcad", "type": "model", "asset_id": "island_tree_03", "source": "polyhaven", "name": "Island Tree 03", "position": [-15.5, -0.09483, 1.5], "rotation": [0.0, 75.0, 0.0], "scale": [1.5, 1.5, 1.5], "legacy_prop": true},
+    {"id": "6f8813f184011153b1af0e036a689f71", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-32.80377, 3.26017, -20.45577], "rotation": [11.52122, 75.95088, -25.36879], "scale": [1.49625, 1.49625, 1.49625], "legacy_prop": true},
+    {"id": "72aa24fb35da7a1fa86ca858a03a687e", "type": "buoyant", "name": "Offshore barrel", "asset_id": "wine_barrel_01", "position": [1.5, -0.55, -26.0], "model_height": 0.9, "mass": 60},
+    {"id": "7b2003eca57070e36579694adee18d99", "type": "model", "asset_id": "island_tree_02", "source": "polyhaven", "name": "Island Tree 02", "position": [-27.0, 0.78037, 4.0], "rotation": [0.0, -60.00001, 0.0], "scale": [1.5, 1.5, 1.5], "legacy_prop": true},
+    {"id": "7b3b78d1832f811a4baee179acccf3d0", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [32.96711, 1.00351, -4.82447], "rotation": [-2.25671, 14.00458, 27.04429], "scale": [1.40669, 1.40669, 1.40669], "legacy_prop": true},
+    {"id": "7c272186db9f3069ee2dc019200f22a0", "type": "model", "asset_id": "island_tree_02", "source": "polyhaven", "name": "Island Tree 02", "position": [-9.0, 1.11303, 19.0], "rotation": [0.0, 40.0, 0.0], "scale": [1.4, 1.4, 1.4], "legacy_prop": true},
+    {"id": "8318d5ddbb48c350c2acf58115b6714c", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-38.2105, 1.9489, -31.81267], "rotation": [0.9453, -156.1461, 11.08393], "scale": [1.17805, 1.17805, 1.17805], "legacy_prop": true},
+    {"id": "8aae228e48c788595d209c8fdb773620", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [40.01386, -0.01958, -38.88553], "rotation": [-10.82998, 0.48184, -13.29296], "scale": [1.55078, 1.55078, 1.55078], "legacy_prop": true},
+    {"id": "9786c440d73a259ce74d7a677f61e95f", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [-8.5, -1.01759, -16.5], "rotation": [0.0, 30.0, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "a32a85e7b92b968f1a3f11e9a4347822", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-38.81848, 2.17111, -31.93806], "rotation": [-8.65114, -22.03021, -7.0192], "scale": [0.97092, 0.97092, 0.97092], "legacy_prop": true},
+    {"id": "ab81f8128bb5e1667f244c117ce639be", "type": "buoyant", "name": "Inshore barrel", "asset_id": "wine_barrel_01", "position": [-3.0, -0.55, -21.0], "model_height": 0.9, "mass": 60},
+    {"id": "ba344c477a3d54a9b4bf2619c52dd6f9", "type": "model", "asset_id": "island_tree_03", "source": "polyhaven", "name": "Island Tree 03", "position": [24.0, -0.1308, -6.0], "rotation": [0.0, -109.99998, 0.0], "scale": [1.2, 1.2, 1.2], "legacy_prop": true},
+    {"id": "bc8a6e0ddcfcdcade59e5ca03e31371d", "type": "model", "asset_id": "lambis_shell", "source": "polyhaven", "name": "Lambis Shell", "position": [-3.5, -0.12436, -10.2], "rotation": [0.0, 9.51516, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "c4705dfb652d140687b437c61cce5644", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [37.66783, 5.53496, -12.7251], "rotation": [-8.88896, -162.50826, -22.92252], "scale": [1.03321, 1.03321, 1.03321], "legacy_prop": true},
+    {"id": "cee9e55cb5c71a7f27cb410b07b85e8b", "type": "buoyant", "name": "Cove buoy", "asset_id": "ocean_buoy", "position": [-9.0, -0.55, -34.0], "model_height": 2.2, "mass": 180},
+    {"id": "d5a14dc138ffdedc7caf184d05571ceb", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [37.88115, 4.831, -20.43896], "rotation": [10.94851, 170.35329, -10.91861], "scale": [1.46468, 1.46468, 1.46468], "legacy_prop": true},
+    {"id": "db51f6b8f8f8ae25554c35bcad94f976", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [12.5, -0.69955, -14.0], "rotation": [0.0, 160.0, 0.0], "scale": [0.7, 0.7, 0.7], "legacy_prop": true},
+    {"id": "dc3a4098f52d7374d2218f396b83f5e0", "type": "model", "asset_id": "coast_rocks_05", "source": "polyhaven", "name": "Coast Rocks 05", "position": [24.557, -0.57359, 8.43134], "rotation": [0.20921, -176.46727, -0.70696], "scale": [1.02786, 1.02786, 1.02786], "legacy_prop": true},
+    {"id": "e1f3ed5459aa9e69089e82f2a7238a62", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [-36.18767, 3.32964, -26.70439], "rotation": [6.45788, -82.70364, 19.07455], "scale": [1.24718, 1.24718, 1.24718], "legacy_prop": true},
+    {"id": "e53a21d20d052223bb616d10222b38b3", "type": "model", "asset_id": "coast_land_rocks_03", "source": "polyhaven", "name": "Coast Land Rocks 03", "position": [29.90047, -0.10926, -6.39941], "rotation": [10.66617, -35.50771, 13.46602], "scale": [1.21498, 1.21498, 1.21498], "legacy_prop": true},
+    {"id": "eea8922c259179b34fb6c24bf250c974", "type": "model", "asset_id": "lambis_shell", "source": "polyhaven", "name": "Lambis Shell", "position": [1.0, -0.21431, -11.6], "rotation": [0.0, 66.42382, 0.0], "scale": [1.0, 1.0, 1.0], "legacy_prop": true},
+    {"id": "ef75bda8600f1225aa264849c9f34010", "type": "model", "asset_id": "island_tree_03", "source": "polyhaven", "name": "Island Tree 03", "position": [6.5, 1.35161, 21.5], "rotation": [0.0, 130.0, 0.0], "scale": [1.6, 1.6, 1.6], "legacy_prop": true}
+  ]
 }

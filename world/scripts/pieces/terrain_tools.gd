@@ -3,6 +3,7 @@ extends RefCounted
 
 const Terrain = preload("res://scripts/pieces/terrain_node.gd")
 const Editor = preload("res://scripts/pieces/piece_editor.gd")
+const Materials = preload("res://scripts/assets/runtime_materials.gd")
 const MAX_DABS := 256
 
 static func available(editor: Editor) -> bool:
@@ -37,17 +38,24 @@ static func execute(editor: Editor, plan: Dictionary) -> Dictionary:
 		return {"ok": false, "message": "Choose a visible terrain piece in the current environment."}
 	var record := editor.record(id)
 	var data := Terrain.Data.new()
-	if not data.decode(record.get("terrain_surface", "")):
+	if not data.decode(record.get("terrain_surface", ""), record.get("terrain_paint_data", "")):
 		return {"ok": false, "message": "The terrain data could not be read."}
 	var mode: String = plan.brush
 	var radius: float = plan.get("radius", 10.0)
 	var amount: float = plan.get("strength", 0.6)
 	if mode in ["smooth", "flatten", "paint"] and amount > 1.0:
 		return {"ok": false, "message": "Use a strength between 0 and 1 for this brush."}
-	var palette := Terrain.palette().map(func(item: Dictionary) -> String: return item.id)
-	var layer := palette.find(plan.get("paint", "earth"))
+	var id_list: Array = record.get("terrain_materials", []).duplicate()
+	var paint: String = plan.get("paint", "earth")
+	var layer := Terrain.builtin_slot(paint)
 	if mode == "paint" and layer < 0:
-		return {"ok": false, "message": "Choose a material from the terrain palette."}
+		if Materials.cached_images(paint).is_empty():
+			return {"ok": false, "message": "Import that material before painting."}
+		if paint not in id_list:
+			if id_list.size() >= Terrain.Data.IMPORT_SLOTS:
+				return {"ok": false, "message": "This terrain already uses five imported materials."}
+			id_list.append(paint)
+		layer = id_list.find(paint) + 3
 	var path: Array[Vector2] = []
 	for point: Array in plan.points:
 		var local := terrain.local_point(Vector3(point[0], point[1], point[2]))
@@ -65,12 +73,12 @@ static func execute(editor: Editor, plan: Dictionary) -> Dictionary:
 	var level := data.surface_at(path[0], terrain.terrain_size)
 	for point in dabs:
 		data.dab(point, terrain.terrain_size, mode, radius, amount, layer, level)
-	return editor.commit_storage(id, {"terrain_surface": data.encode()}, editor.revision, "Terrain stroke saved.")
+	return editor.commit_storage(id, Terrain.storage_for(data, id_list), editor.revision, "Terrain stroke saved.")
 
 static func _inspect(editor: Editor, id: String, points: Array) -> Dictionary:
 	var terrains := editor.summaries().filter(func(piece: Dictionary) -> bool: return piece.type == "terrain")
 	var result := {"ok": true, "message": "Terrain pieces: " + ", ".join(terrains.map(func(item: Dictionary) -> String: return item.name + " (" + item.id + ")")),
-		"terrains": terrains, "materials": Terrain.palette()}
+		"terrains": terrains, "materials": Terrain.palette() + Materials.installed().slice(0, 64)}
 	if not id.is_empty():
 		var terrain := editor.node_for(id) as Terrain
 		if terrain == null:
@@ -79,7 +87,8 @@ static func _inspect(editor: Editor, id: String, points: Array) -> Dictionary:
 		var at := terrain.global_position
 		result["origin"] = [at.x, at.y, at.z]
 		var data := Terrain.Data.new()
-		data.decode(editor.record(id).get("terrain_surface", ""))
+		var record := editor.record(id)
+		data.decode(record.get("terrain_surface", ""), record.get("terrain_paint_data", ""))
 		var samples := []
 		for point: Array in points:
 			var local := terrain.local_point(Vector3(point[0], point[1], point[2]))

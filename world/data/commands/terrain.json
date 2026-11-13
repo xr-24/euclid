@@ -10,7 +10,7 @@
     },
     {
       "name": "terrain_brush",
-      "description": "Apply one undoable brush stroke. Inspect terrain first for the target ID. Choose raise, lower, smooth, flatten or paint. Points are world [x,y,z] coordinates forming a path on the surface. Radius is in metres. Strength is metres per dab for raise/lower, and 0 to 1 for smoothing, flattening or paint. Flatten samples its first point. Paint material is earth, sand or rock.",
+      "description": "Apply one undoable brush stroke. Inspect terrain first for the target ID. Choose raise, lower, smooth, flatten or paint. Points are world [x,y,z] coordinates forming a path on the surface. Radius is in metres. Strength is metres per dab for raise/lower, and 0 to 1 for smoothing, flattening or paint. Flatten samples its first point. Paint takes a built-in or imported material ID from inspect_terrain.",
       "service": "world", "handler": "_terrain_command", "effect": "write", "surfaces": ["f2", "mcp"],
       "fields": {"target": "piece_id", "brush": "terrain_brush", "points": "terrain_points", "radius": "terrain_radius", "strength": "terrain_strength", "paint": "terrain_paint"},
       "required": ["target", "brush", "points"],

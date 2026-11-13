@@ -4,6 +4,7 @@ extends StaticBody3D
 
 const Data = preload("res://scripts/pieces/terrain_data.gd")
 const Assets = preload("res://scripts/assets/asset_library.gd")
+const Runtime = preload("res://scripts/assets/runtime_materials.gd")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
 const CHUNK := 32
 const CHUNKS := 8
@@ -13,6 +14,8 @@ static var _palette: Array = JSON.parse_string(FileAccess.get_file_as_string(PAL
 static var _indices := _make_indices()
 
 var data := Data.new()
+var material_ids: Array = []
+var _ground_material: ShaderMaterial
 var terrain_size: Vector2
 var _tiles: Array[MeshInstance3D] = []
 var _shapes: Array[CollisionShape3D] = []
@@ -26,12 +29,13 @@ static func palette() -> Array:
 func setup(record: Dictionary) -> void:
 	terrain_size = Vector2(record.terrain_size[0], record.terrain_size[1])
 	_step = terrain_size / Data.CELLS
-	data.decode(record.get("terrain_surface", ""))
-	var material := _material()
+	data.decode(record.get("terrain_surface", ""), record.get("terrain_paint_data", ""))
+	_ground_material = _material()
+	_set_imports(record.get("terrain_materials", []))
 	for z in CHUNKS:
 		for x in CHUNKS:
 			var tile := MeshInstance3D.new()
-			tile.material_override = material
+			tile.material_override = _ground_material
 			tile.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if record.get("cast_shadow", false) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(tile)
 			_tiles.append(tile)
@@ -40,15 +44,19 @@ func setup(record: Dictionary) -> void:
 			_shapes.append(shape)
 			_rebuild_tile(x, z, true)
 
-func load_surface(encoded: String) -> bool:
+func load_record(record: Dictionary) -> bool:
 	var next := Data.new()
-	if not next.decode(encoded):
+	if not next.decode(record.get("terrain_surface", ""), record.get("terrain_paint_data", "")):
 		return false
 	var visual := _pending
 	var collision := _pending_collision
+	var next_ids: Array = record.get("terrain_materials", [])
+	var has_imports := not material_ids.is_empty() or not next_ids.is_empty()
+	_set_imports(next_ids)
 	for index in Data.COUNT:
 		var height_changed := data.heights[index] != next.heights[index]
-		if height_changed or data.paint[index * 2] != next.paint[index * 2] or data.paint[index * 2 + 1] != next.paint[index * 2 + 1]:
+		var paint_changed := data.paint[index * 2] != next.paint[index * 2] or data.paint[index * 2 + 1] != next.paint[index * 2 + 1]
+		if height_changed or paint_changed or (has_imports and _import_differs(index, next)):
 			@warning_ignore("integer_division")
 			var cell := Rect2i(index % Data.SIDE, index / Data.SIDE, 1, 1)
 			visual = _merge(visual, cell)
@@ -59,6 +67,40 @@ func load_surface(encoded: String) -> bool:
 	_pending_collision = Rect2i()
 	_rebuild(_merge(visual, collision), collision)
 	return true
+
+func _import_differs(index: int, next: Data) -> bool:
+	var offset := index * Data.IMPORT_SLOTS
+	for slot in Data.IMPORT_SLOTS:
+		if data.imported[offset + slot] != next.imported[offset + slot]:
+			return true
+	return false
+
+func prepare_material(id: String) -> int:
+	var built_in := builtin_slot(id)
+	if built_in >= 0:
+		return built_in
+	var existing := material_ids.find(id)
+	if existing >= 0:
+		return existing + 3
+	if material_ids.size() >= Data.IMPORT_SLOTS or Runtime.cached_images(id).is_empty():
+		return -1
+	_set_imports(material_ids + [id])
+	return material_ids.size() + 2
+
+static func builtin_slot(id: String) -> int:
+	return _palette.find_custom(func(entry: Dictionary) -> bool: return entry.id == id)
+
+static func storage_for(surface: Data, ids: Array) -> Dictionary:
+	var extra := surface.encode_imported()
+	# Keep slot numbers stable for paints that remain. Empty tail slots can be reused.
+	var active := ids.duplicate()
+	if not extra.is_empty():
+		while not active.is_empty() and not surface.has_import_paint(active.size() - 1):
+			active.pop_back()
+	var encoded := surface.encode()
+	return {"terrain_surface": encoded if not encoded.is_empty() else null,
+		"terrain_paint_data": extra if not extra.is_empty() else null,
+		"terrain_materials": active if not extra.is_empty() else null}
 
 func preview_dab(point: Vector2, mode: String, radius: float, strength: float, layer: int, level: float) -> void:
 	var dirty := data.dab(point, terrain_size, mode, radius, strength, layer, level)
@@ -94,6 +136,8 @@ func _rebuild_tile(tx: int, tz: int, collision: bool) -> void:
 	var normals := PackedVector3Array()
 	var tangents := PackedFloat32Array()
 	var weights := PackedColorArray()
+	var extra_low := PackedVector2Array()
+	var extra_high := PackedVector2Array()
 	for z in range(tz * CHUNK, (tz + 1) * CHUNK + 1):
 		for x in range(tx * CHUNK, (tx + 1) * CHUNK + 1):
 			var dx := (data.height_at(x + 1, z) - data.height_at(x - 1, z)) / (2.0 * _step.x)
@@ -103,13 +147,18 @@ func _rebuild_tile(tx: int, tz: int, collision: bool) -> void:
 			normals.append(Vector3(-dx, 1.0, -dz).normalized())
 			var tangent := Vector3(1.0, dx, 0.0).normalized()
 			tangents.append_array(PackedFloat32Array([tangent.x, tangent.y, tangent.z, -1.0]))
-			weights.append(data.weights(z * Data.SIDE + x))
+			var index := z * Data.SIDE + x
+			weights.append(data.weights(index))
+			extra_low.append(Vector2(data.weight(index, 4), data.weight(index, 5)) / 255.0)
+			extra_high.append(Vector2(data.weight(index, 6), data.weight(index, 7)) / 255.0)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = points
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TANGENT] = tangents
 	arrays[Mesh.ARRAY_COLOR] = weights
+	arrays[Mesh.ARRAY_TEX_UV] = extra_low
+	arrays[Mesh.ARRAY_TEX_UV2] = extra_high
 	arrays[Mesh.ARRAY_INDEX] = _indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -154,3 +203,23 @@ static func _material() -> ShaderMaterial:
 		material.set_shader_parameter(prefix + "_tint", Color.html(entry.color) if textures.is_empty() else Color.WHITE)
 	material.set_shader_parameter("tile_size", tiles)
 	return material
+
+func _set_imports(ids: Array) -> void:
+	if ids == material_ids:
+		return
+	material_ids = ids.duplicate()
+	_ground_material.set_shader_parameter("import_count", ids.size())
+	if ids.is_empty():
+		for key in Runtime.MAPS:
+			_ground_material.set_shader_parameter("import_" + key, null)
+		return
+	var entries: Array = []
+	for id: String in ids:
+		entries.append(Runtime.cached_images(id))
+	for map in Runtime.MAPS.size():
+		var images: Array[Image] = []
+		for entry: Array in entries:
+			images.append(entry[map] if not entry.is_empty() else Runtime.missing_image(map))
+		var textures := Texture2DArray.new()
+		if textures.create_from_images(images) == OK:
+			_ground_material.set_shader_parameter("import_" + Runtime.MAPS[map], textures)

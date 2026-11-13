@@ -1,25 +1,38 @@
 extends RefCounted
-## A bounded height field and three material weights per sample. Saved samples use centimetres
-## for height and two bytes for paint; the remaining weight belongs to the base material.
+## A height field with three built-in and five imported material layers.
+## The first two weights retain the original save layout; earth is the remainder.
 
 const CELLS := 256
 const SIDE := CELLS + 1
 const COUNT := SIDE * SIDE
 const HEIGHT_LIMIT := 24.0
 const BYTES := COUNT * 4
+const IMPORT_SLOTS := 5
+const LAYERS := 3 + IMPORT_SLOTS
 
 var heights := PackedFloat32Array()
 var paint := PackedByteArray()
+var imported := PackedByteArray()
 
 func _init() -> void:
 	heights.resize(COUNT)
 	paint.resize(COUNT * 2)
+	imported.resize(COUNT * IMPORT_SLOTS)
 
-func decode(encoded: String) -> bool:
+func decode(encoded: String, extra := "", slots := IMPORT_SLOTS) -> bool:
+	if not extra.is_empty():
+		var compressed := Marshalls.base64_to_raw(extra)
+		if compressed.is_empty():
+			return false
+		imported = compressed.decompress(COUNT * IMPORT_SLOTS, FileAccess.COMPRESSION_DEFLATE)
+		if imported.size() != COUNT * IMPORT_SLOTS:
+			return false
+	else:
+		imported.fill(0)
 	if encoded.is_empty():
 		heights.fill(0.0)
 		paint.fill(0)
-		return true
+		return _valid_weights(slots) if not extra.is_empty() else true
 	var compressed := Marshalls.base64_to_raw(encoded)
 	if compressed.is_empty():
 		return false
@@ -34,7 +47,29 @@ func decode(encoded: String) -> bool:
 		heights[index] = height / 100.0
 		paint[index * 2] = raw[at + 2]
 		paint[index * 2 + 1] = raw[at + 3]
+	return _valid_weights(slots) if not extra.is_empty() else true
+
+func _valid_weights(slots: int) -> bool:
+	for index in COUNT:
+		var total := int(paint[index * 2]) + int(paint[index * 2 + 1])
+		for slot in IMPORT_SLOTS:
+			var value := imported[index * IMPORT_SLOTS + slot]
+			if slot >= slots and value != 0:
+				return false
+			total += value
+		if total > 255:
+			return false
 	return true
+
+func encode_imported() -> String:
+	return "" if imported.count(0) == imported.size() else Marshalls.raw_to_base64(
+		imported.compress(FileAccess.COMPRESSION_DEFLATE))
+
+func has_import_paint(slot: int) -> bool:
+	for index in range(slot, imported.size(), IMPORT_SLOTS):
+		if imported[index] != 0:
+			return true
+	return false
 
 func encode() -> String:
 	var raw := PackedByteArray()
@@ -68,7 +103,16 @@ func surface_at(point: Vector2, size: Vector2) -> float:
 func weights(index: int) -> Color:
 	var sand := float(paint[index * 2]) / 255.0
 	var rock := float(paint[index * 2 + 1]) / 255.0
-	return Color(1.0 - sand - rock, sand, rock, 1.0)
+	var extra := 0
+	for slot in IMPORT_SLOTS:
+		extra += imported[index * IMPORT_SLOTS + slot]
+	return Color(maxf(0.0, 1.0 - sand - rock - extra / 255.0), sand, rock,
+		imported[index * IMPORT_SLOTS] / 255.0)
+
+func weight(index: int, layer: int) -> int:
+	if layer <= 2:
+		return paint[index * 2 + layer - 1]
+	return imported[index * IMPORT_SLOTS + layer - 3]
 
 func dab(center: Vector2, size: Vector2, mode: String, radius: float, amount: float, layer: int, level: float) -> Rect2i:
 	var step := size / CELLS
@@ -105,13 +149,18 @@ func dab(center: Vector2, size: Vector2, mode: String, radius: float, amount: fl
 	return dirty
 
 func _paint(index: int, layer: int, amount: float) -> bool:
-	var sand := int(paint[index * 2])
-	var rock := int(paint[index * 2 + 1])
-	var next_sand := roundi(lerpf(sand, 255 if layer == 1 else 0, amount))
-	var next_rock := mini(255 - next_sand, roundi(lerpf(rock, 255 if layer == 2 else 0, amount)))
-	paint[index * 2] = next_sand
-	paint[index * 2 + 1] = next_rock
-	return next_sand != sand or next_rock != rock
+	var changed := false
+	var remaining := 255
+	for slot in range(1, LAYERS):
+		var before := weight(index, slot)
+		var after := mini(remaining, roundi(lerpf(before, 255 if layer == slot else 0, amount)))
+		remaining -= after
+		if slot <= 2:
+			paint[index * 2 + slot - 1] = after
+		else:
+			imported[index * IMPORT_SLOTS + slot - 3] = after
+		changed = changed or before != after
+	return changed
 
 static func _average(source: PackedFloat32Array, x: int, z: int) -> float:
 	var total := 0.0

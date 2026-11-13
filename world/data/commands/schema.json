@@ -5,7 +5,8 @@
     "terrain_brush": { "type": "string", "enum": ["raise", "lower", "smooth", "flatten", "paint"] },
     "terrain_radius": { "type": "number", "minimum": 4, "maximum": 60 },
     "terrain_strength": { "type": "number", "minimum": 0.01, "maximum": 4 },
-    "terrain_paint": { "type": "string", "enum": ["earth", "sand", "rock"] },
+    "terrain_paint": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+    "material_query": { "type": "string", "maxLength": 120 },
     "piece_material": {
       "type": "object",
       "required": [],

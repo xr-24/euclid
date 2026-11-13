@@ -35,6 +35,20 @@ func _terrain_command(plan: Dictionary) -> Dictionary:
 		player.global_position = TerrainTools.above_surface(_world.pieces, player.global_position, plan.target)
 	return result
 
+func _material_command(plan: Dictionary) -> Dictionary:
+	if plan.tool == "search_materials":
+		var result: Dictionary = await _world.material_client.search(plan.query)
+		if result.ok:
+			result["message"] = ", ".join(result.materials.map(func(item: Dictionary) -> String:
+				return "%s (%s)" % [item.name, item.id]))
+			if result.materials.is_empty():
+				result["message"] = "No materials matched that search."
+		return result
+	var imported: Dictionary = await _world.material_client.import_material(plan.target)
+	if imported.ok:
+		imported["message"] = "%s is ready to paint." % imported.material.name
+	return imported
+
 func _inspect_player_rig(plan: Dictionary) -> Dictionary:
 	return _world.player_rig.inspect(plan.get("target", ""))
 

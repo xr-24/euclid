@@ -14,10 +14,16 @@ uniform vec3 base_tint : source_color = vec3(1.0);
 uniform vec3 sand_tint : source_color = vec3(1.0);
 uniform vec3 rock_tint : source_color = vec3(1.0);
 uniform vec3 tile_size = vec3(3.0, 3.5, 4.0);
-varying vec3 terrain_weights;
+uniform sampler2DArray import_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray import_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray import_orm : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform int import_count = 0;
+varying vec4 terrain_weights;
+varying vec4 import_weights;
 
 void vertex() {
-	terrain_weights = COLOR.rgb;
+	terrain_weights = COLOR;
+	import_weights = vec4(UV, UV2);
 }
 
 void fragment() {
@@ -26,11 +32,13 @@ void fragment() {
 	float wire;
 	vec4 effect = construct_fx(world, world_normal, TIME, wire, CAMERA_POSITION_WORLD);
 	if (effect.a < 0.5) { discard; }
-	vec3 weights = max(terrain_weights, vec3(0.0));
-	weights /= max(0.001, weights.x + weights.y + weights.z);
+	vec3 weights = max(terrain_weights.rgb, vec3(0.0));
+	float total = weights.x + weights.y + weights.z + terrain_weights.a + dot(import_weights, vec4(1.0));
+	weights /= max(0.001, total);
 	vec3 albedo = vec3(0.0);
 	vec3 mapped_normal = vec3(0.0);
 	vec2 ao_rough = vec2(0.0);
+	float metallic = 0.0;
 	vec2 dx = dFdx(world.xz);
 	vec2 dy = dFdy(world.xz);
 	if (weights.x > 0.0) {
@@ -51,10 +59,22 @@ void fragment() {
 		mapped_normal += weights.z * textureGrad(rock_normal, uv, dx / tile_size.z, dy / tile_size.z).rgb;
 		ao_rough += weights.z * textureGrad(rock_orm, uv, dx / tile_size.z, dy / tile_size.z).rg;
 	}
+	for (int layer = 0; layer < import_count; layer++) {
+		float weight = (layer == 0 ? terrain_weights.a : import_weights[layer - 1]) / max(0.001, total);
+		if (weight > 0.0) {
+			vec3 uv = vec3(world.xz / 3.0, float(layer));
+			albedo += weight * textureGrad(import_albedo, uv, dx / 3.0, dy / 3.0).rgb;
+			mapped_normal += weight * textureGrad(import_normal, uv, dx / 3.0, dy / 3.0).rgb;
+			vec3 orm = textureGrad(import_orm, uv, dx / 3.0, dy / 3.0).rgb;
+			ao_rough += weight * orm.rg;
+			metallic += weight * orm.b;
+		}
+	}
 	ALBEDO = albedo * (1.0 - wire);
 	EMISSION = effect.rgb;
 	NORMAL_MAP = mapped_normal;
 	NORMAL_MAP_DEPTH = 0.65;
 	AO = ao_rough.x;
 	ROUGHNESS = ao_rough.y;
+	METALLIC = metallic;
 }

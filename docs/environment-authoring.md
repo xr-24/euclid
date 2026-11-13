@@ -85,11 +85,17 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 - **Agent terrain tools** share that data and history. Use `inspect_terrain` to find the piece,
   see its paint materials, or sample elevations. `terrain_brush` takes the piece ID, a brush,
   and an array of world-space `[x,y,z]` points. Each call saves one stroke.
+- **Live terrain materials** come from Poly Haven. In the Terrain panel choose **Paint → Import…**,
+  search, and choose a result to make it the active brush. The gateway verifies the 1K color,
+  OpenGL normal, and packed occlusion/roughness/metallic maps before caching them. Godot loads the
+  complete map set without a restart. Each terrain can use five imported materials alongside its
+  built-in palette. Material IDs, paint, and undo persist with the terrain. Agents use
+  `search_materials` and `import_material`, then pass the material ID to `terrain_brush`.
 
 ## Next, in order
 
-1. **Ground material imports and planting.** Bring additional Poly Haven PBR textures and HDRI
-   skies through the asset service. Add scatter pieces that control what grows where and how densely.
+1. **Planting and HDRI imports.** Add scatter pieces that control what grows where and how densely.
+   Bring additional Poly Haven skies into the atmosphere picker.
 2. **Water as a piece.** Pools, ponds and basins from a shape, using the existing water looks;
    a flowing surface for streams and waterfalls; spray emitters.
 3. **One record system.** Move the prop factories (cone, box, door, model) into the piece

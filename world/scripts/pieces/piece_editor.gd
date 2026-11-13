@@ -156,7 +156,7 @@ func commit_storage(id: String, updates: Dictionary, expected_revision: int, mes
 	for key in updates:
 		if not storage.has(key):
 			return _failure("This piece does not store that data.")
-		if updates[key] == "":
+		if updates[key] == null:
 			entry.piece.erase(key)
 		else:
 			entry.piece[key] = updates[key]

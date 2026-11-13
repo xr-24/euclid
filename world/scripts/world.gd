@@ -18,6 +18,7 @@ const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 const GridAgentClient = preload("res://scripts/agents/grid_agent_client.gd")
 const AssetClient = preload("res://scripts/agents/asset_client.gd")
+const MaterialClient = preload("res://scripts/agents/material_client.gd")
 const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
@@ -51,6 +52,7 @@ const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 var manifest: Dictionary
 var asset_client: Node
+var material_client: MaterialClient
 var zone_id := "construct"
 var zone_root: Node3D
 var player: CharacterBody3D
@@ -450,7 +452,7 @@ func _open_terrain() -> void:
 	overlay.offset_bottom = minf(380, screen.y - 28) - screen.y
 	var editor := TerrainPanel.new()
 	overlay_content.add_child(editor)
-	editor.setup(pieces, _close_panel, TerrainTools.undo.bind(pieces, player))
+	editor.setup(pieces, _close_panel, TerrainTools.undo.bind(pieces, player), material_client)
 	terrain_brush.attach(pieces, editor, player, camera, _look)
 
 func _open_player_rig() -> void:
@@ -1131,6 +1133,9 @@ func _setup_gateway() -> void:
 	gateway_url = OS.get_environment("CONSTRUCT_GATEWAY_URL")
 	gateway_token = OS.get_environment("CONSTRUCT_GATEWAY_TOKEN")
 	asset_client.configure(gateway_url, gateway_token)
+	material_client = MaterialClient.new()
+	add_child(material_client)
+	material_client.configure(asset_client)
 	grid_agent = GridAgentClient.new()
 	add_child(grid_agent)
 	grid_agent.configure(gateway_url, gateway_token)

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "search_materials", "description": "Search Poly Haven for paintable PBR materials by name. Returns material IDs for import_material.",
+      "service": "world", "handler": "_material_command", "effect": "read", "surfaces": ["f2", "mcp"],
+      "fields": {"query": "material_query"}, "required": ["query"], "scope": "session", "undo": "none", "mutates_world": false
+    },
+    {
+      "name": "import_material", "description": "Download a Poly Haven material by ID. It is then available to paint live with terrain_brush.",
+      "service": "world", "handler": "_material_command", "effect": "write", "surfaces": ["f2", "mcp"],
+      "fields": {"target": "terrain_paint"}, "required": ["target"], "scope": "session", "undo": "none", "mutates_world": false
+    }
+  ]
+}

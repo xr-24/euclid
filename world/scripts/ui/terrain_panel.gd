@@ -2,6 +2,8 @@ extends VBoxContainer
 
 const Terrain = preload("res://scripts/pieces/terrain_node.gd")
 const Editor = preload("res://scripts/pieces/piece_editor.gd")
+const Cache = preload("res://scripts/assets/runtime_materials.gd")
+const MaterialClient = preload("res://scripts/agents/material_client.gd")
 
 var mode := "raise"
 var _radius := HSlider.new()
@@ -9,8 +11,11 @@ var _strength := HSlider.new()
 var _materials := OptionButton.new()
 var _status := Label.new()
 var _undo: Button
+var _paint_row := HBoxContainer.new()
+var _client: MaterialClient
 
-func setup(editor: Editor, close: Callable, undo: Callable) -> void:
+func setup(editor: Editor, close: Callable, undo: Callable, client: MaterialClient) -> void:
+	_client = client
 	add_theme_constant_override("separation", 9)
 	var heading := HBoxContainer.new()
 	add_child(heading)
@@ -31,10 +36,14 @@ func setup(editor: Editor, close: Callable, undo: Callable) -> void:
 			button.tooltip_text = "Match the height where the stroke begins."
 	_slider("Radius", _radius, 4, 60, 12, " m")
 	_slider("Strength", _strength, 10, 100, 55, "%")
-	for material: Dictionary in Terrain.palette():
-		_materials.add_item(material.name)
-	_materials.hide()
-	add_child(_materials)
+	_materials.fit_to_longest_item = false
+	_materials.size_flags_horizontal = SIZE_EXPAND_FILL
+	_paint_row.add_child(_materials)
+	_button(_paint_row, "Import…", _browse)
+	add_child(_paint_row)
+	_paint_row.hide()
+	_client.installed.connect(_refresh_materials)
+	_refresh_materials()
 	var hint := Label.new()
 	hint.text = "Left drag to edit. Middle drag to look."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -54,8 +63,8 @@ func radius() -> float:
 func strength() -> float:
 	return _strength.value * 0.01
 
-func material_index() -> int:
-	return _materials.selected
+func material_id() -> String:
+	return _materials.get_selected_metadata()
 
 func show_status(message: String) -> void:
 	_status.text = message
@@ -65,7 +74,29 @@ func _refresh_undo(editor: Editor) -> void:
 
 func _select(next: String) -> void:
 	mode = next
-	_materials.visible = mode == "paint"
+	_paint_row.visible = mode == "paint"
+
+func _refresh_materials() -> void:
+	var selected := material_id() if _materials.selected >= 0 else "earth"
+	_materials.clear()
+	for item: Dictionary in Terrain.palette() + Cache.installed():
+		_materials.add_item(item.name)
+		_materials.set_item_metadata(_materials.item_count - 1, item.id)
+		if item.id == selected:
+			_materials.select(_materials.item_count - 1)
+
+func _browse() -> void:
+	var browser := preload("res://scripts/ui/material_browser.gd").new()
+	add_child(browser)
+	browser.setup(_client)
+	browser.chosen.connect(func(id: String, title: String) -> void:
+		_refresh_materials()
+		for index in _materials.item_count:
+			if _materials.get_item_metadata(index) == id:
+				_materials.select(index)
+				break
+		show_status("%s is ready to paint." % title))
+	browser.popup_centered(Vector2i(450, 330))
 
 func _slider(title: String, slider: HSlider, low: float, high: float, initial: float, suffix: String) -> void:
 	var row := HBoxContainer.new()

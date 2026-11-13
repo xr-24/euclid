@@ -941,6 +941,16 @@ func _check_terrain() -> void:
 		"smooth lowers a local peak towards its neighbours")
 	brush.dab(Vector2.ZERO, area, "flatten", 8.0, 1.0, 0, 1.5)
 	_check(is_equal_approx(brush.surface_at(Vector2.ZERO, area), 1.5), "flatten matches the stroke's sampled level")
+	var center := TerrainData.CELLS / 2 * TerrainData.SIDE + TerrainData.CELLS / 2
+	brush.dab(Vector2.ZERO, area, "paint", 8.0, 1.0, 2, 0.0)
+	var legacy := TerrainData.new()
+	_check(legacy.decode(brush.encode()) and legacy.weight(center, 2) == 255,
+		"older built-in material weights still decode")
+	brush.dab(Vector2.ZERO, area, "paint", 8.0, 0.5, 3, 0.0)
+	var expanded := TerrainData.new()
+	_check(expanded.decode(brush.encode(), brush.encode_imported(), 1) and expanded.weight(center, 2) >= 127
+		and expanded.weight(center, 3) >= 127 and is_equal_approx(expanded.surface_at(Vector2.ZERO, area), 1.5),
+		"an imported layer blends with saved paint and preserves height")
 	layer.free()
 	DirAccess.remove_absolute(path)
 

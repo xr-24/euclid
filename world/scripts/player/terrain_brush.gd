@@ -54,7 +54,7 @@ func looking() -> bool:
 
 func cancel() -> void:
 	if is_instance_valid(_target) and _editor.node_for(_id) == _target:
-		_target.load_surface(_editor.record(_id).get("terrain_surface", ""))
+		_target.load_record(_editor.record(_id))
 	_clear_stroke()
 	_stop_look()
 	_marker.hide()
@@ -153,7 +153,11 @@ func _begin(hit: Dictionary) -> void:
 	_mode = _panel.mode
 	_radius = _panel.radius()
 	_strength = _panel.strength()
-	_material = _panel.material_index()
+	_material = _target.prepare_material(_panel.material_id()) if _mode == "paint" else 0
+	if _material < 0:
+		_clear_stroke()
+		_panel.show_status("Material unavailable or all five import slots are in use.")
+		return
 	_last = hit.point
 	_left_surface = false
 	_level = _target.data.surface_at(_last, _target.terrain_size)
@@ -173,8 +177,11 @@ func _finish() -> void:
 	if not is_instance_valid(_target) or _revision != _editor.revision:
 		cancel()
 		return
-	var result := _editor.commit_storage(_id, {"terrain_surface": _target.data.encode()}, _revision, "Stroke saved.")
+	var updates := Terrain.storage_for(_target.data, _target.material_ids)
+	var result := _editor.commit_storage(_id, updates, _revision, "Stroke saved.")
 	if result.ok:
+		if _editor.revision == _revision:
+			_target.load_record(_editor.record(_id))
 		_player.global_position = Tools.above_surface(_editor, _player.global_position, _id)
 		_clear_stroke()
 	else:

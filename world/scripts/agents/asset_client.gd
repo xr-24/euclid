@@ -9,7 +9,9 @@ func configure(url: String, token: String) -> void:
 	_url = url
 	_headers = ["Authorization: Bearer " + token, "Content-Type: application/json"]
 
-func _json(route: String, body: Variant = null) -> Dictionary:
+func request_json(route: String, body: Variant = null) -> Dictionary:
+	if _url.is_empty():
+		return {"ok": false, "message": "Launch Euclid with its local gateway to import assets."}
 	var request := HTTPRequest.new()
 	request.timeout = 85
 	request.body_size_limit = 262144
@@ -29,8 +31,24 @@ func _json(route: String, body: Variant = null) -> Dictionary:
 		return {"ok": false, "message": str(data.get("error", "The asset request failed."))}
 	return data
 
+func download_file(route: String, path: String, limit: int) -> Dictionary:
+	var request := HTTPRequest.new()
+	request.timeout = 85
+	request.body_size_limit = limit
+	request.use_threads = true
+	request.download_file = path
+	add_child(request)
+	if request.request(_url + route, _headers) != OK:
+		request.queue_free()
+		return {"ok": false, "message": "The asset download could not start."}
+	var response: Array = await request.request_completed
+	request.queue_free()
+	if response[0] != HTTPRequest.RESULT_SUCCESS or response[1] != 200:
+		return {"ok": false, "message": "The asset download failed. You can retry it."}
+	return {"ok": true}
+
 func list_assets() -> Dictionary:
-	return await _json("/v1/assets")
+	return await request_json("/v1/assets")
 
 func ensure_asset(target: String, context: Dictionary, preserve_rig := false) -> Dictionary:
 	if _busy:
@@ -49,9 +67,9 @@ func _prepare(target: String, context: Dictionary, preserve_rig: bool) -> Dictio
 			target = "rig-" + target
 		if Assets.scene(target) != null:
 			return {"ok": true, "asset": Assets.metadata(target)}
-		data = await _json("/v1/assets/import", {"asset_id": target})
+		data = await request_json("/v1/assets/import", {"asset_id": target})
 	else:
-		data = await _json("/v1/assets/resolve", {"query": target, "context": context, "preserve_rig": preserve_rig})
+		data = await request_json("/v1/assets/resolve", {"query": target, "context": context, "preserve_rig": preserve_rig})
 	if not data.get("ok", false):
 		return data
 	var id: String = str(data.get("asset_id", data.get("asset", {}).get("asset_id", "")))
@@ -62,24 +80,14 @@ func _prepare(target: String, context: Dictionary, preserve_rig: bool) -> Dictio
 		if Time.get_ticks_msec() > deadline:
 			return {"ok": false, "message": "The model is still preparing. Retry after the import finishes."}
 		await get_tree().create_timer(1.5).timeout
-		data = await _json("/v1/assets/" + id)
+		data = await request_json("/v1/assets/" + id)
 		if not data.get("ok", false):
 			return data
 	var location := Assets.folder(id)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(location))
-	var request := HTTPRequest.new()
-	request.timeout = 85
-	request.body_size_limit = 67108864
-	request.use_threads = true
-	request.download_file = location.path_join("model.part")
-	add_child(request)
-	if request.request(_url + "/v1/assets/" + id + "/model.glb", _headers) != OK:
-		request.queue_free()
-		return {"ok": false, "message": "The model download could not start."}
-	var response: Array = await request.request_completed
-	request.queue_free()
-	if response[0] != HTTPRequest.RESULT_SUCCESS or response[1] != 200:
-		return {"ok": false, "message": "The model download failed. You can retry it."}
+	var download := await download_file("/v1/assets/" + id + "/model.glb", location.path_join("model.part"), 67108864)
+	if not download.ok:
+		return download
 	if DirAccess.rename_absolute(location.path_join("model.part"), location.path_join("model.glb")) != OK:
 		return {"ok": false, "message": "The model cache could not be saved."}
 	var metadata_file := FileAccess.open(location.path_join("asset.json"), FileAccess.WRITE)

@@ -2,11 +2,11 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const settings = { profile: 'balanced', width: 1920, height: 1080 };
-const views = ['arrival', 'pool', 'portico'];
+
 const metrics = ['fps', 'p95_ms', 'p99_ms', 'gpu_ms', 'cpu_process_ms', 'draw_calls', 'primitives'];
 const runId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 
-function validate(result) {
+function validate(result, { zone, views }) {
   if (result?.schema_version !== 1 || result.profile !== settings.profile || result.vsync !== false ||
       result.resolution?.[0] !== settings.width || result.resolution?.[1] !== settings.height ||
       typeof result.renderer !== 'string' || !result.renderer || typeof result.device !== 'string' || !result.device ||
@@ -14,10 +14,10 @@ function validate(result) {
     throw new Error('The benchmark did not use the expected display settings.');
   }
   const samples = views.map(view => {
-    const sample = result.samples.find(item => item.zone === 'villa' && item.variant === 'default' && item.view === view);
+    const sample = result.samples.find(item => item.zone === zone && item.variant === 'default' && item.view === view);
     if (!sample || !Number.isInteger(sample.frames) || sample.frames < 3 ||
         !metrics.every(key => Number.isFinite(sample[key]) && sample[key] >= 0)) {
-      throw new Error('The benchmark did not measure every fixed villa view.');
+      throw new Error('The benchmark did not measure every configured view.');
     }
     return { view, frames: sample.frames, ...Object.fromEntries(metrics.map(key => [key, sample[key]])) };
   });
@@ -54,20 +54,31 @@ export function createWorkbenchDiagnostics(storage, git, runner) {
       const folder = path.join(runs, job.id);
       const worktree = path.join(folder, 'worktree');
       const snapshot = path.join(folder, 'snapshot');
-      const report = { id: job.id, status: 'failed', name: 'Villa frame times', ...settings, base,
+      const report = { id: job.id, status: 'failed', name: 'Environment frame times', ...settings, base,
         version: version || '', completed_at: '', before: null, after: null, error: '', log: '' };
       const update = chunk => { job.log = (job.log + chunk).slice(-12000); };
       try {
         await mkdir(snapshot, { recursive: true });
         await git.add(worktree, base);
         update('Measuring the pinned Git baseline.\n');
+        const manifest = JSON.parse(await readFile(path.join(worktree, 'world/data/world.json'), 'utf8'));
+        const defaults = JSON.parse(await readFile(new URL('../world/data/world.json', import.meta.url), 'utf8'));
+        const zone = manifest.benchmark_zone ?? defaults.benchmark_zone ?? manifest.zones[0].id;
+        if (!/^[a-z][a-z0-9_-]{0,63}$/.test(zone)) throw new Error('Invalid benchmark environment.');
+        const definition = JSON.parse(await readFile(path.join(worktree, 'world/data/zones', zone, 'zone.json'), 'utf8'));
+        const views = definition.benchmark_views;
+        if (!Array.isArray(views) || !views.length || views.some(view => !/^[a-zA-Z0-9_-]+$/.test(view))) {
+          throw new Error('The benchmark environment has no valid views.');
+        }
+        const target = { ...settings, zone, views };
+        report.name = (manifest.zones.find(item => item.id === zone)?.name ?? zone) + ' frame times';
         report.before = validate(await runner.benchmark({ directory: snapshot, worktree, id: job.id },
-          path.join(folder, 'before'), settings, update, signal));
+          path.join(folder, 'before'), target, update, signal), target);
         if (draft) {
           await verify(draft);
           update('Measuring the reviewed draft.\n');
           report.after = validate(await runner.benchmark({ directory: snapshot, worktree: draft.worktree, id: job.id },
-            path.join(folder, 'after'), settings, update, signal));
+            path.join(folder, 'after'), target, update, signal), target);
           await verify(draft);
           if (['device', 'renderer', 'mode'].some(key => report.before[key] !== report.after[key])) {
             throw new Error('The baseline and draft used different rendering devices or modes.');

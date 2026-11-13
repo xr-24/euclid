@@ -150,6 +150,24 @@
         "water_look": {"type": "object", "properties": {"shallow_color": {"$ref": "#/$defs/color"}, "deep_color": {"$ref": "#/$defs/color"}, "foam_color": {"$ref": "#/$defs/color"}, "roughness_value": {"type": "number", "minimum": 0, "maximum": 1}, "reflection_strength": {"type": "number", "minimum": 0, "maximum": 1}, "ripple_strength": {"type": "number", "minimum": 0, "maximum": 1}, "clarity": {"type": "number", "minimum": 0.05, "maximum": 8}, "foam_amount": {"type": "number", "minimum": 0, "maximum": 2}, "refraction": {"type": "number", "minimum": 0, "maximum": 0.06}}, "required": []}
       }
     },
+    "pool_basin": {
+      "label": "Pool with basin",
+      "description": "Place a complete rectangular pool with lining, a rim and water. For an excavated pool, parent it directly to a terrain piece and set basin_mode to excavated.",
+      "script": "res://scripts/pieces/water_piece.gd",
+      "required": ["water_kind", "water_size", "basin_mode"],
+      "defaults": {"water_kind": "pool", "water_size": [4, 6], "basin_mode": "raised", "basin_depth": 1.45},
+      "validate_record": true,
+      "validate_parent": true,
+      "parent_defaults": {"terrain": {"basin_mode": "excavated"}},
+      "fields": {
+        "water_kind": {"type": "string", "enum": ["pool"]},
+        "water_size": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number", "minimum": 1.5, "maximum": 50}},
+        "basin_mode": {"type": "string", "enum": ["raised", "excavated"]},
+        "basin_depth": {"type": "number", "minimum": 0.35, "maximum": 5},
+        "basin_material": {"$ref": "#/$defs/piece_material"},
+        "mirror": {"type": "boolean"}
+      }
+    },
     "spray": {
       "label": "Water spray",
       "description": "An aimable particle jet for fountains and waterfalls.",
@@ -231,7 +249,7 @@
     },
     "building": {
       "label": "Building plan",
-      "description": "A walkable room with a floor, four walls, roof, steps and working openings. Front faces local -Z.",
+      "description": "An editable footprint with a floor, exterior walls, roof, steps and interior partitions. Front faces local -Z.",
       "script": "res://scripts/pieces/building_piece.gd",
       "placement_yaw": 180,
       "placement_lift": 0.04,
@@ -248,6 +266,12 @@
         "roof": {"type": "string", "enum": ["none", "flat", "gable"]},
         "roof_rise": {"type": "number", "minimum": 0.15, "maximum": 8},
         "openings": {"type": "object", "properties": {"front": {"$ref": "#/$defs/building_opening"}, "right": {"$ref": "#/$defs/building_opening"}, "back": {"$ref": "#/$defs/building_opening"}, "left": {"$ref": "#/$defs/building_opening"}}, "required": []},
+        "wall_openings": {
+          "type": "object", "description": "Opening lists for exterior walls. A list overrides the legacy single opening on that side.",
+          "properties": {"front": {"$ref": "#/$defs/wall_opening_list"}, "right": {"$ref": "#/$defs/wall_opening_list"}, "back": {"$ref": "#/$defs/wall_opening_list"}, "left": {"$ref": "#/$defs/wall_opening_list"}},
+          "required": []
+        },
+        "partitions": {"type": "array", "maxItems": 32, "description": "Interior walls from start to end [x,z] in local metres. Opening offsets are measured from each wall's midpoint.", "items": {"$ref": "#/$defs/partition"}},
         "steps": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "offset": {"type": "number", "minimum": -30, "maximum": 30}, "width": {"type": "number", "minimum": 0.5, "maximum": 20}, "rise": {"type": "number", "minimum": 0.1, "maximum": 5}, "run": {"type": "number", "minimum": 0.3, "maximum": 25}, "count": {"type": "number", "minimum": 1, "maximum": 32}}, "required": []},
         "material": {"$ref": "#/$defs/piece_material"},
         "floor_material": {"$ref": "#/$defs/piece_material"},
@@ -267,8 +291,9 @@
     },
     "video_screen": {
       "label": "Video screen",
-      "description": "A local video surface. Choose a video from list_local_videos, or import a file from the Pieces panel. The screen faces local +Z.",
+      "description": "A video or playlist from a YouTube link, or an imported local file. The screen faces local +Z.",
       "script": "res://scripts/pieces/video_screen_piece.gd",
+      "validate_record": true,
       "placement_yaw": 0,
       "placement_lift": 1.5,
       "interactions": true,
@@ -276,6 +301,7 @@
       "defaults": {"screen_size": [2.4, 1.35], "autoplay": true, "loop": true, "volume": 0.8},
       "fields": {
         "screen_size": {"type": "array", "description": "Width and height in metres", "items": {"type":"number","minimum":0.2,"maximum":30}, "minItems":2,"maxItems":2},
+        "youtube_url": {"type": "string", "description": "Paste a YouTube video or playlist link. Clear it to use a local file.", "maxLength": 1024},
         "video_id": {"type": "string", "catalog": "local_video", "pattern": "^([a-f0-9]{32})?$"},
         "autoplay": {"type": "boolean"},
         "loop": {"type": "boolean"},

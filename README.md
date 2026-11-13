@@ -69,15 +69,25 @@ In **Build → Pieces**, add **Vegetation scatter**, **Water surface**, **Water 
 or **Physics prop**. Make scatter a child of a terrain to follow its sculpted height.
 The villa and shore can be edited through the same Pieces panel.
 
-Add **Building plan** for an editable room with a floor, walls, a roof, and
-optional steps. Choose the door or window for each side and set its size,
-position, and hinge or slide motion. Aim at a door or window and press **E**
-to use it. **Stairs** can also be placed independently.
+Add **Building plan** for a floor, exterior walls, roof, and optional steps.
+In the piece editor, **Partitions** defines interior walls by their local
+start and end coordinates. **Wall Openings** can hold several doors,
+windows, or open passages on each exterior wall. Aim at a door or window and
+press **E** to use it.
 
-Add **Video screen** and select **Video → Import…**, choose a local file, then
-**Apply**. OGV files play directly. MP4, MOV, WebM and MKV files use FFmpeg on
-your PATH for import. Press **E** at the screen to play or pause. The same piece
-fields set dimensions, autoplay, looping, and volume.
+Add **Pool with basin** for a complete pool. Choose a sculptable terrain as
+the parent to excavate and line it in the same edit. Add it at environment
+level for a freestanding pool. Moving or removing an excavated pool restores
+the terrain beneath it.
+
+Add **Video screen**, paste a YouTube video or playlist link, then select
+**Apply**. Use **E** at the screen to play or pause, or **Previous** and **Next**
+in the piece editor to navigate the playlist. On Windows, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-video.ps1`
+once to install the embedded browser for that checkout, then start Euclid
+normally. For a local file, clear the YouTube link and use **Local video → Import…**.
+OGV works directly. MP4, MOV, WebM and MKV use FFmpeg on your PATH and import
+in the background.
 
 Let go of the palm beam to drop the prop where it is; it keeps the turn you gave it.
 Right-click while holding it to place it and lock its physics there instead. Right-click a

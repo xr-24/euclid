@@ -47,7 +47,7 @@ static func valid(record: Variant) -> bool:
 
 ## A list of pieces and all their children: valid records, unique ids, bounded size and depth.
 static func valid_tree(pieces: Variant) -> bool:
-	return _valid_level(pieces, {}, [0], 0)
+	return _valid_level(pieces, {}, [0], 0, {})
 
 static func factory(type: String) -> GDScript:
 	_factory_mutex.lock()
@@ -58,7 +58,7 @@ static func factory(type: String) -> GDScript:
 	_factory_mutex.unlock()
 	return factory_script
 
-static func _valid_level(pieces: Variant, ids: Dictionary, count: Array, depth: int) -> bool:
+static func _valid_level(pieces: Variant, ids: Dictionary, count: Array, depth: int, parent: Dictionary) -> bool:
 	if not pieces is Array or depth > MAX_DEPTH:
 		return false
 	for piece: Variant in pieces:
@@ -67,8 +67,10 @@ static func _valid_level(pieces: Variant, ids: Dictionary, count: Array, depth: 
 			return false
 		if depth > 0 and _data.types[piece.type].get("fixed_transform", false):
 			return false
+		if _data.types[piece.type].get("validate_parent", false) and not factory(piece.type).valid_parent(piece, parent):
+			return false
 		ids[piece.id] = true
-		if piece.has("children") and not _valid_level(piece.children, ids, count, depth + 1):
+		if piece.has("children") and not _valid_level(piece.children, ids, count, depth + 1, piece):
 			return false
 	return true
 

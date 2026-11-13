@@ -37,9 +37,9 @@ var _root: Node3D
 var _load_error := ""
 var bounds: AABB
 
-func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime = null, scene_bounds := Placement.GRID) -> void:
+func _init(path := "", prefabs: PrefabLibrary = null, behaviors: BehaviorRuntime = null, scene_bounds: Variant = null) -> void:
 	_path = path
-	bounds = scene_bounds
+	bounds = Placement.workshop_bounds() if scene_bounds == null else scene_bounds
 	_prefabs = prefabs
 	_behaviors = behaviors
 	var state := SceneStore.read(path, _valid_record, DressingLayer.valid_override.bind(bounds))

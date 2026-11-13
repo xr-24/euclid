@@ -87,18 +87,22 @@ func encode() -> String:
 func height_at(x: int, z: int) -> float:
 	return heights[clampi(z, 0, CELLS) * SIDE + clampi(x, 0, CELLS)]
 
-func surface_at(point: Vector2, size: Vector2) -> float:
+func surface_at(point: Vector2, size: Vector2, cuts := PackedFloat32Array()) -> float:
 	var cell := ((point / size + Vector2.ONE * 0.5) * CELLS).clamp(Vector2.ZERO, Vector2.ONE * CELLS)
 	var x := mini(floori(cell.x), CELLS - 1)
 	var z := mini(floori(cell.y), CELLS - 1)
 	var u := cell.x - x
 	var v := cell.y - z
 	# Same diagonal as the render and collision triangles.
-	var a := height_at(x, z)
-	var b := height_at(x + 1, z)
-	var c := height_at(x, z + 1)
-	var d := height_at(x + 1, z + 1)
+	var a := rendered_height(x, z, cuts)
+	var b := rendered_height(x + 1, z, cuts)
+	var c := rendered_height(x, z + 1, cuts)
+	var d := rendered_height(x + 1, z + 1, cuts)
 	return a + u * (b - a) + v * (c - a) if u + v <= 1.0 else d + (1.0 - u) * (c - d) + (1.0 - v) * (b - d)
+
+func rendered_height(x: int, z: int, cuts: PackedFloat32Array) -> float:
+	var index := clampi(z, 0, CELLS) * SIDE + clampi(x, 0, CELLS)
+	return heights[index] if cuts.is_empty() else minf(heights[index], cuts[index])
 
 func weights(index: int) -> Color:
 	var sand := float(paint[index * 2]) / 255.0

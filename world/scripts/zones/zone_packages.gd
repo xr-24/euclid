@@ -5,20 +5,27 @@ const DIRECTORY := "res://data/zones"
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
+static var _world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world.json"))
 static var _packages := _load_packages()
 static var _aliases := {}
 
 static func ids() -> Array:
 	return _packages.keys()
 
+static func startup_zone() -> String:
+	return _world.get("startup_zone", _world.zones[0].id)
+
+static func workshop_zone() -> String:
+	return _world.get("workshop_zone", startup_zone())
+
 static func definition(id: String) -> Dictionary:
-	return _packages.get(_aliases.get(id, id), _packages.get("construct", {}))
+	return _packages.get(_aliases.get(id, id), _packages.get(startup_zone(), {}))
 
 static func has(id: Variant) -> bool:
 	return id is String and _packages.has(id)
 
 static func register_zone(zone: Dictionary) -> void:
-	var package: String = zone.get("package", "construct" if zone.get("template") == "grid" else zone.id)
+	var package: String = zone.get("package", workshop_zone() if zone.get("template") == "grid" else zone.id)
 	if _packages.has(package):
 		_aliases[zone.id] = package
 

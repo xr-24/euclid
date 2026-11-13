@@ -56,7 +56,7 @@ var manifest: Dictionary
 var asset_client: Node
 var material_client: MaterialClient
 var sky_client: SkyClient
-var zone_id := "construct"
+var zone_id := ""
 var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
@@ -152,14 +152,17 @@ func _ready() -> void:
 	add_child(_weather)
 	_setup_player()
 	behavior_runtime = BehaviorRuntime.new(player)
-	world_tools = WorldTools.new("" if smoke_mode else "user://grid-entities.json", prefab_library, behavior_runtime)
+	var workshop := Packages.workshop_zone()
+	scene_tools[workshop] = WorldTools.new("" if smoke_mode else "user://grid-entities.json",
+		prefab_library, behavior_runtime, Packages.bounds(workshop))
+	world_tools = scene_tools[workshop]
 	_register_live_extensions()
 	add_child(agent_presence)
 	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", null)
 	_setup_ui()
 	_setup_gateway()
 	WorldArt.init(self)
-	_load_zone("construct")
+	_load_zone(Packages.startup_zone())
 	if not smoke_mode:
 		_restore()
 		_setup_world_bridge()
@@ -813,8 +816,6 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 			behavior_runtime.finish(linked_preview, false)
 			world_tools.finish_behavior_preview(linked_preview, false)
 		world_tools.attach(null)
-		if not scene_tools.has("construct"):
-			scene_tools["construct"] = world_tools
 		if not scene_tools.has(zone_id):
 			var prefix := "grid" if _is_workshop(zone_id) else "scene"
 			var path := "" if smoke_mode else "user://%s-entities-%s.json" % [prefix, zone_id]

@@ -4,6 +4,7 @@ extends VBoxContainer
 const Registry = preload("res://scripts/workshop/command_registry.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
+const VideoImport = preload("res://scripts/assets/video_import.gd")
 const Videos = preload("res://scripts/assets/video_library.gd")
 const Library = preload("res://scripts/asset_library.gd")
 const Types = preload("res://scripts/pieces/piece_types.gd")
@@ -116,12 +117,22 @@ func _show_fields(record: Dictionary) -> void:
 		if key in ["id", "type"] or (Types.types()[record.type].get("fixed_transform", false) and key in ["position", "rotation", "scale"]):
 			continue
 		_add_field(key, fields[key], record.get(key), _field_controls, _fields)
+	if record.type == "video_screen":
+		var controls := HBoxContainer.new()
+		_fields.add_child(controls)
+		for command in [["Play", "play"], ["Pause", "pause"], ["Previous", "previous"], ["Next", "next"]]:
+			_button(controls, command[0], _screen_action.bind(record.id, command[1]))
+
+func _screen_action(id: String, action: String) -> void:
+	var screen := _editor.node_for(id)
+	if screen and screen.has_method("playback"):
+		_notice.text = screen.playback(action).message
 
 func _video_options(key: String, value: Variant, inputs: Dictionary, parent: Control) -> void:
 	var options := OptionButton.new()
 	options.fit_to_longest_item = false
 	_fill_videos(options, value)
-	var row := _row("Video", options, parent)
+	var row := _row("Local video", options, parent)
 	_button(row, "Import…", _browse_video.bind(options))
 	inputs[key] = {"control": options, "type": "string", "allow_empty": true, "initial": _read(options)}
 
@@ -142,11 +153,12 @@ func _browse_video(options: OptionButton) -> void:
 func _import_video(path: String, options: OptionButton) -> void:
 	_video_importing = true
 	_notice.text = "Importing video…"
-	var result := {}
-	var task := WorkerThreadPool.add_task(func() -> void: result.merge(Videos.import_local(path)), false, "Import local video")
-	while not WorkerThreadPool.is_task_completed(task):
-		await get_tree().process_frame
-	WorkerThreadPool.wait_for_task_completion(task)
+	var importer := VideoImport.new()
+	get_tree().root.add_child(importer)
+	importer.finished.connect(_video_imported.bind(options))
+	importer.start(path)
+
+func _video_imported(result: Dictionary, options: OptionButton) -> void:
 	_video_importing = false
 	if not result.ok:
 		_notice.text = result.message
@@ -209,7 +221,7 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 			if choice == value:
 				options.select(options.item_count - 1)
 		control = options
-	elif field.get("type") == "array" and field.get("items", {}).get("type") == "object":
+	elif field.get("type") == "array" and _item_is_object(field):
 		var text := TextEdit.new()
 		text.custom_minimum_size.y = 112
 		if value is Array:
@@ -224,9 +236,17 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 		if field.get("type") == "array":
 			text.placeholder_text = "[x, y, z]"
 		control = text
-	var row := _row(key.capitalize(), control, parent)
+	if key == "youtube_url" and control is LineEdit:
+		control.placeholder_text = "YouTube video or playlist link"
+	var row := _row("YouTube" if key == "youtube_url" else key.capitalize(), control, parent)
 	row.tooltip_text = field.get("description", "")
-	inputs[key] = {"control": control, "type": field.get("type", ""), "initial": _read(control)}
+	inputs[key] = {"control": control, "type": field.get("type", ""), "allow_empty": key == "youtube_url", "initial": _read(control)}
+
+static func _item_is_object(field: Dictionary) -> bool:
+	var item: Dictionary = field.get("items", {})
+	if item.has("$ref"):
+		item = Registry.field(str(item["$ref"]).get_file())
+	return item.get("type") == "object"
 
 static func _display_value(value: Variant, field: Dictionary) -> String:
 	if value == null:
@@ -281,6 +301,10 @@ func _edit() -> void:
 	var result := _changes(_field_controls)
 	if result.has("error"):
 		_notice.text = result.error
+		return
+	var youtube: String = result.values.get("youtube_url", "")
+	if not youtube.is_empty() and preload("res://scripts/assets/youtube_link.gd").parse(youtube).is_empty():
+		_notice.text = "Paste a YouTube video or playlist link."
 		return
 	_run({"tool": "edit_piece", "target": _selected, "piece_values": result.values})
 

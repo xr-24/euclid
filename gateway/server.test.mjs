@@ -24,6 +24,11 @@ test('gateway authentication, lifecycle, duplicates, limits and restart', async 
   assert.equal((await post({ ...event, event: 'shell.execute' })).status, 400);
   assert.equal((await post({ ...event, agent_id: 'unassigned' })).status, 403);
   assert.equal((await post({ ...event, event: 'task.completed' })).status, 409);
+  const media = await fetch(base + '/media/youtube');
+  assert.equal(media.status, 200);
+  assert.ok(media.headers.get('content-security-policy').includes('frame-src https://www.youtube.com'));
+  assert.match(await media.text(), /onYouTubeIframeAPIReady/);
+  assert.equal((await fetch(base + '/media/youtube', { headers: { Origin: 'https://example.com' } })).status, 403);
   const concurrent = await Promise.all([post(event), post(event)]);
   const results = await Promise.all(concurrent.map(response => response.json()));
   assert.equal(results.filter(result => result.accepted).length, 1);

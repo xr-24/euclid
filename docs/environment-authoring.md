@@ -104,17 +104,21 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 - **Villa and shore** use those pieces along with editable models, shapes, lights and buoyant
   props. Their Blender-generated meshes remain reusable model assets.
 
-- **Building plans** generate a floor, four walls, a flat or gabled roof, and optional
-  entrance steps. Each wall can hold a hinged or sliding door or window. Aim at the
-  opening and press **E** to use it. In **Pieces**, select **Building plan** to set its
-  footprint, finishes, and opening settings, or add **Stairs** independently. Agents can
-  edit the same fields with `edit_piece`, including the opening's saved initial state.
-- **Video screens** are registered pieces. Add a screen in **Pieces**, import a local
-  video, and apply it. Screens play Ogg Theora and can use FFmpeg to convert common
-  formats during import. Aim at the screen and press **E** to pause or resume. Agents
-  can discover imported IDs with `list_local_videos` and use `control_video_screen` for
-  playback. Source files stay on the player's machine, and shared agent views hide
-  the video image.
+- **Building plans** support multiple rooms within a rectangular footprint. Specify
+  `partitions` as wall segments with `start` and `end` in local `[x,z]` metres,
+  plus optional `openings`. Opening `offset` is measured along the wall from its
+  midpoint. Use `wall_openings` for exterior opening lists. Each opening can be a
+  hinged or sliding door or window, or an open passage (`archway`). The older
+  `openings` field still supplies each side without an explicit list.
+- **Pool with basin** (`pool_basin`) adds the floor, lining, rim and water as one
+  piece. When parented to sculptable terrain it defaults to `basin_mode: excavated`;
+  environment-level placement defaults to `raised`. Excavation is derived from the
+  piece. Removing it or undoing the edit reveals the original terrain and its saved brushwork.
+- **Video screens** use YouTube links by default and accept local imports. Set
+  `youtube_url` with `add_piece` or `edit_piece`. Agents can use
+  `control_video_screen` for playback and playlist navigation. For local sources,
+  call `list_local_videos` to discover IDs after the player imports files. FFmpeg
+  conversions run separately from the game. Shared agent views hide the video image.
 - **Time and weather** live in **Build → Atmosphere**. Set a fixed hour or let the day
   cycle, then adjust cloud cover and rain. The same preview, save and discard tools
   accept `time_mode`, `time_of_day`, `day_length`, `cloud_cover` and `rain`.
@@ -123,4 +127,3 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 
 - **Sharing.** Turn an edited environment into a package that passes the checks, including
   `check.ps1 -Performance`.
-- **Web playback.** Add a browser-backed source for in-world screens.

@@ -69,6 +69,7 @@ const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
+const TerrainNode = preload("res://scripts/pieces/terrain_node.gd")
 const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
@@ -228,6 +229,8 @@ func _run() -> void:
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
 	_check_building()
+	_check_pool_basin()
+	_check_youtube_links()
 	_check_prop_migration(path + ".piece-migration")
 	_check_piece_upgrade()
 	await _check_terrain()
@@ -537,8 +540,8 @@ func _check_scene_edits(path: String) -> void:
 	var beach_root := Node3D.new()
 	var villa_path := path + ".villa"
 	var beach_path := path + ".beach"
-	var villa := WorldTools.new(villa_path, null, null, ScenePlacement.VILLA)
-	var beach := WorldTools.new(beach_path, null, null, ScenePlacement.BEACH)
+	var villa := WorldTools.new(villa_path, null, null, ScenePlacement.bounds_for("villa"))
+	var beach := WorldTools.new(beach_path, null, null, ScenePlacement.bounds_for("beach"))
 	villa.attach(villa_root)
 	beach.attach(beach_root)
 	var added := SceneCommands.execute(villa, {"tool": "spawn_prop", "target": "traffic_cone",
@@ -561,8 +564,8 @@ func _check_scene_edits(path: String) -> void:
 	beach_root.free()
 	villa_root = Node3D.new()
 	beach_root = Node3D.new()
-	villa = WorldTools.new(villa_path, null, null, ScenePlacement.VILLA)
-	beach = WorldTools.new(beach_path, null, null, ScenePlacement.BEACH)
+	villa = WorldTools.new(villa_path, null, null, ScenePlacement.bounds_for("villa"))
+	beach = WorldTools.new(beach_path, null, null, ScenePlacement.bounds_for("beach"))
 	villa.attach(villa_root)
 	beach.attach(beach_root)
 	_check(villa.execute("inspect", {"id": id}).get("entity") == moved.get("entity")
@@ -916,7 +919,56 @@ func _check_building() -> void:
 		_check(not invalid.ok and editor.record(built.id) == plan, "reject a sliding window with insufficient travel")
 		_check(editor.execute({"tool": "undo_piece"}).ok and not editor.record(built.id).openings.front.get("open", false),
 			"undo the building edit")
+	var rooms := editor.execute({"tool": "add_piece", "target": "building", "piece_values": {"position": [0, 0, 0],
+		"footprint": [10, 10], "partitions": [
+			{"start": [-5, 0], "end": [5, 0], "openings": [
+				{"kind": "door", "offset": -2.5}, {"kind": "door", "offset": 2.5}]},
+			{"start": [0, 0], "end": [0, 5]}],
+		"wall_openings": {"front": [{"kind": "window", "offset": -2.5}, {"kind": "window", "offset": 2.5}],
+			"left": [{"kind": "archway", "width": 2.0}]}}})
+	var house := editor.node_for(rooms.get("id", ""))
+	_check(rooms.ok and house and house.has_node("Partition1/Opening2/Leaf") and house.has_node("Partition2")
+		and house.has_node("Front/Opening2/Leaf"), "build two rooms, a shared living area and multiple openings on one wall")
+	var blocked := editor.execute({"tool": "edit_piece", "target": rooms.get("id", ""), "piece_values": {
+		"wall_openings": {"front": [{"kind": "door", "offset": 0.0}, {"kind": "window", "offset": 0.4}]}}})
+	_check(not blocked.ok, "reject overlapping wall openings")
+
 	layer.free()
+
+func _check_pool_basin() -> void:
+	var zone := Node3D.new()
+	root.add_child(zone)
+	var layer := Node3D.new()
+	zone.add_child(layer)
+	var editor := PieceEditor.new()
+	var document := PieceDocument.new("", [])
+	editor.attach(layer, document, true, AABB(Vector3(-40, -24, -40), Vector3(80, 48, 80)))
+	var ground := editor.execute({"tool": "add_piece", "target": "terrain", "piece_values": {
+		"position": [0, 0, 0], "terrain_size": [32, 32]}})
+	var terrain := editor.node_for(ground.get("id", "")) as TerrainNode
+	_check(ground.ok and terrain, "place ground for an excavated basin")
+	if terrain:
+		var pool := editor.execute({"tool": "add_piece", "target": "pool_basin", "parent": ground.id,
+			"piece_values": {"position": [0, 0, 0], "rotation": [0, 25, 0]}})
+		_check(pool.ok and terrain.surface_height(Vector2.ZERO) < -1.45 and terrain.data.height_at(128, 128) == 0.0
+			and zone.get_meta("water_surfaces").size() == 1, "add excavation, basin and water in one undoable piece")
+		_check(editor.execute({"tool": "undo_piece"}).ok and terrain.surface_height(Vector2.ZERO) == 0.0
+			and zone.get_meta("water_surfaces").is_empty(), "restore the original terrain when the pool is undone")
+		var invalid := editor.execute({"tool": "add_piece", "target": "pool_basin", "parent": ground.id,
+			"piece_values": {"position": [15, 0, 0]}})
+		_check(not invalid.ok, "reject a pool that extends beyond its parent terrain")
+	var raised := editor.execute({"tool": "add_piece", "target": "pool_basin", "piece_values": {"position": [0, 0, 0]}})
+	_check(raised.ok and zone.get_meta("water_surfaces")[0].surface.position.y > 1.0, "place a raised pool without terrain")
+	zone.free()
+
+func _check_youtube_links() -> void:
+	const Links = preload("res://scripts/assets/youtube_link.gd")
+	_check(Links.parse("https://youtu.be/M7lc1UVf-VE?si=token").get("video") == "M7lc1UVf-VE"
+		and Links.parse("https://www.youtube.com/playlist?list=PLBCF2DAC6FFB574DE").get("playlist") == "PLBCF2DAC6FFB574DE"
+		and Links.parse("https://www.youtube.com/watch?v=M7lc1UVf-VE&list=PL123&index=2").get("index") == 2,
+		"accept YouTube videos, playlist links and indexed watch links")
+	_check(Links.parse("https://youtube.com.example.com/watch?v=M7lc1UVf-VE").is_empty()
+		and Links.parse("https://www.youtube.com/watch?v=invalid").is_empty(), "reject look-alike hosts and malformed video IDs")
 
 func _check_piece_upgrade() -> void:
 	var path := "user://piece-upgrade-%d.json" % Time.get_ticks_usec()

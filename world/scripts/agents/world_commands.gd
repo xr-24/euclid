@@ -24,7 +24,7 @@ func _piece_command(plan: Dictionary) -> Dictionary:
 	if plan.tool == "undo_piece":
 		return TerrainTools.undo(_world.pieces, _world.player)
 	var placement: Array = []
-	if plan.tool == "add_piece" and not plan.has("parent") and not plan.get("piece_values", {}).has("position"):
+	if plan.tool == "add_piece" and not plan.get("piece_values", {}).has("position"):
 		placement = _world._scene_spawn_position()
 	return _world.pieces.execute(plan, placement)
 

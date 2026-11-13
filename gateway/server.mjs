@@ -21,6 +21,7 @@ import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
+const youtubePage = new URL('./youtube-player.html', import.meta.url);
 const states = { 'task.started': 'working', 'task.completed': 'completed', 'task.failed': 'failed', 'task.blocked': 'blocked', 'presence.online': 'idle' };
 const validId = value => typeof value === 'string' && /^[a-zA-Z0-9._-]{1,100}$/.test(value);
 
@@ -104,7 +105,17 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const server = http.createServer(async (req, res) => {
     try {
       if (req.headers.origin) return reply(res, 403, { error: 'Browser origins are not supported' });
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 31 });
+      if (req.method === 'GET' && req.url === '/media/youtube') {
+        const host = server.address();
+        if (!host || req.headers.host !== `127.0.0.1:${host.port}`) return reply(res, 403, { error: 'Use the local Euclid address' });
+        const page = await readFile(youtubePage);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin',
+          'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; style-src 'unsafe-inline'; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'" });
+        res.end(page);
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 32 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });

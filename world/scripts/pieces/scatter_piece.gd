@@ -35,7 +35,7 @@ class SculptedSurface:
 
 	func height(x: float, z: float) -> float:
 		var p := to_terrain * Vector3(x, 0, z)
-		p.y = terrain.data.surface_at(Vector2(p.x, p.z), terrain.terrain_size)
+		p.y = terrain.surface_height(Vector2(p.x, p.z))
 		return (to_patch * p).y
 
 	func normal(x: float, z: float) -> Vector3:

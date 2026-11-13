@@ -7,7 +7,7 @@
       "fields": {}, "required": [], "scope": "session", "undo": "none", "mutates_world": false
     },
     {
-      "name": "control_video_screen", "description": "Read status, play, pause, or restart a video screen by piece ID.",
+      "name": "control_video_screen", "description": "Read status, play, pause, restart, or go to the next or previous YouTube playlist item by screen piece ID.",
       "service": "world", "handler": "_video_command", "effect": "preview", "surfaces": ["f2", "mcp"],
       "fields": {"target": "piece_id", "playback": "video_playback"}, "required": ["target"],
       "scope": "scene", "undo": "none", "mutates_world": false

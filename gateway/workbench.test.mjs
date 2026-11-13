@@ -331,6 +331,14 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
   const testFile = 'world/scripts/diagnostics/example_test.gd';
   const original = 'extends Node\n' + '# Fixture source padding.\n'.repeat(2800);
   await mkdir(path.join(root, 'world/scripts'), { recursive: true });
+  const benchmarkZone = 'fixture-studio';
+  const benchmarkViews = ['entry', 'desk', 'hall'];
+  const benchmarkPackage = path.join(root, 'world/data/zones', benchmarkZone);
+  await mkdir(benchmarkPackage, { recursive: true });
+  await writeFile(path.join(root, 'world/data/world.json'), JSON.stringify({
+    benchmark_zone: benchmarkZone, zones: [{ id: benchmarkZone, name: 'Fixture Studio' }],
+  }));
+  await writeFile(path.join(benchmarkPackage, 'zone.json'), JSON.stringify({ benchmark_views: benchmarkViews }));
   await writeFile(path.join(root, script), original);
   await writeFile(path.join(root, removed), 'extends Node\n');
   await writeFile(path.join(root, '.gitignore'), '.local/\n');
@@ -362,13 +370,15 @@ test('source drafts isolate authoring, revise from failed checks, and restore re
     async benchmark(source, output, settings, log, signal) {
       if (holdBenchmark) await sleep(10000, undefined, { signal });
       benchmarks++;
+      assert.equal(settings.zone, benchmarkZone);
+      assert.deepEqual(settings.views, benchmarkViews);
       const after = output.endsWith(path.sep + 'after');
       const text = await readFile(path.join(source.worktree, script), 'utf8');
       assert.equal(text, after ? original + 'const NEW := true\n' : original);
       log('Rendered fixed views.\n');
       return { schema_version: 1, profile: settings.profile, resolution: [settings.width, settings.height], vsync: false,
         device: 'Fixture GPU', renderer: 'forward_plus', mode: 'desktop',
-        samples: ['arrival', 'pool', 'portico'].map(view => ({ view, zone: 'villa', variant: 'default', frames: 420,
+        samples: benchmarkViews.map(view => ({ view, zone: benchmarkZone, variant: 'default', frames: 420,
           fps: after ? 70 : 55, p95_ms: after ? 15 : 20, p99_ms: 22, gpu_ms: 10, cpu_process_ms: 2,
           draw_calls: 80, primitives: 10000 })) };
     },

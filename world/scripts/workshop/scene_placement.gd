@@ -2,10 +2,10 @@ extends RefCounted
 ## Editable scene bounds and the shared camera-to-surface placement rule.
 
 const Packages = preload("res://scripts/zones/zone_packages.gd")
-static var GRID := Packages.bounds("construct")
-static var VILLA := Packages.bounds("villa")
-static var BEACH := Packages.bounds("beach")
 const Props = preload("res://scripts/zones/authored_props.gd")
+
+static func workshop_bounds() -> AABB:
+	return Packages.bounds(Packages.workshop_zone())
 
 static func bounds_for(zone: String) -> AABB:
 	return Packages.bounds(zone)

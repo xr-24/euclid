@@ -24,3 +24,6 @@ __pycache__/
 *.key
 *sketchfab*token*.txt
 *sketchfab*key*.txt
+
+# Optional local browser runtime.
+/world/addons/godot_cef/

@@ -2,7 +2,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const directory = new URL('../world/data/commands/', import.meta.url);
 const read = name => JSON.parse(readFileSync(new URL(name, directory), 'utf8'));
-const gridBounds = JSON.parse(readFileSync(new URL('../zones/construct/zone.json', directory), 'utf8')).bounds;
+const world = read('../world.json');
+const workshop = world.workshop_zone ?? world.startup_zone ?? world.zones[0].id;
+const gridBounds = read(`../zones/${workshop}/zone.json`).bounds;
 
 function createRegistry(snapshot) {
   if (snapshot?.version !== 1 || snapshot.schema?.version !== 1 || !snapshot.schema.$defs ||

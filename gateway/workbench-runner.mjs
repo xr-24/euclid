@@ -156,11 +156,11 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
       const tree = await prepare(source, onOutput, signal);
       const code = await run(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
         path.join(root, 'scripts/benchmark.ps1'), '-ProjectPath', path.join(tree, 'world'),
-        '-OutputDirectory', output, '-Zone', 'villa', '-Quality', settings.profile,
+        '-OutputDirectory', output, '-Zone', settings.zone, '-Quality', settings.profile,
         '-Width', String(settings.width), '-Height', String(settings.height), '-WindowId', String(benchmarkWindowId)],
-      { cwd: root, env, timeout: 150000, phase: 'Villa benchmark', onOutput, signal });
-      if (code !== 0) throw new Error('The villa benchmark failed. See the run output.');
-      for (const view of ['arrival', 'pool', 'portico']) await access(path.join(output, `villa_${view}.png`));
+      { cwd: root, env, timeout: 150000, phase: 'Environment benchmark', onOutput, signal });
+      if (code !== 0) throw new Error('The environment benchmark failed. See the run output.');
+      for (const view of settings.views) await access(path.join(output, `${settings.zone}_${view}.png`));
       const result = JSON.parse(await readFile(path.join(output, 'results.json'), 'utf8'));
       return { ...result, mode: benchmarkWindowId ? 'embedded' : 'desktop' };
     },

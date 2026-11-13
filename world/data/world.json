@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "startup_zone": "construct",
+  "workshop_zone": "construct",
+  "benchmark_zone": "villa",
   "zones": [
     { "id": "construct", "name": "The Grid", "subtitle": "A space to build together", "description": "The dark digital workshop and starting hub.", "color": "071217" },
     { "id": "villa", "name": "Villa Aurelia", "subtitle": "Space for focused work", "description": "A Roman villa with marble columns, formal gardens and a reflecting pool.", "color": "d8bd92" },

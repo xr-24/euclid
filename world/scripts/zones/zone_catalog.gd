@@ -34,6 +34,9 @@ static func validate(data: Variant) -> PackedStringArray:
 			continue
 		if zones.has(zone.id): errors.append("Duplicate zone id: " + zone.id)
 		zones[zone.id] = true
+	for field in ["startup_zone", "workshop_zone", "benchmark_zone"]:
+		if data.has(field) and (not _id(data[field]) or not zones.has(data[field])):
+			errors.append("Unknown environment in " + field)
 	var anchors := {}
 	for anchor in data.anchors:
 		if not anchor is Dictionary or not _id(anchor.get("id")):

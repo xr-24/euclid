@@ -86,13 +86,10 @@ static func _inspect(editor: Editor, id: String, points: Array) -> Dictionary:
 		result["size"] = [terrain.terrain_size.x, terrain.terrain_size.y]
 		var at := terrain.global_position
 		result["origin"] = [at.x, at.y, at.z]
-		var data := Terrain.Data.new()
-		var record := editor.record(id)
-		data.decode(record.get("terrain_surface", ""), record.get("terrain_paint_data", ""))
 		var samples := []
 		for point: Array in points:
 			var local := terrain.local_point(Vector3(point[0], point[1], point[2]))
-			var height := terrain.to_global(Vector3(local.x, data.surface_at(local, terrain.terrain_size), local.y)).y
+			var height := terrain.surface_point(local).y
 			samples.append(height if terrain.contains_point(local) else null)
 		result["heights"] = samples
 	return result

@@ -20,6 +20,9 @@ var terrain_size: Vector2
 var _tiles: Array[MeshInstance3D] = []
 var _shapes: Array[CollisionShape3D] = []
 var _step: Vector2
+var _cuts: Array[Dictionary] = []
+var _cut_heights := PackedFloat32Array()
+var _cut_cells := Rect2i()
 var _pending := Rect2i()
 var _pending_collision := Rect2i()
 
@@ -43,6 +46,41 @@ func setup(record: Dictionary) -> void:
 			add_child(shape)
 			_shapes.append(shape)
 			_rebuild_tile(x, z, true)
+
+func apply_excavations(cuts: Array[Dictionary]) -> bool:
+	if cuts == _cuts:
+		return false
+	var dirty := _cut_cells
+	_cuts = cuts
+	_cut_cells = Rect2i()
+	_cut_heights = PackedFloat32Array()
+	if not cuts.is_empty():
+		_cut_heights.resize(Data.COUNT)
+		_cut_heights.fill(INF)
+		for cut: Dictionary in cuts:
+			_apply_cut(cut)
+	dirty = _merge(dirty, _cut_cells)
+	_rebuild(dirty, dirty)
+	return true
+
+func _apply_cut(cut: Dictionary) -> void:
+	var blend := maxf(_step.x, _step.y)
+	var extent: Vector2 = cut.half + Vector2.ONE * blend
+	var axis := Vector2.from_angle(cut.angle).abs()
+	var bounds := Vector2(axis.dot(extent), Vector2(axis.y, axis.x).dot(extent))
+	var center: Vector2 = (cut.center + terrain_size * 0.5) / _step
+	var start := Vector2i((center - bounds / _step).floor()).clamp(Vector2i.ZERO, Vector2i(Data.CELLS, Data.CELLS))
+	var end := Vector2i((center + bounds / _step).ceil()).clamp(Vector2i.ZERO, Vector2i(Data.CELLS, Data.CELLS))
+	_cut_cells = _merge(_cut_cells, Rect2i(start, end - start + Vector2i.ONE))
+	for z in range(start.y, end.y + 1):
+		for x in range(start.x, end.x + 1):
+			var point := ((Vector2(x, z) - center) * _step).rotated(-cut.angle).abs()
+			var margin: Vector2 = point - cut.half
+			var outside := maxf(margin.x, margin.y)
+			if outside < blend:
+				var at := z * Data.SIDE + x
+				var limit := lerpf(cut.bottom, maxf(cut.bottom, Data.HEIGHT_LIMIT), smoothstep(0.0, blend, outside))
+				_cut_heights[at] = minf(_cut_heights[at], limit)
 
 func load_record(record: Dictionary) -> bool:
 	var next := Data.new()
@@ -112,8 +150,11 @@ func flush_preview() -> void:
 	_rebuild(_pending, Rect2i())
 	_pending = Rect2i()
 
+func surface_height(point: Vector2) -> float:
+	return data.surface_at(point, terrain_size, _cut_heights)
+
 func surface_point(point: Vector2, offset := 0.0) -> Vector3:
-	return to_global(Vector3(point.x, data.surface_at(point, terrain_size) + offset, point.y))
+	return to_global(Vector3(point.x, surface_height(point) + offset, point.y))
 
 func local_point(world_point: Vector3) -> Vector2:
 	var point := to_local(world_point)
@@ -140,10 +181,10 @@ func _rebuild_tile(tx: int, tz: int, collision: bool) -> void:
 	var extra_high := PackedVector2Array()
 	for z in range(tz * CHUNK, (tz + 1) * CHUNK + 1):
 		for x in range(tx * CHUNK, (tx + 1) * CHUNK + 1):
-			var dx := (data.height_at(x + 1, z) - data.height_at(x - 1, z)) / (2.0 * _step.x)
-			var dz := (data.height_at(x, z + 1) - data.height_at(x, z - 1)) / (2.0 * _step.y)
+			var dx := (data.rendered_height(x + 1, z, _cut_heights) - data.rendered_height(x - 1, z, _cut_heights)) / (2.0 * _step.x)
+			var dz := (data.rendered_height(x, z + 1, _cut_heights) - data.rendered_height(x, z - 1, _cut_heights)) / (2.0 * _step.y)
 			var at := Vector2(x, z) * _step - terrain_size * 0.5
-			points.append(Vector3(at.x, data.height_at(x, z), at.y))
+			points.append(Vector3(at.x, data.rendered_height(x, z, _cut_heights), at.y))
 			normals.append(Vector3(-dx, 1.0, -dz).normalized())
 			var tangent := Vector3(1.0, dx, 0.0).normalized()
 			tangents.append_array(PackedFloat32Array([tangent.x, tangent.y, tangent.z, -1.0]))

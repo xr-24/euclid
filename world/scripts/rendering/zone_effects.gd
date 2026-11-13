@@ -39,8 +39,8 @@ static func set_side(root: Node, side: float) -> void:
 		var fx := gi is MeshInstance3D and (gi as MeshInstance3D).mesh != null
 		if fx:
 			var mi := gi as MeshInstance3D
-			fx = _has_fx(mi.material_override) if mi.material_override else \
-				(mi.mesh.get_surface_count() > 0 and _has_fx(mi.get_active_material(0)))
+			fx = has_transition(mi.material_override) if mi.material_override else \
+				(mi.mesh.get_surface_count() > 0 and has_transition(mi.get_active_material(0)))
 		if fx:
 			gi.set_instance_shader_parameter("construct_side", side)
 		elif side != 0.0:
@@ -53,8 +53,12 @@ static func set_side(root: Node, side: float) -> void:
 
 ## Re-learn global illumination for the zone now in place (called mid-shift, under the effect).
 
-static func _has_fx(mat: Material) -> bool:
-	return mat is ShaderMaterial and (mat as ShaderMaterial).shader != null and "construct" in (mat as ShaderMaterial).shader.code
+static func has_transition(mat: Material) -> bool:
+	if not mat is ShaderMaterial or mat.shader == null:
+		return false
+	var code: String = mat.shader.code
+	return code.contains("construct_fx(") or code.contains("/construct_fx.gdshaderinc") \
+		or code.contains("/constructible.gdshaderinc")
 
 static func _constructible(mat: Material, converted: Dictionary) -> Material:
 	if converted.has(mat):

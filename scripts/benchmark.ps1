@@ -1,6 +1,6 @@
 param(
     [ValidateSet('balanced','cinematic')][string]$Quality = 'balanced',
-    [ValidateSet('villa','beach','construct')][string]$Zone = 'villa',
+    [ValidatePattern('^[a-z][a-z0-9_-]{0,63}$')][string]$Zone,
     [ValidateSet('default','quality','isolate','costs','looks')][string]$Suite = 'default',
     [string]$OutputDirectory,
     [int]$Width = 1440,
@@ -15,6 +15,10 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $godotPath = Join-Path $projectRoot '.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
 if ($env:GODOT_BIN) { $godotPath = $env:GODOT_BIN }
 if (-not $ProjectPath) { $ProjectPath = Join-Path $projectRoot 'world' }
+if (-not $Zone) {
+    $manifest = Get-Content -Raw -LiteralPath (Join-Path $ProjectPath 'data/world.json') | ConvertFrom-Json
+    $Zone = if ($manifest.benchmark_zone) { $manifest.benchmark_zone } else { $manifest.zones[0].id }
+}
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot ".local\benchmarks\$Quality-$Zone" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null

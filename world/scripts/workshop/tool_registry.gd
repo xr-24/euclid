@@ -115,7 +115,7 @@ static func valid_definition(value: Variant) -> bool:
 static func _valid_field(key: String, value: Variant) -> bool:
 	if key not in Commands.action_properties():
 		return false
-	return Placement.valid_coordinates(Placement.GRID, value) if key == "position" else Commands.valid_field(key, value)
+	return Placement.valid_coordinates(Placement.workshop_bounds(), value) if key == "position" else Commands.valid_field(key, value)
 
 static func _identifier(value: Variant, pattern: String) -> bool:
 	return value is String and RegEx.create_from_string(pattern).search(value) != null

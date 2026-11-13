@@ -61,6 +61,12 @@ static func sync(parent: Node3D, before: Array, after: Array) -> void:
 						Effects.make_constructible(patch, false)
 	for id in previous:
 		parent.get_node("Piece_" + id).free()
+	if parent is Terrain and before != after and _sync_excavations(parent, after):
+		for record: Dictionary in after:
+			if record.type == "scatter":
+				var patch := parent.get_node("Piece_" + record.id) as Node3D
+				if _placed(patch, {}, record):
+					Effects.make_constructible(patch, false)
 
 static func _update_factory(node: Node3D, old: Dictionary, record: Dictionary) -> bool:
 	if old.type != record.type:
@@ -83,7 +89,21 @@ static func _build(parent: Node3D, record: Dictionary, live := false) -> Node3D:
 		Effects.make_constructible(node, false)
 	for child: Dictionary in record.get("children", []):
 		_build(node, child, live)
+	if node is Terrain and _sync_excavations(node, record.get("children", [])):
+		for child: Dictionary in record.get("children", []):
+			if child.type == "scatter":
+				_placed(node.get_node("Piece_" + child.id), {}, child)
 	return node
+
+static func _sync_excavations(terrain: Terrain, records: Array) -> bool:
+	var cuts: Array[Dictionary] = []
+	for record: Dictionary in records:
+		var factory := Types.factory(record.type)
+		if not record.get("hidden", false) and factory and factory.has_script_method("terrain_cut"):
+			var cut: Dictionary = factory.terrain_cut(record)
+			if not cut.is_empty():
+				cuts.append(cut)
+	return terrain.apply_excavations(cuts)
 
 static func _old_record(records: Array, id: String) -> Dictionary:
 	for record: Dictionary in records:

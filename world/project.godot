@@ -50,3 +50,10 @@ construct_progress={
 "type": "float",
 "value": 0.0
 }
+
+[godot_cef]
+
+performance/max_frame_rate=30
+storage/data_path="user://youtube-browser"
+storage/cache_size_mb=128
+debug/remote_devtools_port=0

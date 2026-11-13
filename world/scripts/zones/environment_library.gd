@@ -50,16 +50,16 @@ func create(title: Variant, catalog: Array, template := "") -> Dictionary:
 	for zone in catalog:
 		if zone.name.to_lower() == name.to_lower():
 			return {"ok": false, "message": "An environment already has that name."}
-	var package := "construct"
+	var package := Packages.workshop_zone()
 	if not template.is_empty():
 		var sources := catalog.filter(func(zone: Dictionary) -> bool: return zone.id == template)
 		if sources.is_empty():
 			return {"ok": false, "message": "Choose a template from the current environment catalog."}
-		package = sources[0].get("package", "construct" if sources[0].get("template") == "grid" else template)
+		package = sources[0].get("package", Packages.workshop_zone() if sources[0].get("template") == "grid" else template)
 	if not Packages.has(package):
 		return {"ok": false, "message": "The source environment package is unavailable."}
 	var record := {"id": "space-" + Crypto.new().generate_random_bytes(8).hex_encode(), "name": name}
-	if package != "construct":
+	if package != Packages.workshop_zone():
 		record["package"] = package
 	var next := _records + [record]
 	if not _path.is_empty():
@@ -82,7 +82,7 @@ func create(title: Variant, catalog: Array, template := "") -> Dictionary:
 	return {"ok": true, "zone": _zone(record), "message": "Created %s from the %s package." % [name, package]}
 
 static func _zone(record: Dictionary) -> Dictionary:
-	var package: String = record.get("package", "construct")
+	var package: String = record.get("package", Packages.workshop_zone())
 	var definition := Packages.definition(package)
 	return {"id": record.id, "name": record.name, "template": "grid" if definition.capabilities.get("workshop", false) else package,
 		"package": package, "subtitle": "A custom environment",

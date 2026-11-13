@@ -11,6 +11,7 @@ const Water = preload("res://scripts/simulation/water_system.gd")
 const WaterAssets = preload("res://scripts/assets/asset_library.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const AssetLibrary = preload("res://scripts/asset_library.gd")
+const ZoneEffects = preload("res://scripts/rendering/zone_effects.gd")
 const Weather = preload("res://scripts/rendering/weather.gd")
 const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
@@ -183,7 +184,7 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 		elevation = photo_elevation
 		s.yaw = deg_to_rad(s.sun_azimuth - float(sun_data.get("u", 0.0)) * 360.0)
 	else:
-		s.panorama = _gradient_sky(s.get("sky_colors", Packages.environment("construct").sky_colors))
+		s.panorama = _gradient_sky(s.get("sky_colors", [Color("6f9fc3"), Color("e5d6b8"), Color("d0c4ab"), Color("74796a")]))
 	var clock: bool = s.get("time_mode", "manual") != "manual"
 	var heading: float = s.sun_azimuth
 	s.hide_photo_sun = Vector4.ZERO
@@ -406,11 +407,11 @@ static func set_side(root: Node, side: float) -> void:
 		var fx := false
 		if gi is MeshInstance3D and (gi as MeshInstance3D).mesh != null:
 			var mi := gi as MeshInstance3D
-			fx = _has_fx(mi.material_override) if mi.material_override else \
-				(mi.mesh.get_surface_count() > 0 and _has_fx(mi.get_active_material(0)))
+			fx = ZoneEffects.has_transition(mi.material_override) if mi.material_override else \
+				(mi.mesh.get_surface_count() > 0 and ZoneEffects.has_transition(mi.get_active_material(0)))
 		elif gi is MultiMeshInstance3D and (gi as MultiMeshInstance3D).multimesh and (gi as MultiMeshInstance3D).multimesh.mesh:
 			var mesh := (gi as MultiMeshInstance3D).multimesh.mesh
-			fx = mesh.get_surface_count() > 0 and _has_fx(mesh.surface_get_material(0))
+			fx = mesh.get_surface_count() > 0 and ZoneEffects.has_transition(mesh.surface_get_material(0))
 		if fx:
 			gi.set_instance_shader_parameter("construct_side", side)
 		elif side != 0.0:
@@ -431,8 +432,6 @@ static func rebuild_gi(world: Node3D, zone: String) -> void:
 	var finished := world.get_tree().process_frame if RenderingServer.get_rendering_device() == null else RenderingServer.frame_post_draw
 	finished.connect(func() -> void: env.sdfgi_enabled = true, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
 
-static func _has_fx(mat: Material) -> bool:
-	return mat is ShaderMaterial and (mat as ShaderMaterial).shader != null and "construct" in (mat as ShaderMaterial).shader.code
 
 static func _constructible(mat: Material, converted: Dictionary) -> Material:
 	if converted.has(mat):

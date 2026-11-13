@@ -148,6 +148,7 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 			id = Crypto.new().generate_random_bytes(16).hex_encode() if type == "prop" else "piece-" + Crypto.new().generate_random_bytes(8).hex_encode()
 			var parent: String = plan.get("parent", "")
 			var level := next
+			var parent_type := ""
 			if not parent.is_empty():
 				if Types.types()[type].get("fixed_transform", false):
 					return _failure("This baked piece belongs at environment level.")
@@ -157,7 +158,15 @@ func execute(plan: Dictionary, placement: Array = []) -> Dictionary:
 				if not container.piece.has("children"):
 					container.piece["children"] = []
 				level = container.piece.children
-			var piece: Dictionary = Types.types()[type].get("defaults", {}).duplicate(true)
+				parent_type = container.piece.type
+			var piece_type: Dictionary = Types.types()[type]
+			var piece: Dictionary = piece_type.get("defaults", {}).duplicate(true)
+			var parent_defaults: Dictionary = piece_type.get("parent_defaults", {}).get(parent_type, {})
+			piece.merge(parent_defaults, true)
+			var anchor := node_for(parent)
+			if not parent_defaults.is_empty() and anchor and not placement.is_empty() and not values.has("position"):
+				var point := anchor.to_local(_layer.to_global(Vector3(placement[0], placement[1], placement[2])))
+				piece["position"] = [point.x, point.y, point.z]
 			piece.merge(values.duplicate(true), true)
 			piece.merge({"id": id, "type": type})
 			if parent.is_empty() and not piece.has("position") and not Types.types()[type].get("fixed_transform", false):

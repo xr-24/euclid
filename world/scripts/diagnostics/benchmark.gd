@@ -31,7 +31,7 @@ static func run(world: Node3D) -> void:
 	results["profile"] = graphics.current
 	var zone := OS.get_environment("CONSTRUCT_BENCHMARK_ZONE")
 	if zone.is_empty():
-		zone = "villa"
+		zone = world.manifest.get("benchmark_zone", Packages.startup_zone())
 	world._load_zone(zone)
 	# Save the authored settings so every isolation starts from the same baseline.
 	var env: Environment = world.environment

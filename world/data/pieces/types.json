@@ -278,6 +278,62 @@
         "roof_material": {"$ref": "#/$defs/piece_material"}
       }
     },
+    "house": {
+      "label": "House",
+      "description": "A complete single-storey home: foundation, rooms with doors and windows suited to each room, floors, ceilings and lights, a roof, entrance steps, a patio deck and furniture. Give bedrooms, bathrooms, layout and style and Euclid plans the rooms, or list exact rooms. The entrance faces local -Z.",
+      "script": "res://scripts/pieces/house_piece.gd",
+      "placement_yaw": 180,
+      "placement_lift": 0.02,
+      "interactions": true,
+      "validate_record": true,
+      "required": [],
+      "defaults": {"style": "modern", "bedrooms": 2, "bathrooms": 1, "layout": "open"},
+      "fields": {
+        "style": {"type": "string", "description": "Finishes, roof and window proportions", "enum": ["modern", "desert", "farmhouse"]},
+        "bedrooms": {"type": "number", "description": "Bedrooms when rooms is empty", "minimum": 0, "maximum": 5},
+        "bathrooms": {"type": "number", "description": "Bathrooms when rooms is empty", "minimum": 1, "maximum": 3},
+        "layout": {"type": "string", "description": "open joins living, kitchen, dining and hall without walls", "enum": ["open", "closed"]},
+        "floor_area": {"type": "number", "description": "Approximate floor area in square metres when rooms is empty", "minimum": 0, "maximum": 400},
+        "rooms": {
+          "type": "array",
+          "description": "Exact rooms instead of a generated plan. rect is [x0, z0, x1, z1] in local metres along wall centrelines; -Z is the front. Rooms must not overlap and must touch.",
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "required": ["kind", "rect"],
+            "properties": {
+              "kind": {"type": "string", "enum": ["living", "kitchen", "dining", "bedroom", "bathroom", "hall", "office", "laundry", "closet"]},
+              "name": {"type": "string", "maxLength": 40},
+              "rect": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number", "minimum": -32, "maximum": 32}}
+            }
+          }
+        },
+        "ceiling_height": {"type": "number", "minimum": 2.3, "maximum": 4.5},
+        "foundation_height": {"type": "number", "description": "Floor height above the ground", "minimum": 0, "maximum": 1.5},
+        "roof": {"type": "string", "description": "style uses the style's roof", "enum": ["style", "flat", "parapet", "gable", "none"]},
+        "pool": {"type": "boolean", "description": "A stone terrace with an in-ground pool outside the living room's patio door. Parent the house to a terrain to dig the basin."},
+        "pool_size": {"type": "array", "description": "Water length along the house and width out from it, in metres", "minItems": 2, "maxItems": 2, "items": {"type": "number", "minimum": 2, "maximum": 20}},
+        "pool_depth": {"type": "number", "minimum": 0.6, "maximum": 3},
+        "furnish": {"type": "boolean"},
+        "lights": {"type": "boolean"},
+        "materials": {
+          "type": "object",
+          "description": "Material overrides merged over the style",
+          "required": [],
+          "properties": {
+            "exterior": {"$ref": "#/$defs/piece_material"},
+            "interior": {"$ref": "#/$defs/piece_material"},
+            "trim": {"$ref": "#/$defs/piece_material"},
+            "roof": {"$ref": "#/$defs/piece_material"},
+            "fascia": {"$ref": "#/$defs/piece_material"},
+            "plinth": {"$ref": "#/$defs/piece_material"},
+            "door": {"$ref": "#/$defs/piece_material"},
+            "entry_door": {"$ref": "#/$defs/piece_material"},
+            "accent": {"$ref": "#/$defs/piece_material"}
+          }
+        }
+      }
+    },
     "stairs": {
       "label": "Stairs",
       "description": "Walkable stairs connecting two heights. The top meets local Z = 0.",

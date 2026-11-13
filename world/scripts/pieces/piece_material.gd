@@ -53,6 +53,9 @@ static func _standard(spec: Dictionary) -> BaseMaterial3D:
 		made.roughness = float(spec.roughness)
 	if spec.has("metallic"):
 		made.metallic = float(spec.metallic)
+	if spec.has("alpha"):
+		made.albedo_color.a = float(spec.alpha)
+		made.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	if spec.has("emission"):
 		made.emission_enabled = true
 		made.emission = Color.html(str(spec.emission))

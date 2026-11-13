@@ -69,6 +69,9 @@ const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
+const HousePiece = preload("res://scripts/pieces/house_piece.gd")
+const HouseLayout = preload("res://scripts/pieces/house_layout.gd")
+const BuildingOpening = preload("res://scripts/pieces/building_opening.gd")
 const TerrainNode = preload("res://scripts/pieces/terrain_node.gd")
 const PieceBuilder = preload("res://scripts/pieces/piece_builder.gd")
 const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
@@ -230,6 +233,7 @@ func _run() -> void:
 	_check_piece_edits(manifest)
 	_check_building()
 	_check_pool_basin()
+	_check_houses()
 	_check_youtube_links()
 	_check_prop_migration(path + ".piece-migration")
 	_check_piece_upgrade()
@@ -934,6 +938,60 @@ func _check_building() -> void:
 	_check(not blocked.ok, "reject overlapping wall openings")
 
 	layer.free()
+
+func _check_houses() -> void:
+	var record := {"id": "home", "type": "house", "style": "modern", "bedrooms": 2, "bathrooms": 1}
+	_check(PieceTypes.valid(record), "accept a house described only by its programme")
+	var rooms := HouseLayout.rooms(record)
+	var kinds := rooms.map(func(room: Dictionary) -> String: return room.kind)
+	_check(kinds.count("bedroom") == 2 and kinds.count("bathroom") == 1 and kinds.has("living") and kinds.has("kitchen"),
+		"plan two bedrooms, a bath, a living room and a kitchen")
+	var walls := HouseLayout.walls(record, rooms, HousePiece.style_for(record))
+	var entrances := 0
+	var doors := 0
+	var windows := 0
+	for wall: Dictionary in walls:
+		for opening: Dictionary in wall.openings:
+			entrances += 1 if opening.get("entrance", false) else 0
+			doors += 1 if opening.kind == "door" else 0
+			windows += 1 if opening.kind == "window" else 0
+	_check(entrances == 1 and doors >= 4 and windows >= 5, "give the house one entrance, a door to each private room and windows")
+	for room: Dictionary in rooms:
+		if room.kind in ["bedroom", "bathroom"]:
+			var reached := walls.any(func(wall: Dictionary) -> bool:
+				return not wall.exterior and wall.openings.any(func(opening: Dictionary) -> bool:
+					var at := float(opening.at)
+					var r: Rect2 = room.rect
+					return int(wall.axis) == 0 and absf(float(wall.line) - r.position.y) < 0.02 and at > r.position.x and at < r.end.x))
+			_check(reached, "reach %s through a door from the hall" % room.name)
+	var overlap := {"id": "bad", "type": "house", "rooms": [{"kind": "living", "rect": [0, 0, 5, 5]}, {"kind": "bedroom", "rect": [4, 0, 8, 4]}]}
+	_check(not PieceTypes.valid(overlap), "reject overlapping rooms")
+	var apart := {"id": "bad", "type": "house", "rooms": [{"kind": "living", "rect": [0, 0, 5, 5]}, {"kind": "bedroom", "rect": [9, 0, 12, 4]}]}
+	_check(not PieceTypes.valid(apart), "reject rooms that do not touch")
+	var shaped := {"id": "ell", "type": "house", "style": "farmhouse", "rooms": [{"kind": "living", "rect": [-4, -3, 2, 2]},
+		{"kind": "kitchen", "rect": [2, -3, 6, 2]}, {"kind": "bedroom", "rect": [-4, 2, 0, 6]}, {"kind": "bathroom", "rect": [0, 2, 2.5, 6]}]}
+	_check(PieceTypes.valid(shaped) and not HouseLayout.is_rectangle(HouseLayout.rooms(shaped)), "accept an L-shaped plan")
+	var home := HousePiece.build(record)
+	var openings := home.find_children("*", "", true, false).filter(func(node: Node) -> bool: return node is BuildingOpening)
+	var labels := openings.map(func(opening: Node) -> String: return opening.interaction_label())
+	_check(home.has_node("Walls") and home.has_node("Roof") and home.has_node("Ceilings") and home.has_node("Furniture"),
+		"build walls, roof, ceilings and furniture")
+	_check(labels.has("Open door") and labels.has("Open window") and labels.has(""), "make doors and casements open and picture windows fixed")
+	_check(home.find_children("*", "SpotLight3D", true, false).size() >= rooms.size(), "light every room")
+	home.free()
+	var gable := HousePiece.build(shaped)
+	_check(gable.get_node("Roof").get_child_count() > 0, "fall back to a flat roof over an L-shaped plan")
+	gable.free()
+	_check(HousePiece.terrain_cut(record).is_empty(), "leave the ground alone without a pool")
+	var pooled := record.duplicate()
+	pooled["pool"] = true
+	var cut := HousePiece.terrain_cut(pooled)
+	var footprint := HouseLayout.bounds(rooms)
+	_check(not cut.is_empty() and not footprint.has_point(cut.center), "dig the pool outside the house")
+	var pool_home := HousePiece.build(pooled)
+	_check(pool_home.find_children("*", "", true, false).any(func(node: Node) -> bool: return node.has_meta("water_piece")),
+		"fill the house's pool with registered water")
+	pool_home.free()
 
 func _check_pool_basin() -> void:
 	var zone := Node3D.new()

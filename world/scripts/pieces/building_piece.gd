@@ -50,7 +50,7 @@ static func _ordered_openings(specs: Array) -> Array:
 static func _opening_size(spec: Dictionary) -> Vector3:
 	var window: bool = spec.kind == "window"
 	return Vector3(spec.get("width", 1.35 if window else 1.1), spec.get("height", 1.05 if window else 2.05),
-		spec.get("sill", 0.92) if window else 0.0)
+		spec.get("sill", 0.92) if window else float(spec.get("sill", 0.0)) if spec.kind == "archway" else 0.0)
 
 static func _next_opening_edge(openings: Array, index: int, span: float) -> float:
 	if index + 1 >= openings.size():
@@ -153,7 +153,18 @@ static func update_fields(node: Node3D, before: Dictionary, after: Dictionary) -
 					part.set_open(opened)
 	return true
 
-static func _wall(root: Node3D, span: float, height: float, depth: float, surface: Material, trim: Material, specs: Array) -> void:
+## A straight wall along local X, centred on the origin, with framed openings. Other pieces (such as
+## houses) build their walls with this. finishes may hold "leaf" and "glass" materials, and named
+## sets of them that an opening selects with its "finish" key.
+static func wall(root: Node3D, span: float, height: float, depth: float, surface: Material, trim: Material, specs: Array,
+		finishes := {}) -> void:
+	_wall(root, span, height, depth, surface, trim, specs, finishes)
+
+static func valid_wall_openings(span: float, height: float, specs: Array) -> bool:
+	return _valid_openings(span, height, specs)
+
+static func _wall(root: Node3D, span: float, height: float, depth: float, surface: Material, trim: Material, specs: Array,
+		finishes := {}) -> void:
 	var openings := _ordered_openings(specs)
 	var edge := -span * 0.5
 	for index in openings.size():
@@ -164,12 +175,12 @@ static func _wall(root: Node3D, span: float, height: float, depth: float, surfac
 		var right := center + width * 0.5
 		var next_edge := _next_opening_edge(openings, index, span)
 		_section(root, edge, left, 0.0, height, depth, surface)
-		_frame(root, height, depth, surface, trim, spec, _slide_direction(spec, left - edge, next_edge - right), index)
+		_frame(root, height, depth, surface, trim, spec, _slide_direction(spec, left - edge, next_edge - right), index, finishes)
 		edge = right
 	_section(root, edge, span * 0.5, 0.0, height, depth, surface)
 
 static func _frame(root: Node3D, height: float, depth: float, surface: Material, trim: Material,
-		spec: Dictionary, slide_side: float, index: int) -> void:
+		spec: Dictionary, slide_side: float, index: int, finishes := {}) -> void:
 	var kind: String = spec.kind
 	var size := _opening_size(spec)
 	var width := size.x
@@ -193,7 +204,7 @@ static func _frame(root: Node3D, height: float, depth: float, surface: Material,
 	opening.position = Vector3(left + FRAME, sill + (FRAME if kind == "window" else 0.02), 0)
 	root.add_child(opening)
 	opening.configure(kind, spec.get("motion", "hinge"), width - FRAME * 2.0, high - FRAME * 2.0,
-		depth, spec.get("open", false), slide_side)
+		depth, spec.get("open", false), slide_side, finishes.get(str(spec.get("finish", "")), finishes))
 
 static func _section(root: Node3D, x0: float, x1: float, y0: float, y1: float, depth: float, material: Material) -> void:
 	_box(root, Vector3((x0 + x1) * 0.5, (y0 + y1) * 0.5, 0), Vector3(x1 - x0, y1 - y0, depth), material)

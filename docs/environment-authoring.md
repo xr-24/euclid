@@ -104,6 +104,25 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
 - **Villa and shore** use those pieces along with editable models, shapes, lights and buoyant
   props. Their Blender-generated meshes remain reusable model assets.
 
+- **Houses** (`house`) are whole homes planned from rooms. Give `bedrooms`, `bathrooms`,
+  `layout` (`open` or `closed`), `style` (`modern`, `desert`, `farmhouse`) and optionally
+  `floor_area`, or list exact `rooms` (`kind` and `rect` `[x0, z0, x1, z1]` along wall
+  centrelines; rooms may form an L or other rectilinear shape). `scripts/pieces/house_layout.gd`
+  turns that into walls: exterior and interior thicknesses from the style, no walls between
+  shared rooms in an open plan, a door from each bedroom, bath or office to the hall (or the
+  nearest shared room), one front entrance, a glazed patio door from the living room, and
+  windows sized by room kind (full-height glazing in living rooms, casements in bedrooms,
+  high frosted windows in baths). `house_piece.gd` builds the foundation, floors per room,
+  painted wall linings, framed doors and windows with handles, ceilings with downlights, the
+  roof (flat with eaves, parapet with vigas, or gable), entrance steps and lights, a gravel
+  apron, stepping stones and a patio deck; `house_furniture.gd` furnishes each room against
+  walls free of openings. `pool: true` swaps the deck for a stone terrace with an in-ground
+  pool; parented to a terrain, the house digs the basin. Styles live in
+  `world/data/pieces/house_styles.json` (finishes, roof, proportions); `materials` on the
+  piece overrides any finish. Static surfaces are merged per material when built, so a house
+  draws in a few dozen calls. Preview any record outside the game with
+  `xvfb-run godot --rendering-method gl_compatibility --path world --script
+  res://scripts/diagnostics/house_preview.gd -- <output dir> '<record JSON>'`.
 - **Building plans** support multiple rooms within a rectangular footprint. Specify
   `partitions` as wall segments with `start` and `end` in local `[x,z]` metres,
   plus optional `openings`. Opening `offset` is measured along the wall from its

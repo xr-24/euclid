@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "about": "Architectural styles for house pieces: finishes, roof, and window and door proportions by room kind. Sizes are metres. Material entries use the piece material format (see types.json).",
+  "styles": {
+    "modern": {
+      "label": "Modern",
+      "roof": "flat",
+      "accent_cladding": true,
+      "eaves": 0.65,
+      "exterior_wall": 0.3,
+      "interior_wall": 0.12,
+      "materials": {
+        "exterior": {"color": "e4e0d8", "roughness": 0.88},
+        "interior": {"color": "efece6", "roughness": 0.92},
+        "ceiling": {"color": "f7f5f0", "roughness": 0.95},
+        "plinth": {"color": "5f5d5a", "roughness": 0.9},
+        "trim": {"color": "1b1d20", "roughness": 0.35, "metallic": 0.55},
+        "baseboard": {"color": "e9e6df", "roughness": 0.6},
+        "roof": {"texture": "gravel_ground_01", "texture_size": 2.0, "color": "8a8986"},
+        "fascia": {"color": "1f2124", "roughness": 0.4, "metallic": 0.4},
+        "door": {"color": "eeece7", "roughness": 0.55},
+        "entry_door": {"texture": "dark_wooden_planks", "texture_size": 1.4, "color": "c9a27e"},
+        "glass": {"color": "9fb7bd", "alpha": 0.22, "roughness": 0.05, "metallic": 0.2},
+        "frosted": {"color": "e8eef0", "alpha": 0.82, "roughness": 0.5},
+        "accent": {"texture": "dark_wooden_planks", "texture_size": 1.4, "color": "d6c3ad"}
+      },
+      "floors": {
+        "default": {"texture": "oak_wood_planks", "texture_size": 1.6, "color": "e2c6a4"},
+        "bathroom": {"texture": "marble_01", "texture_size": 1.2, "color": "ffffff"},
+        "laundry": {"texture": "granite_tile", "texture_size": 0.9, "color": "ffffff"}
+      },
+      "windows": {
+        "living": {"width": 2.8, "height": "full", "sill": 0.08, "per": 3.6, "max": 3, "motion": "fixed"},
+        "dining": {"width": 2.2, "height": "full", "sill": 0.08, "per": 3.2, "max": 2, "motion": "fixed"},
+        "kitchen": {"width": 1.8, "height": 1.0, "sill": 1.08, "per": 3.4, "max": 2, "motion": "hinge"},
+        "bedroom": {"width": 1.8, "height": 1.55, "sill": 0.6, "per": 3.6, "max": 2, "motion": "hinge"},
+        "office": {"width": 1.6, "height": 1.45, "sill": 0.7, "per": 3.2, "max": 2, "motion": "hinge"},
+        "bathroom": {"width": 1.0, "height": 0.6, "sill": 1.6, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "laundry": {"width": 0.9, "height": 0.6, "sill": 1.5, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "hall": {"width": 0.8, "height": "full", "sill": 0.08, "per": 6.0, "max": 1, "motion": "fixed"}
+      },
+      "entry_door": {"width": 1.1, "height": 2.4},
+      "patio_door": {"width": 2.6, "height": 2.4},
+      "door": {"width": 0.86, "height": 2.1}
+    },
+    "desert": {
+      "label": "Desert adobe",
+      "roof": "parapet",
+      "eaves": 0.0,
+      "exterior_wall": 0.42,
+      "interior_wall": 0.14,
+      "vigas": true,
+      "materials": {
+        "exterior": {"texture": "patterned_clay_plaster", "texture_size": 3.5, "color": "e7c7a1"},
+        "interior": {"color": "efe3d2", "roughness": 0.95},
+        "ceiling": {"color": "f3eadc", "roughness": 0.95},
+        "plinth": {"color": "a07b5c", "roughness": 0.95},
+        "trim": {"texture": "dark_wooden_planks", "texture_size": 1.0, "color": "7b5a43"},
+        "baseboard": {"color": "c9a98a", "roughness": 0.8},
+        "roof": {"texture": "gravel_ground_01", "texture_size": 2.0, "color": "c9a988"},
+        "fascia": {"texture": "patterned_clay_plaster", "texture_size": 3.5, "color": "e2bf98"},
+        "door": {"texture": "dark_wooden_planks", "texture_size": 1.2, "color": "a57a58"},
+        "entry_door": {"texture": "dark_wooden_planks", "texture_size": 1.2, "color": "8a6142"},
+        "glass": {"color": "a9b9b4", "alpha": 0.24, "roughness": 0.05, "metallic": 0.2},
+        "frosted": {"color": "efeae0", "alpha": 0.82, "roughness": 0.5},
+        "accent": {"texture": "dark_wooden_planks", "texture_size": 1.0, "color": "9c7150"}
+      },
+      "floors": {
+        "default": {"texture": "floor_tiles_02", "texture_size": 1.4, "color": "e3a77f"},
+        "bedroom": {"texture": "dark_wooden_planks", "texture_size": 1.6, "color": "c49a76"},
+        "bathroom": {"texture": "old_mosaic_floor", "texture_size": 1.0, "color": "e8d8c4"}
+      },
+      "windows": {
+        "living": {"width": 1.6, "height": 1.7, "sill": 0.55, "per": 2.6, "max": 3, "motion": "hinge"},
+        "dining": {"width": 1.4, "height": 1.6, "sill": 0.6, "per": 2.6, "max": 2, "motion": "hinge"},
+        "kitchen": {"width": 1.2, "height": 1.0, "sill": 1.08, "per": 2.8, "max": 2, "motion": "hinge"},
+        "bedroom": {"width": 1.3, "height": 1.4, "sill": 0.7, "per": 3.0, "max": 2, "motion": "hinge"},
+        "office": {"width": 1.2, "height": 1.3, "sill": 0.8, "per": 3.0, "max": 2, "motion": "hinge"},
+        "bathroom": {"width": 0.7, "height": 0.6, "sill": 1.6, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "laundry": {"width": 0.7, "height": 0.6, "sill": 1.5, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "hall": {"width": 0.6, "height": 0.9, "sill": 1.2, "per": 6.0, "max": 1, "motion": "hinge"}
+      },
+      "entry_door": {"width": 1.05, "height": 2.25},
+      "patio_door": {"width": 1.8, "height": 2.2},
+      "door": {"width": 0.86, "height": 2.05}
+    },
+    "farmhouse": {
+      "label": "Farmhouse",
+      "roof": "gable",
+      "muntins": true,
+      "roof_pitch": 0.6,
+      "eaves": 0.45,
+      "exterior_wall": 0.28,
+      "interior_wall": 0.12,
+      "materials": {
+        "exterior": {"color": "f1eee7", "roughness": 0.8},
+        "interior": {"color": "f2efe8", "roughness": 0.92},
+        "ceiling": {"color": "f8f6f1", "roughness": 0.95},
+        "plinth": {"texture": "sandstone_blocks_08", "texture_size": 2.0, "color": "b9b1a6"},
+        "trim": {"color": "202326", "roughness": 0.4, "metallic": 0.3},
+        "baseboard": {"color": "f2f0eb", "roughness": 0.55},
+        "roof": {"color": "2e3236", "roughness": 0.45, "metallic": 0.5},
+        "fascia": {"color": "f1eee7", "roughness": 0.6},
+        "door": {"color": "f2f0eb", "roughness": 0.5},
+        "entry_door": {"color": "23272b", "roughness": 0.45},
+        "glass": {"color": "9fb4ba", "alpha": 0.22, "roughness": 0.05, "metallic": 0.2},
+        "frosted": {"color": "eef1f2", "alpha": 0.82, "roughness": 0.5},
+        "accent": {"texture": "dark_wooden_planks", "texture_size": 1.4, "color": "c9b9a5"}
+      },
+      "floors": {
+        "default": {"texture": "oak_wood_planks", "texture_size": 1.8, "color": "c9a47c"},
+        "kitchen": {"texture": "floor_tiles_02", "texture_size": 1.0, "color": "e9e6df"},
+        "bathroom": {"texture": "marble_01", "texture_size": 1.0, "color": "ffffff"}
+      },
+      "windows": {
+        "living": {"width": 1.1, "height": 1.65, "sill": 0.6, "per": 1.6, "max": 4, "motion": "hinge"},
+        "dining": {"width": 1.1, "height": 1.65, "sill": 0.6, "per": 1.6, "max": 3, "motion": "hinge"},
+        "kitchen": {"width": 1.4, "height": 1.0, "sill": 1.08, "per": 2.8, "max": 2, "motion": "hinge"},
+        "bedroom": {"width": 1.0, "height": 1.5, "sill": 0.7, "per": 1.6, "max": 3, "motion": "hinge"},
+        "office": {"width": 1.0, "height": 1.5, "sill": 0.7, "per": 1.6, "max": 2, "motion": "hinge"},
+        "bathroom": {"width": 0.7, "height": 0.7, "sill": 1.5, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "laundry": {"width": 0.7, "height": 0.7, "sill": 1.5, "per": 4.0, "max": 1, "motion": "hinge", "finish": "frosted"},
+        "hall": {"width": 0.7, "height": 1.2, "sill": 0.9, "per": 6.0, "max": 1, "motion": "hinge"}
+      },
+      "entry_door": {"width": 1.0, "height": 2.2},
+      "patio_door": {"width": 1.8, "height": 2.2},
+      "door": {"width": 0.84, "height": 2.05}
+    }
+  }
+}

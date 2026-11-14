@@ -33,6 +33,7 @@ All paths below are relative to `world/scripts/`.
 | `ui/terminal_theme.gd`, `ui/code_fx.gd`, `ui/glow_layer.gd` | Shared cyan theme, text effects and panel bloom | World menus and text tools share a palette. Effects leave text content intact. |
 | `agents/gateway_client.gd` | Authenticated snapshots and connection status | Emits data; no rendering, world commands or OS control |
 | `agents/development_host.gd` | F4 Workbench, Agent Chat, development actions, benchmarks, native CLI and voice | Routes conversations to the task gateway and avatar activation to the world coordinator |
+| `agents/speech_player.gd`, `gateway/speech.mjs` | Voice selection, browser authorization, and reply playback | Godot plays MP3s. The local gateway owns the ElevenLabs key and restricts voice routes to the player's launcher capability |
 | `agents/agent_presence.gd` | Contact-triggered agent projections and their spacing | Receives player and zone state and never handles chat or network requests |
 | `persistence/world_state_store.gd` | Validated, versioned, atomic save IO | No scene loading; malformed saves do not partially apply |
 | `extensions/live_extensions.gd`, `extensions/live_kinds.gd` | The one lifecycle for live extensions and its five kinds | Kinds receive a context of callables, not the world |

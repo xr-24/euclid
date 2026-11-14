@@ -7,6 +7,7 @@ if (-not (Test-Path -LiteralPath $godotPath)) { throw 'Run scripts\setup.ps1 fir
 $godotPath = (Resolve-Path -LiteralPath $godotPath).Path
 $supervisor = Join-Path $PSScriptRoot 'recovery.mjs'
 if ($Recovery) {
+    Remove-Item Env:ELEVENLABS_API_KEY -ErrorAction SilentlyContinue
     & node $supervisor recovery $godotPath
     exit $LASTEXITCODE
 }
@@ -39,13 +40,22 @@ if (-not $NoGateway) {
     $health = $null
     try { $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2 } catch {}
     if ($health.service -eq 'construct-gateway') {
-        if ($health.version -ge 33) {
+        if ($health.version -ge 34) {
             $gatewayReady = $true
         } else {
             & (Join-Path $PSScriptRoot 'stop-gateway.ps1')
         }
     }
     if (-not $gatewayReady) {
+        $lock = Join-Path $projectRoot 'package-lock.json'
+        $installed = Join-Path $projectRoot 'node_modules/.package-lock.json'
+        if (-not (Test-Path -LiteralPath $installed) -or
+            (Get-Item -LiteralPath $installed).LastWriteTimeUtc -lt (Get-Item -LiteralPath $lock).LastWriteTimeUtc -or
+            -not (Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules/@elevenlabs/elevenlabs-js/package.json')) -or
+            -not (Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules/@elevenlabs/cli/package.json'))) {
+            & npm.cmd ci --prefix $projectRoot
+            if ($LASTEXITCODE -ne 0) { throw 'Could not install the Euclid gateway dependencies.' }
+        }
         $nodePath = (Get-Command node -ErrorAction Stop).Source
         $serverPath = Join-Path $projectRoot 'gateway\server.mjs'
         $gatewayProcess = Start-Process -FilePath $nodePath -ArgumentList @('"' + $serverPath + '"') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $localDir 'gateway.log') -RedirectStandardError (Join-Path $localDir 'gateway-error.log')
@@ -68,6 +78,7 @@ if (-not $NoGateway) {
     Remove-Item Env:CONSTRUCT_GATEWAY_URL -ErrorAction SilentlyContinue
     Remove-Item Env:CONSTRUCT_GATEWAY_TOKEN -ErrorAction SilentlyContinue
 }
+Remove-Item Env:ELEVENLABS_API_KEY -ErrorAction SilentlyContinue
 if ($Editor) {
     $editorArguments = @('--path', ('"' + $worldPath + '"'), '--editor')
     if ($Compatibility) { $editorArguments += @('--rendering-method', 'gl_compatibility') }

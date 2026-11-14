@@ -22,7 +22,7 @@ export function checkScope(names) {
 function childEnvironment(godot) {
   const env = { ...process.env, GODOT_BIN: godot };
   for (const name of Object.keys(env)) {
-    if (/^(?:CONSTRUCT_|EUCLID_|SKETCHFAB_|OPENAI_|CODEX_)/i.test(name)) delete env[name];
+    if (/^(?:CONSTRUCT_|EUCLID_|SKETCHFAB_|OPENAI_|CODEX_|ELEVENLABS_)/i.test(name)) delete env[name];
   }
   return env;
 }

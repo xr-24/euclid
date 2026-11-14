@@ -7,6 +7,9 @@ signal cli_requested
 signal minimize_requested
 signal layout_requested(expanded: bool)
 signal voice_requested(enabled: bool)
+signal voice_selected(id: String)
+signal voice_preview_requested
+signal voice_retry_requested
 signal development_requested(action: String)
 signal peer_selected(peer: String)
 
@@ -29,6 +32,14 @@ var _history: RichTextLabel
 var _entry: LineEdit
 var _prompt: Label
 var _resize: Button
+var _voice_toggle: Button
+var _voice_row: MarginContainer
+var _voice_picker: OptionButton
+var _voice_preview: Button
+var _voice_retry: Button
+var _voice_status: Label
+var _voice_status_row: MarginContainer
+var _listed_voices: Array = []
 var _draft_row: HBoxContainer
 var _draft_strip: MarginContainer
 var _preview_draft: Button
@@ -62,14 +73,15 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 	bar.add_child(title)
 	_cli = _icon(bar, "↗", "Open native Codex CLI")
 	_cli.pressed.connect(func() -> void: cli_requested.emit())
-	var voice := _icon(bar, "♪", "Read replies aloud")
-	voice.toggle_mode = true
-	voice.button_pressed = voice_enabled
-	voice.toggled.connect(func(enabled: bool) -> void: voice_requested.emit(enabled))
+	_voice_toggle = _icon(bar, "♪", "Read replies aloud with ElevenLabs")
+	_voice_toggle.toggle_mode = true
+	_voice_toggle.button_pressed = voice_enabled
+	_voice_toggle.toggled.connect(func(enabled: bool) -> void: voice_requested.emit(enabled))
 	_resize = _icon(bar, "□", "Expand terminal")
 	_resize.pressed.connect(_toggle_size)
 	_icon(bar, "−", "Minimize terminal (F2)").pressed.connect(func() -> void: minimize_requested.emit())
 	_rule(_body)
+	_setup_voice_picker()
 	var conversations := HBoxContainer.new()
 	_inset(_body, conversations, 12, 0)
 	_tabs.hide()
@@ -128,6 +140,49 @@ func setup(lines: PackedStringArray, busy: bool, voice_enabled: bool) -> void:
 
 func focus_entry() -> void:
 	_entry.grab_focus()
+
+func _setup_voice_picker() -> void:
+	var row := HBoxContainer.new()
+	_voice_row = _inset(_body, row, 12, 4)
+	_voice_row.hide()
+	_voice_picker = OptionButton.new()
+	_voice_picker.fit_to_longest_item = false
+	_voice_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_voice_picker.tooltip_text = "ElevenLabs voice"
+	_voice_picker.item_selected.connect(func(index: int) -> void: voice_selected.emit(_voice_picker.get_item_metadata(index)))
+	row.add_child(_voice_picker)
+	_voice_preview = _icon(row, "▶", "Play a voice sample")
+	_voice_preview.pressed.connect(func() -> void: voice_preview_requested.emit())
+	_voice_retry = _icon(row, "↻", "Refresh account voices")
+	_voice_retry.pressed.connect(func() -> void: voice_retry_requested.emit())
+	_voice_status = Label.new()
+	_voice_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_voice_status.add_theme_color_override("font_color", MUTED)
+	_voice_status_row = _inset(_body, _voice_status, 12, 4)
+	_voice_status_row.hide()
+
+func update_voice(enabled: bool, options: Array, selected: String, status: String, connecting: bool, loading: bool) -> void:
+	_voice_toggle.set_pressed_no_signal(enabled)
+	_voice_row.visible = enabled
+	_voice_status_row.visible = enabled and not status.is_empty()
+	_voice_status.text = status
+	if _voice_picker.item_count == 0 or options != _listed_voices:
+		_listed_voices = options.duplicate()
+		_voice_picker.clear()
+		_voice_picker.add_item("Choose a voice")
+		_voice_picker.set_item_disabled(0, true)
+		for voice: Dictionary in options:
+			_voice_picker.add_item(voice.name)
+			_voice_picker.set_item_metadata(_voice_picker.item_count - 1, voice.id)
+		var popup := _voice_picker.get_popup()
+		popup.max_size.y = 420
+	var index := options.find_custom(func(voice: Dictionary) -> bool: return voice.id == selected)
+	_voice_picker.select(index + 1)
+	_voice_picker.disabled = loading or connecting or options.is_empty()
+	_voice_preview.disabled = _voice_picker.disabled or index < 0
+	_voice_retry.disabled = loading
+	_voice_retry.text = "Connect" if connecting else "↻"
+	_voice_retry.tooltip_text = "Authorize ElevenLabs in your browser" if connecting else "Refresh account voices"
 
 func set_conversations(labels: Dictionary, recipients: Array[String], tabs: Array[String], selected: String) -> void:
 	if peer != selected:

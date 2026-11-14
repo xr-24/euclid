@@ -6,7 +6,7 @@ extends VBoxContainer
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 
 const SkyClient = preload("res://scripts/agents/sky_client.gd")
-const Browser = preload("res://scripts/ui/poly_haven_browser.gd")
+const Browser = preload("res://scripts/ui/texture_browser.gd")
 const SkyCache = preload("res://scripts/assets/runtime_skies.gd")
 
 ## field, label, minimum, maximum, step, format
@@ -168,9 +168,12 @@ func _load() -> void:
 		_options = summary.skies
 		_sky.clear()
 		for sky: String in _options:
-			var label := "Painted gradient" if sky == "gradient" else sky.trim_prefix(SkyCache.PREFIX).get_basename().capitalize()
+			var label := "Painted gradient" if sky == "gradient" else SkyCache.label(sky)
 			_sky.add_item(label)
 			_sky.set_item_metadata(_sky.item_count - 1, sky)
+			var credit := SkyCache.info(sky)
+			if not credit.is_empty():
+				_sky.set_item_tooltip(_sky.item_count - 1, "%s · %s\n%s" % [credit.author, credit.license, credit.page])
 	for field in _sliders:
 		var slider: HSlider = _sliders[field]
 		slider.set_value_no_signal(float(values.get(field, slider.min_value)))
@@ -187,7 +190,7 @@ func _browse_sky() -> void:
 	add_child(browser)
 	browser.setup("sky", "skies", _client.search, _client.import_sky)
 	browser.chosen.connect(func(key: String, _title: String) -> void: _change("sky", key))
-	browser.popup_centered(Vector2i(450, 330))
+	browser.popup_centered(Vector2i(520, 360))
 
 func _change(field: String, value: Variant) -> void:
 	if _loading:

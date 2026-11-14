@@ -8,8 +8,12 @@ const VideoImport = preload("res://scripts/assets/video_import.gd")
 const Videos = preload("res://scripts/assets/video_library.gd")
 const Library = preload("res://scripts/asset_library.gd")
 const Types = preload("res://scripts/pieces/piece_types.gd")
+const MaterialClient = preload("res://scripts/agents/material_client.gd")
+const MaterialCache = preload("res://scripts/assets/runtime_materials.gd")
+const TextureBrowser = preload("res://scripts/ui/texture_browser.gd")
 
 var _editor: PieceEditor
+var _materials: MaterialClient
 var _list := OptionButton.new()
 var _parent := OptionButton.new()
 var _types := OptionButton.new()
@@ -22,13 +26,16 @@ var _add: Button
 var _selected := ""
 var _placement: Array
 var _field_controls := {}
+var _texture_choices: Array[OptionButton] = []
 var _revision := {}
 var _rendered := false
 var _video_importing := false
 var _facing := 0.0
 
-func setup(editor: PieceEditor, placement: Array, selected: String, close: Callable, facing := 0.0) -> void:
+func setup(editor: PieceEditor, placement: Array, selected: String, close: Callable, facing := 0.0,
+		materials: MaterialClient = null) -> void:
 	_editor = editor
+	_materials = materials
 	_placement = placement
 	_facing = facing
 	_selected = selected
@@ -61,6 +68,8 @@ func setup(editor: PieceEditor, placement: Array, selected: String, close: Calla
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_notice)
 	_editor.changed.connect(_refresh)
+	if _materials:
+		_materials.installed.connect(_refresh_textures)
 	_refresh()
 
 func selected_piece() -> String:
@@ -110,6 +119,7 @@ func _show_fields(record: Dictionary) -> void:
 		_fields.remove_child(child)
 		child.queue_free()
 	_field_controls.clear()
+	_texture_choices.clear()
 	if record.is_empty():
 		return
 	var fields := _editor.fields(record.type)
@@ -198,7 +208,20 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 		inputs[key] = {"children": group}
 		return
 	var control: Control
-	if field.get("catalog") == "vegetation":
+	var finish_or_material: bool = field.get("anyOf", []).any(func(option: Dictionary) -> bool:
+		return option.get("$ref") == "#/$defs/piece_material")
+	if field.get("catalog") == "surface_texture":
+		var options := OptionButton.new()
+		options.fit_to_longest_item = false
+		_fill_textures(options, value)
+		_texture_choices.append(options)
+		control = options
+	elif finish_or_material:
+		var text := LineEdit.new()
+		text.text = JSON.stringify(value) if value is Dictionary else str(value) if value is String else ""
+		text.placeholder_text = "Finish name or material settings"
+		control = text
+	elif field.get("catalog") == "vegetation":
 		var choices := OptionButton.new()
 		choices.fit_to_longest_item = false
 		choices.add_item("Choose a plant or rock")
@@ -240,7 +263,51 @@ func _add_field(key: String, field: Dictionary, value: Variant, inputs: Dictiona
 		control.placeholder_text = "YouTube video or playlist link"
 	var row := _row("YouTube" if key == "youtube_url" else key.capitalize(), control, parent)
 	row.tooltip_text = field.get("description", "")
-	inputs[key] = {"control": control, "type": field.get("type", ""), "allow_empty": key == "youtube_url", "initial": _read(control)}
+	inputs[key] = {"control": control, "type": field.get("type", ""), "allow_empty": key == "youtube_url",
+		"initial": _read(control), "finish_or_material": finish_or_material}
+	if _materials and (field.get("catalog") == "surface_texture" or finish_or_material):
+		_button(row, "Import…", _browse_texture.bind(control))
+
+func _refresh_textures() -> void:
+	for options in _texture_choices:
+		_fill_textures(options, _read(options))
+
+func _fill_textures(options: OptionButton, selected: Variant) -> void:
+	options.clear()
+	options.add_item("Choose an imported texture")
+	for item: Dictionary in MaterialCache.installed():
+		options.add_item(item.name)
+		var index := options.item_count - 1
+		options.set_item_metadata(index, item.id)
+		options.set_item_tooltip(index, "%s · %s\n%s" % [item.get("author", ""), item.get("license", ""), item.get("page", "")])
+		if item.id == selected:
+			options.select(index)
+	if selected is String and not selected.is_empty() and options.selected == 0:
+		options.add_item(selected.capitalize())
+		options.set_item_metadata(options.item_count - 1, selected)
+		options.select(options.item_count - 1)
+
+func _browse_texture(control: Control) -> void:
+	var browser := TextureBrowser.new()
+	add_child(browser)
+	browser.setup("material", "materials", _materials.search, _materials.import_material)
+	browser.chosen.connect(func(id: String, title: String) -> void:
+		if not is_instance_valid(control):
+			return
+		if control is OptionButton:
+			_fill_textures(control, id)
+		else:
+			var previous := JSON.new()
+			var text: String = control.text.strip_edges()
+			var spec: Dictionary = {}
+			if text.begins_with("{") and previous.parse(text) == OK and previous.data is Dictionary:
+				spec = previous.data
+			elif not text.is_empty() and Registry.valid_field("piece_material", {"finish": text}):
+				spec["finish"] = text
+			spec["texture"] = id
+			control.text = JSON.stringify(spec)
+		_notice.text = "%s imported. Select Apply to use it." % title)
+	browser.popup_centered(Vector2i(520, 360))
 
 static func _item_is_object(field: Dictionary) -> bool:
 	var item: Dictionary = field.get("items", {})
@@ -341,7 +408,7 @@ static func _changes(inputs: Dictionary) -> Dictionary:
 			continue
 		if value == null or (value is String and value.is_empty() and not field.get("allow_empty", false)):
 			return {"error": "Enter a value for %s." % key.capitalize()}
-		if field.type in ["array", "number"]:
+		if field.type in ["array", "number"] or (field.get("finish_or_material", false) and value is String and value.begins_with("{")):
 			value = JSON.parse_string(value)
 			if value == null:
 				return {"error": "Check the format of %s." % key.capitalize()}

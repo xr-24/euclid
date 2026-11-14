@@ -10,8 +10,8 @@ var _pending := {}
 func configure(assets: Node) -> void:
 	_assets = assets
 
-func search(query: String) -> Dictionary:
-	return await _assets.request_json("/v1/materials/search", {"query": query})
+func search(query: String, provider := "polyhaven") -> Dictionary:
+	return await _assets.request_json("/v1/materials/search", {"query": query, "provider": provider})
 
 func import_material(id: String) -> Dictionary:
 	if not Cache.valid_id(id):

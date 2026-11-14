@@ -2,23 +2,25 @@ extends Node
 ## Shares the authenticated asset transport with model and material imports.
 
 const Cache = preload("res://scripts/assets/runtime_skies.gd")
+const Store = preload("res://scripts/persistence/world_state_store.gd")
 var _assets: Node
 var _pending := {}
 
 func configure(assets: Node) -> void:
 	_assets = assets
 
-func search(query: String) -> Dictionary:
-	return await _assets.request_json("/v1/skies/search", {"query": query})
+func search(query: String, provider := "polyhaven") -> Dictionary:
+	return await _assets.request_json("/v1/skies/search", {"query": query, "provider": provider})
 
 func import_sky(id: String) -> Dictionary:
 	if not Cache.valid_id(id):
 		return _error("Invalid sky ID.")
 	if _pending.has(id):
 		return _error("This sky is already importing.")
-	var key := Cache.PREFIX + id + ".hdr"
+	var key := Cache.key_for(id)
 	if Cache.texture(key) != null:
-		return {"ok": true, "sky": {"id": id, "key": key, "name": id.capitalize()}}
+		var info := Cache.info(key)
+		return {"ok": true, "sky": info if not info.is_empty() else {"id": id, "key": key, "name": Cache.label(key)}}
 	_pending[id] = true
 	var result := await _download(id, key)
 	_pending.erase(id)
@@ -42,8 +44,13 @@ func _download(id: String, key: String) -> Dictionary:
 	if DirAccess.rename_absolute(stage, Cache.directory.path_join(key)) != OK:
 		DirAccess.remove_absolute(stage)
 		return _error("Could not save the sky.")
-	Cache.remember(key, image)
 	sky["key"] = key
+	var metadata_error := Store.write_json(Cache.directory.path_join(key + ".json"), sky)
+	if metadata_error != OK:
+		DirAccess.remove_absolute(Cache.directory.path_join(key))
+		DirAccess.remove_absolute(Cache.directory.path_join(key + ".json.tmp"))
+		return _error("Could not save the sky metadata.")
+	Cache.remember(key, image)
 	return {"ok": true, "sky": sky}
 
 static func _error(message: String) -> Dictionary:

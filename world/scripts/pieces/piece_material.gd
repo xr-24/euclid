@@ -33,6 +33,9 @@ static func make(spec: Dictionary) -> Material:
 		made = shader_material
 	else:
 		made = _standard(spec)
+		# A missing import can become available later. Do not retain its fallback.
+		if spec.has("texture") and not made is ORMMaterial3D:
+			return made
 	_mutex.lock()
 	if _cache.size() >= 256:
 		_cache.erase(_cache.keys()[0])

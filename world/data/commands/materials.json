@@ -2,12 +2,12 @@
   "version": 1,
   "commands": [
     {
-      "name": "search_materials", "description": "Search Poly Haven for paintable PBR materials by name. Returns material IDs for import_material.",
+      "name": "search_materials", "description": "Search Poly Haven for PBR materials or Sketchfab for downloadable textured samples by name or link. Returns IDs for import_material. Defaults to Poly Haven.",
       "service": "world", "handler": "_material_command", "effect": "read", "surfaces": ["f2", "mcp"],
-      "fields": {"query": "material_query"}, "required": ["query"], "scope": "session", "undo": "none", "mutates_world": false
+      "fields": {"query": "material_query", "provider": "provider"}, "required": ["query"], "scope": "session", "undo": "none", "mutates_world": false
     },
     {
-      "name": "import_material", "description": "Download a Poly Haven material by ID. It is then available to paint live with terrain_brush.",
+      "name": "import_material", "description": "Download a Poly Haven or Sketchfab material by ID. Use it with terrain_brush or as the texture ID in a piece material.",
       "service": "world", "handler": "_material_command", "effect": "write", "surfaces": ["f2", "mcp"],
       "fields": {"target": "terrain_paint"}, "required": ["target"], "scope": "session", "undo": "none", "mutates_world": false
     }

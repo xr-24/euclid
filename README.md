@@ -60,11 +60,22 @@ In **Open Ground**, open **Build → Terrain** or press **B → Terrain**. Pick 
 ground. Hold middle mouse to look and move. Flatten samples the height where you begin.
 Paint blends dry earth, sand, and rock. Releasing the mouse saves one undoable stroke
 and updates the walkable surface.
-Choose **Paint → Import…** to search Poly Haven for materials such as gravel or sandstone.
-The downloaded material becomes the active brush and stays in your local library for later use.
+Choose **Paint → Import…** to browse Poly Haven and Sketchfab. The browser starts with
+a selection of tile, paving, soil, and gravel. The imported material becomes the
+active brush and stays in your local library. In **Build → Pieces**, choose a
+piece and use **Import…** beside a supported material or texture field, then
+select **Apply**. Agents can use the returned ID as a piece material's `texture`
+or as a terrain paint ID.
 
-In **Build → Atmosphere → Sky → Import…**, search Poly Haven for a 2K HDRI. The
-selected sky previews immediately. **Save** keeps it for that environment.
+In **Build → Atmosphere → Sky → Import…**, choose a starter sky or search by name.
+Sketchfab also accepts model links. Its skyboxes need a downloadable model with
+an embedded 2:1 panorama. Poly Haven supplies 2K HDRIs, and Sketchfab panoramas
+use the colors from the model's image. The selected sky previews immediately.
+**Save** keeps it for that environment. Adjust the sun separately to suit the sky.
+
+Sketchfab imports use the configured Sketchfab key (`.local/sketchfab-key.txt`
+or `SKETCHFAB_API_TOKEN`). The texture cache retains the author, source link,
+and license for each import.
 In **Build → Pieces**, add **Vegetation scatter**, **Water surface**, **Water spray**,
 or **Physics prop**. Make scatter a child of a terrain to follow its sculpted height.
 The villa and shore can be edited through the same Pieces panel.

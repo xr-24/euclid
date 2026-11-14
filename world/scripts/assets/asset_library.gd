@@ -1,10 +1,12 @@
 extends RefCounted
 ## Shared imported resources and PBR construction. Builders serialize access to this cache.
+const RuntimeMaterials = preload("res://scripts/assets/runtime_materials.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
 const GENERATED := "res://assets/generated/textures/"
 static var _cache := {}
 static var _resources := {}
 static var _materials := {}
+static var _runtime_texture_order: Array[String] = []
 static var _collision_shapes := {}
 static var _resource_mutex := Mutex.new()
 static var has_rd := false
@@ -39,7 +41,21 @@ static func texture_set(id: String) -> Dictionary:
 					maps[map] = get_resource(maps[map])
 				_cache[id] = maps
 				return maps
-	return {}
+	return _imported_texture_set(id)
+
+static func _imported_texture_set(id: String) -> Dictionary:
+	var imported := RuntimeMaterials.cached_images(id)
+	if imported.size() != RuntimeMaterials.MAPS.size():
+		return {}
+	var maps := {}
+	for index in imported.size():
+		maps[RuntimeMaterials.MAPS[index]] = ImageTexture.create_from_image(imported[index])
+	maps["runtime"] = true
+	if _runtime_texture_order.size() >= 12:
+		_cache.erase(_runtime_texture_order.pop_front())
+	_runtime_texture_order.append(id)
+	_cache[id] = maps
+	return maps
 
 ## World-space triplanar PBR material, so it works on any mesh regardless of UVs.
 
@@ -53,7 +69,6 @@ static func pbr(id: String, size_m: float, tint := Color.WHITE, fallback := Colo
 		var plain := StandardMaterial3D.new()
 		plain.albedo_color = fallback
 		plain.roughness = 0.75
-		_materials[key] = plain
 		return plain
 	var mat := ORMMaterial3D.new()
 	mat.albedo_texture = maps.albedo
@@ -66,7 +81,8 @@ static func pbr(id: String, size_m: float, tint := Color.WHITE, fallback := Colo
 	mat.uv1_triplanar_sharpness = 6.0
 	mat.uv1_scale = Vector3.ONE / size_m
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	_materials[key] = mat
+	if not maps.get("runtime", false):
+		_materials[key] = mat
 	return mat
 
 ## Collision geometry is immutable and shared across visits; bodies retain independent transforms.

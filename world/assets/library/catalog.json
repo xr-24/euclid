@@ -1,5 +1,110 @@
 {
  "assets": {
+  "ClassicNightstand_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/ClassicNightstand_01.glb",
+   "size_m": {
+    "depth": 0.424,
+    "height": 0.7,
+    "width": 0.568
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/ClassicNightstand_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Classicnightstand 01",
+   "triangles": 2002
+  },
+  "CoffeeTable_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/CoffeeTable_01.glb",
+   "size_m": {
+    "depth": 0.973,
+    "height": 0.523,
+    "width": 1.54
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/CoffeeTable_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coffeetable 01",
+   "triangles": 8000
+  },
+  "GreenChair_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/GreenChair_01.glb",
+   "size_m": {
+    "depth": 0.664,
+    "height": 1.059,
+    "width": 0.673
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/GreenChair_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Greenchair 01",
+   "triangles": 4213
+  },
+  "Ottoman_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/Ottoman_01.glb",
+   "size_m": {
+    "depth": 0.621,
+    "height": 0.624,
+    "width": 0.885
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/Ottoman_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Ottoman 01",
+   "triangles": 4240
+  },
+  "Shelf_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/Shelf_01.glb",
+   "size_m": {
+    "depth": 0.257,
+    "height": 2.08,
+    "width": 1.003
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/Shelf_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Shelf 01",
+   "triangles": 182
+  },
   "antique_ceramic_vase_01": {
    "category": "prop",
    "licence": "cc0",
@@ -106,6 +211,82 @@
    "title": "Bust of Augustus",
    "triangles": 49999
   },
+  "bar_chair_round_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/bar_chair_round_01.glb",
+   "size_m": {
+    "depth": 0.491,
+    "height": 0.752,
+    "width": 0.49
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/bar_chair_round_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Bar chair round 01",
+   "triangles": 6000
+  },
+  "bed_upholstered_dark": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bed_upholstered_dark/bed_upholstered_dark.glb",
+   "size_m": {
+    "depth": 2.15,
+    "height": 1.028,
+    "width": 1.72
+   },
+   "source": {
+    "author": "rickmaolly",
+    "author_page": "https://sketchfab.com/rickmaolly",
+    "changes": "Reduced from 161010 to 39998 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bed-b8c16d4b69f64335b46379b119b102b4",
+    "site": "Sketchfab",
+    "title": "Bed"
+   },
+   "tags": [
+    "bed",
+    "bedroom",
+    "modern"
+   ],
+   "title": "Upholstered double bed",
+   "triangles": 39998
+  },
+  "bed_upholstered_grey": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bed_upholstered_grey/bed_upholstered_grey.glb",
+   "size_m": {
+    "depth": 2.1,
+    "height": 1.553,
+    "width": 1.725
+   },
+   "source": {
+    "author": "Allan-Jay Branscombe",
+    "author_page": "https://sketchfab.com/AllanJayBranscombe",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/game-ready-double-bed-eeafb24592f249f08f9576c2511272d8",
+    "site": "Sketchfab",
+    "title": "Game Ready - Double Bed"
+   },
+   "tags": [
+    "bed",
+    "bedroom"
+   ],
+   "title": "Double bed with headboard",
+   "triangles": 12932
+  },
   "boulder_01": {
    "category": "prop",
    "licence": "cc0",
@@ -156,6 +337,27 @@
    ],
    "title": "Caryatid",
    "triangles": 79998
+  },
+  "ceiling_fan": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/ceiling_fan.glb",
+   "size_m": {
+    "depth": 1.463,
+    "height": 0.516,
+    "width": 1.463
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/ceiling_fan",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Ceiling fan",
+   "triangles": 7420
   },
   "cheiridopsis_succulent": {
    "category": "prop",
@@ -283,6 +485,27 @@
    "title": "Coastal cliff 01",
    "triangles": 119998
   },
+  "coffee_table_round_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/coffee_table_round_01.glb",
+   "size_m": {
+    "depth": 1.301,
+    "height": 0.491,
+    "width": 1.301
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/coffee_table_round_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Coffee table round 01",
+   "triangles": 4044
+  },
   "crystalline_iceplant": {
    "category": "prop",
    "licence": "cc0",
@@ -303,6 +526,27 @@
    "tags": [],
    "title": "Crystalline iceplant",
    "triangles": 7334
+  },
+  "dining_chair_02": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/dining_chair_02.glb",
+   "size_m": {
+    "depth": 0.576,
+    "height": 0.973,
+    "width": 0.433
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/dining_chair_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Dining chair 02",
+   "triangles": 8000
   },
   "dionysos_torso": {
    "category": "fragment",
@@ -360,6 +604,27 @@
    "title": "Discobolus",
    "triangles": 79994
   },
+  "drawer_cabinet": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/drawer_cabinet.glb",
+   "size_m": {
+    "depth": 0.488,
+    "height": 1.881,
+    "width": 1.141
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/drawer_cabinet",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Drawer cabinet",
+   "triangles": 11995
+  },
   "farnese_hercules_study": {
    "category": "statue",
    "licence": "cc-by",
@@ -416,6 +681,61 @@
    "title": "Faune au Chevreau",
    "triangles": 14981
   },
+  "floor_lamp_reading": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/floor_lamp_reading/floor_lamp_reading.glb",
+   "size_m": {
+    "depth": 0.316,
+    "height": 1.5,
+    "width": 0.548
+   },
+   "source": {
+    "author": "Jack John",
+    "author_page": "https://sketchfab.com/li82545683",
+    "changes": "rescaled to real size, textures capped at 1024 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/floor-lamp-3e2a60cb3d2c42e5bdfab33d396f85e2",
+    "site": "Sketchfab",
+    "title": "floor lamp"
+   },
+   "tags": [
+    "lamp",
+    "lighting",
+    "modern"
+   ],
+   "title": "Black reading floor lamp",
+   "triangles": 3794
+  },
+  "floor_lamp_shade": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/floor_lamp_shade/floor_lamp_shade.glb",
+   "size_m": {
+    "depth": 0.415,
+    "height": 1.6,
+    "width": 0.415
+   },
+   "source": {
+    "author": "Justin.Foley",
+    "author_page": "https://sketchfab.com/Justin.Foley",
+    "changes": "rescaled to real size, textures capped at 1024 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/pbr-floor-lamp-free-download-083c9408b89949d8b201e8a1bb6ce41c",
+    "site": "Sketchfab",
+    "title": "PBR Floor Lamp (Free Download)"
+   },
+   "tags": [
+    "lamp",
+    "lighting"
+   ],
+   "title": "Floor lamp with shade",
+   "triangles": 6977
+  },
   "flower_gazania": {
    "category": "prop",
    "licence": "cc0",
@@ -457,6 +777,69 @@
    "tags": [],
    "title": "Grass medium 02",
    "triangles": 7842
+  },
+  "hanging_picture_frame_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/hanging_picture_frame_01.glb",
+   "size_m": {
+    "depth": 0.016,
+    "height": 0.841,
+    "width": 0.594
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/hanging_picture_frame_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Hanging picture frame 01",
+   "triangles": 2586
+  },
+  "hanging_picture_frame_02": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/hanging_picture_frame_02.glb",
+   "size_m": {
+    "depth": 0.033,
+    "height": 0.5,
+    "width": 0.752
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/hanging_picture_frame_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Hanging picture frame 02",
+   "triangles": 3678
+  },
+  "hanging_picture_frame_03": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/hanging_picture_frame_03.glb",
+   "size_m": {
+    "depth": 0.032,
+    "height": 0.502,
+    "width": 0.385
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/hanging_picture_frame_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Hanging picture frame 03",
+   "triangles": 24348
   },
   "hermes": {
    "category": "statue",
@@ -741,6 +1124,111 @@
    "title": "Bust of Marcus Aurelius",
    "triangles": 49999
   },
+  "mid_century_lounge_chair": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/mid_century_lounge_chair.glb",
+   "size_m": {
+    "depth": 1.19,
+    "height": 1.169,
+    "width": 1.009
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/mid_century_lounge_chair",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Mid century lounge chair",
+   "triangles": 6148
+  },
+  "modern_arm_chair_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/modern_arm_chair_01.glb",
+   "size_m": {
+    "depth": 0.987,
+    "height": 1.023,
+    "width": 0.82
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/modern_arm_chair_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Modern arm chair 01",
+   "triangles": 8916
+  },
+  "modern_ceiling_lamp_01": {
+   "category": "prop",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/modern_ceiling_lamp_01.glb",
+   "size_m": {
+    "depth": 0.432,
+    "height": 0.952,
+    "width": 0.432
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/modern_ceiling_lamp_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Modern ceiling lamp 01",
+   "triangles": 5602
+  },
+  "modern_coffee_table_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/modern_coffee_table_01.glb",
+   "size_m": {
+    "depth": 1.202,
+    "height": 0.39,
+    "width": 0.6
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/modern_coffee_table_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Modern coffee table 01",
+   "triangles": 4504
+  },
+  "modern_wooden_cabinet": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/modern_wooden_cabinet.glb",
+   "size_m": {
+    "depth": 0.52,
+    "height": 0.68,
+    "width": 2.44
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/modern_wooden_cabinet",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Modern wooden cabinet",
+   "triangles": 11998
+  },
   "modular_wooden_pier": {
    "category": "structure",
    "licence": "cc0",
@@ -861,6 +1349,27 @@
    "tags": [],
    "title": "Outdoor table chair set 01",
    "triangles": 9828
+  },
+  "painted_wooden_nightstand": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/painted_wooden_nightstand.glb",
+   "size_m": {
+    "depth": 0.509,
+    "height": 0.616,
+    "width": 0.505
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/painted_wooden_nightstand",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Painted wooden nightstand",
+   "triangles": 470
   },
   "potted_plant_01": {
    "category": "plant",
@@ -1191,6 +1700,48 @@
    "title": "Shrub sorrel 01",
    "triangles": 3319
   },
+  "side_table_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/side_table_01.glb",
+   "size_m": {
+    "depth": 0.45,
+    "height": 0.551,
+    "width": 0.55
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/side_table_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Side table 01",
+   "triangles": 2756
+  },
+  "side_table_tall_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/side_table_tall_01.glb",
+   "size_m": {
+    "depth": 0.384,
+    "height": 0.761,
+    "width": 0.384
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/side_table_tall_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Side table tall 01",
+   "triangles": 5000
+  },
   "sleeping_ariadne": {
    "category": "statue",
    "licence": "cc-by",
@@ -1247,6 +1798,152 @@
    "title": "Sleeping Hermaphroditus",
    "triangles": 89997
   },
+  "sofa_02": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/sofa_02.glb",
+   "size_m": {
+    "depth": 0.818,
+    "height": 0.709,
+    "width": 1.807
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/sofa_02",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Sofa 02",
+   "triangles": 2728
+  },
+  "sofa_03": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/sofa_03.glb",
+   "size_m": {
+    "depth": 0.924,
+    "height": 1.12,
+    "width": 2.728
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/sofa_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Sofa 03",
+   "triangles": 3809
+  },
+  "sofa_mid_century": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/sofa_mid_century/sofa_mid_century.glb",
+   "size_m": {
+    "depth": 0.924,
+    "height": 0.854,
+    "width": 2.0
+   },
+   "source": {
+    "author": "Tom Seddon",
+    "author_page": "https://sketchfab.com/bloodmeat08",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/mid-century-modern-sofa-1f9f52ae17d642b582d0c5ccf9dd64b3",
+    "site": "Sketchfab",
+    "title": "Mid Century Modern Sofa"
+   },
+   "tags": [
+    "sofa",
+    "living room",
+    "mid-century"
+   ],
+   "title": "Mid-century modern sofa",
+   "triangles": 5403
+  },
+  "sofa_modern_linen": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/sofa_modern_linen/sofa_modern_linen.glb",
+   "size_m": {
+    "depth": 0.98,
+    "height": 0.752,
+    "width": 2.5
+   },
+   "source": {
+    "author": "3dimentionalben",
+    "author_page": "https://sketchfab.com/3dimentionalben",
+    "changes": "Reduced from 33770 to 29994 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/modern-sofa-ac92f6e97eaa43c4ad6cb8f7c65ac43f",
+    "site": "Sketchfab",
+    "title": "Modern  Sofa"
+   },
+   "tags": [
+    "sofa",
+    "living room",
+    "modern"
+   ],
+   "title": "Modern linen sofa",
+   "triangles": 29994
+  },
+  "steel_frame_shelves_03": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/steel_frame_shelves_03.glb",
+   "size_m": {
+    "depth": 0.721,
+    "height": 2.312,
+    "width": 2.351
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/steel_frame_shelves_03",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Steel frame shelves 03",
+   "triangles": 7992
+  },
+  "toilet_ceramic": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/toilet_ceramic/toilet_ceramic.glb",
+   "size_m": {
+    "depth": 0.637,
+    "height": 0.78,
+    "width": 0.502
+   },
+   "source": {
+    "author": "HippoStance",
+    "author_page": "https://sketchfab.com/hippostance",
+    "changes": "rescaled to real size, textures capped at 1024 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/toilet-132a8ee2af3a40d39d270fbed3d3666c",
+    "site": "Sketchfab",
+    "title": "Toilet"
+   },
+   "tags": [
+    "toilet",
+    "bathroom"
+   ],
+   "title": "Toilet",
+   "triangles": 10492
+  },
   "trajan_tower_hill": {
    "category": "statue",
    "licence": "cc-by-nc",
@@ -1297,6 +1994,34 @@
    "tags": [],
    "title": "Tree small 02",
    "triangles": 172763
+  },
+  "tv_flat_screen": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/tv_flat_screen/tv_flat_screen.glb",
+   "size_m": {
+    "depth": 0.394,
+    "height": 0.771,
+    "width": 1.25
+   },
+   "source": {
+    "author": "HippoStance",
+    "author_page": "https://sketchfab.com/hippostance",
+    "changes": "rescaled to real size, textures capped at 1024 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/flat-screen-television-f90d4fb91dd34b6791e8d66d00f96591",
+    "site": "Sketchfab",
+    "title": "Flat Screen Television"
+   },
+   "tags": [
+    "tv",
+    "television",
+    "living room"
+   ],
+   "title": "Flat screen television",
+   "triangles": 2706
   },
   "venus_dockive": {
    "category": "statue",
@@ -1353,6 +2078,27 @@
    ],
    "title": "Venus Verticordia",
    "triangles": 79994
+  },
+  "vintage_cabinet_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/vintage_cabinet_01.glb",
+   "size_m": {
+    "depth": 0.67,
+    "height": 2.236,
+    "width": 2.021
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/vintage_cabinet_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Vintage cabinet 01",
+   "triangles": 7011
   },
   "wild_rooibos_bush": {
    "category": "prop",
@@ -1465,6 +2211,27 @@
    "tags": [],
    "title": "Wooden crate 01",
    "triangles": 6576
+  },
+  "wooden_display_shelves_01": {
+   "category": "furniture",
+   "licence": "cc0",
+   "scene": "res://assets/thirdparty/polyhaven/models/wooden_display_shelves_01.glb",
+   "size_m": {
+    "depth": 1.078,
+    "height": 1.556,
+    "width": 0.372
+   },
+   "source": {
+    "author": "Poly Haven",
+    "licence": "cc0",
+    "licence_label": "CC0 1.0 (public domain)",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "page": "https://polyhaven.com/a/wooden_display_shelves_01",
+    "site": "Poly Haven"
+   },
+   "tags": [],
+   "title": "Wooden display shelves 01",
+   "triangles": 3174
   },
   "wooden_lantern_01": {
    "category": "prop",

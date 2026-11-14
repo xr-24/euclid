@@ -1,0 +1,27 @@
+{
+ "id": "tv_flat_screen",
+ "title": "Flat screen television",
+ "category": "prop",
+ "tags": [
+  "tv",
+  "television",
+  "living room"
+ ],
+ "size_m": {
+  "width": 1.25,
+  "depth": 0.394,
+  "height": 0.771
+ },
+ "triangles": 2706,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Flat Screen Television",
+  "page": "https://sketchfab.com/3d-models/flat-screen-television-f90d4fb91dd34b6791e8d66d00f96591",
+  "author": "HippoStance",
+  "author_page": "https://sketchfab.com/hippostance",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 1024 px, re-centred."
+ }
+}

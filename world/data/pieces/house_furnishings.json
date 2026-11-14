@@ -1,28 +1,342 @@
 {
   "version": 1,
-  "about": "Models that house pieces furnish rooms with, by slot and style. Each slot lists library model ids in order of preference; the first one installed is used, scaled down (never up) to fit the slot's size [width, height, depth] in metres, and turned by its optional entry in turn (degrees). Without any installed model the house builds a simple stand-in. polyhaven lists the CC0 models scripts/build-furniture.ps1 downloads.",
+  "about": "Models that house pieces furnish rooms with, by slot and style. Each slot lists library model ids in order of preference; the first one installed is used, scaled down (never up) to fit the slot's size [width, height, depth] in metres, and turned by its optional entry in turn (degrees). Without any installed model the house builds a simple stand-in. polyhaven and sketchfab list the models scripts/build-furniture.ps1 downloads (Sketchfab entries are in scripts/assets/sketchfab.json and credited automatically).",
   "polyhaven": [
-    "sofa_02", "sofa_03", "modern_arm_chair_01", "mid_century_lounge_chair", "Ottoman_01", "GreenChair_01",
-    "modern_coffee_table_01", "coffee_table_round_01", "CoffeeTable_01", "side_table_01", "side_table_tall_01",
-    "dining_chair_02", "bar_chair_round_01", "modern_wooden_cabinet", "drawer_cabinet", "vintage_cabinet_01",
-    "wooden_display_shelves_01", "steel_frame_shelves_03", "Shelf_01", "painted_wooden_nightstand",
-    "ClassicNightstand_01", "modern_ceiling_lamp_01", "hanging_picture_frame_01", "hanging_picture_frame_02",
-    "hanging_picture_frame_03", "ceiling_fan"
+    "sofa_02",
+    "sofa_03",
+    "modern_arm_chair_01",
+    "mid_century_lounge_chair",
+    "Ottoman_01",
+    "GreenChair_01",
+    "modern_coffee_table_01",
+    "coffee_table_round_01",
+    "CoffeeTable_01",
+    "side_table_01",
+    "side_table_tall_01",
+    "dining_chair_02",
+    "bar_chair_round_01",
+    "modern_wooden_cabinet",
+    "drawer_cabinet",
+    "vintage_cabinet_01",
+    "wooden_display_shelves_01",
+    "steel_frame_shelves_03",
+    "Shelf_01",
+    "painted_wooden_nightstand",
+    "ClassicNightstand_01",
+    "modern_ceiling_lamp_01",
+    "hanging_picture_frame_01",
+    "hanging_picture_frame_02",
+    "hanging_picture_frame_03",
+    "ceiling_fan"
   ],
   "slots": {
-    "sofa": {"size": [2.4, 1.0, 1.0], "models": {"default": ["sofa_02"], "farmhouse": ["sofa_03", "sofa_02"]}},
-    "armchair": {"size": [1.05, 1.15, 1.2], "models": {"default": ["modern_arm_chair_01", "mid_century_lounge_chair"], "desert": ["mid_century_lounge_chair", "modern_arm_chair_01"], "farmhouse": ["GreenChair_01", "modern_arm_chair_01"]}},
-    "coffee_table": {"size": [1.35, 0.55, 1.35], "models": {"default": ["modern_coffee_table_01", "coffee_table_round_01"], "desert": ["coffee_table_round_01", "modern_coffee_table_01"], "farmhouse": ["CoffeeTable_01", "modern_coffee_table_01"]}},
-    "side_table": {"size": [0.6, 0.8, 0.55], "models": {"default": ["side_table_01"], "farmhouse": ["side_table_tall_01", "side_table_01"]}},
-    "media_unit": {"size": [2.5, 0.75, 0.6], "models": {"default": ["modern_wooden_cabinet"]}},
-    "dining_chair": {"size": [0.55, 1.05, 0.62], "models": {"default": ["dining_chair_02"]}},
-    "bar_stool": {"size": [0.52, 0.85, 0.52], "models": {"default": ["bar_chair_round_01"]}},
-    "nightstand": {"size": [0.6, 0.72, 0.52], "models": {"default": ["side_table_01", "painted_wooden_nightstand"], "desert": ["painted_wooden_nightstand", "side_table_01"], "farmhouse": ["painted_wooden_nightstand", "ClassicNightstand_01"]}},
-    "storage": {"size": [1.25, 2.0, 0.6], "models": {"default": ["drawer_cabinet"], "farmhouse": ["vintage_cabinet_01", "drawer_cabinet"]}},
-    "bookshelf": {"size": [1.2, 2.1, 0.45], "models": {"default": ["wooden_display_shelves_01", "Shelf_01", "wooden_bookshelf_worn"], "farmhouse": ["Shelf_01", "wooden_bookshelf_worn"]}},
-    "plant": {"size": [0.8, 1.7, 0.8], "models": {"default": ["potted_plant_01", "potted_plant_02"]}},
-    "pendant": {"size": [0.7, 0.8, 0.7], "models": {"default": ["modern_ceiling_lamp_01"]}},
-    "art": {"size": [1.1, 1.1, 0.1], "models": {"default": ["hanging_picture_frame_02", "hanging_picture_frame_01", "hanging_picture_frame_03"]}}
+    "sofa": {
+      "size": [
+        2.4,
+        1.0,
+        1.0
+      ],
+      "models": {
+        "default": [
+          "sofa_modern_linen",
+          "sofa_02"
+        ],
+        "desert": [
+          "sofa_mid_century",
+          "sofa_modern_linen"
+        ],
+        "farmhouse": [
+          "sofa_mid_century",
+          "sofa_03",
+          "sofa_02"
+        ]
+      }
+    },
+    "armchair": {
+      "size": [
+        1.05,
+        1.15,
+        1.2
+      ],
+      "models": {
+        "default": [
+          "modern_arm_chair_01",
+          "mid_century_lounge_chair"
+        ],
+        "desert": [
+          "mid_century_lounge_chair",
+          "modern_arm_chair_01"
+        ],
+        "farmhouse": [
+          "GreenChair_01",
+          "modern_arm_chair_01"
+        ]
+      }
+    },
+    "coffee_table": {
+      "size": [
+        1.35,
+        0.55,
+        1.35
+      ],
+      "models": {
+        "default": [
+          "modern_coffee_table_01",
+          "coffee_table_round_01"
+        ],
+        "desert": [
+          "coffee_table_round_01",
+          "modern_coffee_table_01"
+        ],
+        "farmhouse": [
+          "CoffeeTable_01",
+          "modern_coffee_table_01"
+        ]
+      }
+    },
+    "side_table": {
+      "size": [
+        0.6,
+        0.8,
+        0.55
+      ],
+      "models": {
+        "default": [
+          "side_table_01"
+        ],
+        "farmhouse": [
+          "side_table_tall_01",
+          "side_table_01"
+        ]
+      }
+    },
+    "media_unit": {
+      "size": [
+        2.5,
+        0.75,
+        0.6
+      ],
+      "models": {
+        "default": [
+          "modern_wooden_cabinet"
+        ]
+      }
+    },
+    "dining_chair": {
+      "size": [
+        0.55,
+        1.05,
+        0.62
+      ],
+      "models": {
+        "default": [
+          "dining_chair_02"
+        ]
+      }
+    },
+    "bar_stool": {
+      "size": [
+        0.52,
+        0.85,
+        0.52
+      ],
+      "models": {
+        "default": [],
+        "farmhouse": [
+          "bar_chair_round_01"
+        ],
+        "desert": [
+          "bar_chair_round_01"
+        ]
+      }
+    },
+    "nightstand": {
+      "size": [
+        0.6,
+        0.72,
+        0.52
+      ],
+      "models": {
+        "default": [
+          "side_table_01",
+          "painted_wooden_nightstand"
+        ],
+        "desert": [
+          "painted_wooden_nightstand",
+          "side_table_01"
+        ],
+        "farmhouse": [
+          "painted_wooden_nightstand",
+          "ClassicNightstand_01"
+        ]
+      }
+    },
+    "storage": {
+      "size": [
+        1.25,
+        2.0,
+        0.6
+      ],
+      "models": {
+        "default": [
+          "drawer_cabinet"
+        ],
+        "farmhouse": [
+          "vintage_cabinet_01",
+          "drawer_cabinet"
+        ]
+      }
+    },
+    "bookshelf": {
+      "size": [
+        1.2,
+        2.1,
+        0.45
+      ],
+      "models": {
+        "default": [
+          "wooden_display_shelves_01",
+          "Shelf_01",
+          "wooden_bookshelf_worn"
+        ],
+        "farmhouse": [
+          "Shelf_01",
+          "wooden_bookshelf_worn"
+        ]
+      }
+    },
+    "plant": {
+      "size": [
+        0.8,
+        1.7,
+        0.8
+      ],
+      "models": {
+        "default": [
+          "potted_plant_01",
+          "potted_plant_02"
+        ]
+      }
+    },
+    "pendant": {
+      "size": [
+        0.7,
+        0.8,
+        0.7
+      ],
+      "models": {
+        "default": [
+          "modern_ceiling_lamp_01"
+        ]
+      }
+    },
+    "art": {
+      "size": [
+        1.1,
+        1.1,
+        0.1
+      ],
+      "models": {
+        "default": [
+          "hanging_picture_frame_02",
+          "hanging_picture_frame_01",
+          "hanging_picture_frame_03"
+        ]
+      }
+    },
+    "bed": {
+      "size": [
+        2.1,
+        1.3,
+        2.3
+      ],
+      "models": {
+        "default": [
+          "bed_upholstered_dark",
+          "bed_upholstered_grey"
+        ],
+        "farmhouse": [
+          "bed_upholstered_grey"
+        ],
+        "desert": [
+          "bed_upholstered_dark"
+        ]
+      }
+    },
+    "toilet": {
+      "size": [
+        0.5,
+        0.85,
+        0.75
+      ],
+      "models": {
+        "default": [
+          "toilet_ceramic"
+        ]
+      }
+    },
+    "tv": {
+      "size": [
+        1.4,
+        0.9,
+        0.35
+      ],
+      "models": {
+        "default": [
+          "tv_flat_screen"
+        ]
+      }
+    },
+    "floor_lamp": {
+      "size": [
+        0.6,
+        1.7,
+        0.6
+      ],
+      "models": {
+        "default": [
+          "floor_lamp_reading",
+          "floor_lamp_shade"
+        ],
+        "farmhouse": [
+          "floor_lamp_shade",
+          "floor_lamp_reading"
+        ],
+        "desert": [
+          "floor_lamp_shade",
+          "floor_lamp_reading"
+        ]
+      }
+    },
+    "bed_guest": {
+      "size": [
+        1.65,
+        1.3,
+        2.15
+      ],
+      "models": {
+        "default": [
+          "bed_upholstered_dark",
+          "bed_upholstered_grey"
+        ],
+        "farmhouse": [
+          "bed_upholstered_grey"
+        ],
+        "desert": [
+          "bed_upholstered_dark"
+        ]
+      }
+    }
   },
-  "turn": {}
+  "turn": {},
+  "sketchfab": [
+    "bed_upholstered_dark",
+    "bed_upholstered_grey",
+    "sofa_modern_linen",
+    "sofa_mid_century",
+    "toilet_ceramic",
+    "tv_flat_screen",
+    "floor_lamp_reading",
+    "floor_lamp_shade"
+  ]
 }

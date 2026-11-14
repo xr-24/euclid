@@ -1,0 +1,27 @@
+{
+ "id": "floor_lamp_reading",
+ "title": "Black reading floor lamp",
+ "category": "prop",
+ "tags": [
+  "lamp",
+  "lighting",
+  "modern"
+ ],
+ "size_m": {
+  "width": 0.548,
+  "depth": 0.316,
+  "height": 1.5
+ },
+ "triangles": 3794,
+ "source": {
+  "site": "Sketchfab",
+  "title": "floor lamp",
+  "page": "https://sketchfab.com/3d-models/floor-lamp-3e2a60cb3d2c42e5bdfab33d396f85e2",
+  "author": "Jack John",
+  "author_page": "https://sketchfab.com/li82545683",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 1024 px, re-centred."
+ }
+}

@@ -84,6 +84,10 @@ func _initialize() -> void:
 			var corner := Vector3(rect[2] - 0.5, floor_y + 0.5, rect[3] - 0.5)
 			var eye := centre.lerp(Vector3(rect[0] + 0.5, floor_y + 1.6, rect[1] + 0.5), 0.55)
 			views.append(["inside_" + str(room.name).to_snake_case(), eye, corner])
+			# The opposite way too, so furniture against the first view's walls is seen.
+			var back_corner := Vector3(rect[0] + 0.5, floor_y + 0.5, rect[1] + 0.5)
+			var back_eye := centre.lerp(Vector3(rect[2] - 0.5, floor_y + 1.6, rect[3] - 0.5), 0.55)
+			views.append(["inside_" + str(room.name).to_snake_case() + "_back", back_eye, back_corner])
 	for view: Array in views:
 		var cutaway: bool = view[0] == "cutaway"
 		(house.get_node("Roof") as Node3D).visible = not cutaway

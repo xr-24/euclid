@@ -1,4 +1,49 @@
 {
+ "ClassicNightstand_01": {
+  "size_m": [
+   0.568,
+   0.424,
+   0.7
+  ],
+  "source_triangles": 2002,
+  "triangles": 2002
+ },
+ "CoffeeTable_01": {
+  "size_m": [
+   1.54,
+   0.973,
+   0.523
+  ],
+  "source_triangles": 10404,
+  "triangles": 8000
+ },
+ "GreenChair_01": {
+  "size_m": [
+   0.673,
+   0.664,
+   1.059
+  ],
+  "source_triangles": 4213,
+  "triangles": 4213
+ },
+ "Ottoman_01": {
+  "size_m": [
+   0.885,
+   0.621,
+   0.624
+  ],
+  "source_triangles": 4240,
+  "triangles": 4240
+ },
+ "Shelf_01": {
+  "size_m": [
+   1.003,
+   0.257,
+   2.08
+  ],
+  "source_triangles": 182,
+  "triangles": 182
+ },
  "antique_ceramic_vase_01": {
   "size_m": [
    0.255,
@@ -8,6 +53,15 @@
   "source_triangles": 9408,
   "triangles": 9408
  },
+ "bar_chair_round_01": {
+  "size_m": [
+   0.49,
+   0.491,
+   0.752
+  ],
+  "source_triangles": 14373,
+  "triangles": 6000
+ },
  "boulder_01": {
   "size_m": [
    1.275,
@@ -16,6 +70,15 @@
   ],
   "source_triangles": 66122,
   "triangles": 26611
+ },
+ "ceiling_fan": {
+  "size_m": [
+   1.463,
+   1.463,
+   0.516
+  ],
+  "source_triangles": 16356,
+  "triangles": 7420
  },
  "cheiridopsis_succulent": {
   "size_m": [
@@ -71,6 +134,15 @@
   "source_triangles": 461824,
   "triangles": 119998
  },
+ "coffee_table_round_01": {
+  "size_m": [
+   1.301,
+   1.301,
+   0.491
+  ],
+  "source_triangles": 4044,
+  "triangles": 4044
+ },
  "crystalline_iceplant": {
   "size_m": [
    1.617,
@@ -79,6 +151,24 @@
   ],
   "source_triangles": 13094,
   "triangles": 7334
+ },
+ "dining_chair_02": {
+  "size_m": [
+   0.433,
+   0.576,
+   0.973
+  ],
+  "source_triangles": 22013,
+  "triangles": 8000
+ },
+ "drawer_cabinet": {
+  "size_m": [
+   1.141,
+   0.488,
+   1.881
+  ],
+  "source_triangles": 26406,
+  "triangles": 11995
  },
  "flower_gazania": {
   "size_m": [
@@ -106,6 +196,33 @@
   ],
   "source_triangles": 7842,
   "triangles": 7842
+ },
+ "hanging_picture_frame_01": {
+  "size_m": [
+   0.594,
+   0.016,
+   0.841
+  ],
+  "source_triangles": 2586,
+  "triangles": 2586
+ },
+ "hanging_picture_frame_02": {
+  "size_m": [
+   0.752,
+   0.033,
+   0.5
+  ],
+  "source_triangles": 3678,
+  "triangles": 3678
+ },
+ "hanging_picture_frame_03": {
+  "size_m": [
+   0.385,
+   0.032,
+   0.502
+  ],
+  "source_triangles": 24348,
+  "triangles": 24348
  },
  "horse_statue_01": {
   "size_m": [
@@ -179,6 +296,51 @@
   "source_triangles": 17456,
   "triangles": 17456
  },
+ "mid_century_lounge_chair": {
+  "size_m": [
+   1.009,
+   1.19,
+   1.169
+  ],
+  "source_triangles": 6148,
+  "triangles": 6148
+ },
+ "modern_arm_chair_01": {
+  "size_m": [
+   0.82,
+   0.987,
+   1.023
+  ],
+  "source_triangles": 8916,
+  "triangles": 8916
+ },
+ "modern_ceiling_lamp_01": {
+  "size_m": [
+   0.432,
+   0.432,
+   0.952
+  ],
+  "source_triangles": 5602,
+  "triangles": 5602
+ },
+ "modern_coffee_table_01": {
+  "size_m": [
+   0.6,
+   1.202,
+   0.39
+  ],
+  "source_triangles": 4504,
+  "triangles": 4504
+ },
+ "modern_wooden_cabinet": {
+  "size_m": [
+   2.44,
+   0.52,
+   0.68
+  ],
+  "source_triangles": 24976,
+  "triangles": 11998
+ },
  "modular_wooden_pier": {
   "size_m": [
    3.102,
@@ -205,6 +367,15 @@
   ],
   "source_triangles": 9828,
   "triangles": 9828
+ },
+ "painted_wooden_nightstand": {
+  "size_m": [
+   0.505,
+   0.509,
+   0.616
+  ],
+  "source_triangles": 470,
+  "triangles": 470
  },
  "potted_plant_01": {
   "size_m": [
@@ -323,6 +494,51 @@
   "source_triangles": 3319,
   "triangles": 3319
  },
+ "side_table_01": {
+  "size_m": [
+   0.55,
+   0.45,
+   0.551
+  ],
+  "source_triangles": 2756,
+  "triangles": 2756
+ },
+ "side_table_tall_01": {
+  "size_m": [
+   0.384,
+   0.384,
+   0.761
+  ],
+  "source_triangles": 6408,
+  "triangles": 5000
+ },
+ "sofa_02": {
+  "size_m": [
+   1.807,
+   0.818,
+   0.709
+  ],
+  "source_triangles": 2728,
+  "triangles": 2728
+ },
+ "sofa_03": {
+  "size_m": [
+   2.728,
+   0.924,
+   1.12
+  ],
+  "source_triangles": 8003,
+  "triangles": 3809
+ },
+ "steel_frame_shelves_03": {
+  "size_m": [
+   2.351,
+   0.721,
+   2.312
+  ],
+  "source_triangles": 8396,
+  "triangles": 7992
+ },
  "tree_small_02": {
   "size_m": [
    2.899,
@@ -331,6 +547,15 @@
   ],
   "source_triangles": 2062487,
   "triangles": 172763
+ },
+ "vintage_cabinet_01": {
+  "size_m": [
+   2.021,
+   0.67,
+   2.236
+  ],
+  "source_triangles": 61096,
+  "triangles": 7011
  },
  "wild_rooibos_bush": {
   "size_m": [
@@ -367,6 +592,15 @@
   ],
   "source_triangles": 6576,
   "triangles": 6576
+ },
+ "wooden_display_shelves_01": {
+  "size_m": [
+   0.372,
+   1.078,
+   1.556
+  ],
+  "source_triangles": 3174,
+  "triangles": 3174
  },
  "wooden_lantern_01": {
   "size_m": [

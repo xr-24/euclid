@@ -1,4 +1,4 @@
-# Download and prepare the CC0 Poly Haven furnishings that house pieces use, then index and import
+# Download and prepare the Poly Haven (CC0) and Sketchfab furnishings that house pieces use, then index and import
 # them. Only the furniture models are fetched and rebuilt; the rest of the art is left alone.
 #   powershell -ExecutionPolicy Bypass -File scripts\build-furniture.ps1
 param([string]$BlenderPath = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe')
@@ -13,6 +13,14 @@ Write-Host "Fetching $($ids.Count) Poly Haven furnishings..."
 if ($LASTEXITCODE -ne 0) { throw 'Poly Haven download failed' }
 & $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'blender\optimize_models.py') -- @ids
 if ($LASTEXITCODE -ne 0) { throw 'Model optimisation failed' }
+$sketchfab = @($list.sketchfab)
+if ($sketchfab.Count -gt 0) {
+    Write-Host "Fetching $($sketchfab.Count) Sketchfab furnishings (needs .local\sketchfab-key.txt)..."
+    & $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'assets\fetch_sketchfab.py') -- @sketchfab
+    if ($LASTEXITCODE -ne 0) { throw 'Sketchfab download failed' }
+    & $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'blender\build_library.py') -- @sketchfab --preview
+    if ($LASTEXITCODE -ne 0) { throw 'Asset library build failed' }
+}
 & $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'assets\build_catalog.py')
 if ($LASTEXITCODE -ne 0) { throw 'Asset catalog build failed' }
 $godotPath = Join-Path $projectRoot '.tools\godot\Godot_v4.7.2-stable_win64_console.exe'

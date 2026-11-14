@@ -1,0 +1,26 @@
+{
+ "id": "toilet_ceramic",
+ "title": "Toilet",
+ "category": "furniture",
+ "tags": [
+  "toilet",
+  "bathroom"
+ ],
+ "size_m": {
+  "width": 0.502,
+  "depth": 0.637,
+  "height": 0.78
+ },
+ "triangles": 10492,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Toilet",
+  "page": "https://sketchfab.com/3d-models/toilet-132a8ee2af3a40d39d270fbed3d3666c",
+  "author": "HippoStance",
+  "author_page": "https://sketchfab.com/hippostance",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 1024 px, re-centred."
+ }
+}

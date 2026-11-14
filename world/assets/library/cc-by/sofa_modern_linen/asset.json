@@ -1,0 +1,27 @@
+{
+ "id": "sofa_modern_linen",
+ "title": "Modern linen sofa",
+ "category": "furniture",
+ "tags": [
+  "sofa",
+  "living room",
+  "modern"
+ ],
+ "size_m": {
+  "width": 2.5,
+  "depth": 0.98,
+  "height": 0.752
+ },
+ "triangles": 29994,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Modern  Sofa",
+  "page": "https://sketchfab.com/3d-models/modern-sofa-ac92f6e97eaa43c4ad6cb8f7c65ac43f",
+  "author": "3dimentionalben",
+  "author_page": "https://sketchfab.com/3dimentionalben",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 33770 to 29994 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

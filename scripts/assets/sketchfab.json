@@ -35,6 +35,14 @@
   {"id": "agave_americana", "uid": "efe126efa459471c81cfc3132357b1b6", "title": "Agave americana", "category": "plant", "tags": ["succulent", "coastal", "california"], "fit": {"height": 1.4}, "budget": 15000, "texture": 2048},
   {"id": "cypress_tree", "uid": "249d8cb553a8469e9d645713f8e96ed1", "title": "Cypress tree", "category": "tree", "tags": ["cypress", "mediterranean", "columnar"], "fit": {"height": 12.0}, "budget": 25000, "texture": 2048},
   {"id": "italian_cypress", "uid": "50efbd3872d844169783e746ebf42dac", "title": "Italian cypress", "category": "tree", "tags": ["cypress", "mediterranean", "columnar"], "fit": {"height": 14.0}, "budget": 40000, "texture": 2048},
-  {"id": "monterey_cypress", "uid": "49aba64f05104f40b6baf2c721463f88", "title": "Monterey cypress (Macrocarpa)", "category": "tree", "tags": ["cypress", "coastal", "california", "windswept"], "fit": {"height": 13.0}, "budget": 60000, "texture": 2048}
+  {"id": "monterey_cypress", "uid": "49aba64f05104f40b6baf2c721463f88", "title": "Monterey cypress (Macrocarpa)", "category": "tree", "tags": ["cypress", "coastal", "california", "windswept"], "fit": {"height": 13.0}, "budget": 60000, "texture": 2048},
+  {"id": "bed_upholstered_dark", "uid": "b8c16d4b69f64335b46379b119b102b4", "title": "Upholstered double bed", "category": "furniture", "tags": ["bed", "bedroom", "modern"], "fit": {"length": 2.15}, "budget": 40000, "texture": 2048, "rotate": [0, 0, 180]},
+  {"id": "bed_upholstered_grey", "uid": "eeafb24592f249f08f9576c2511272d8", "title": "Double bed with headboard", "category": "furniture", "tags": ["bed", "bedroom"], "fit": {"length": 2.1}, "budget": 20000, "texture": 2048},
+  {"id": "sofa_modern_linen", "uid": "ac92f6e97eaa43c4ad6cb8f7c65ac43f", "title": "Modern linen sofa", "category": "furniture", "tags": ["sofa", "living room", "modern"], "fit": {"length": 2.5}, "budget": 30000, "texture": 2048},
+  {"id": "sofa_mid_century", "uid": "1f9f52ae17d642b582d0c5ccf9dd64b3", "title": "Mid-century modern sofa", "category": "furniture", "tags": ["sofa", "living room", "mid-century"], "fit": {"length": 2.0}, "budget": 20000, "texture": 2048},
+  {"id": "toilet_ceramic", "uid": "132a8ee2af3a40d39d270fbed3d3666c", "title": "Toilet", "category": "furniture", "tags": ["toilet", "bathroom"], "fit": {"height": 0.78}, "budget": 12000, "texture": 1024},
+  {"id": "tv_flat_screen", "uid": "f90d4fb91dd34b6791e8d66d00f96591", "title": "Flat screen television", "category": "prop", "tags": ["tv", "television", "living room"], "fit": {"length": 1.25}, "budget": 6000, "texture": 1024, "rotate": [0, 0, -90]},
+  {"id": "floor_lamp_reading", "uid": "3e2a60cb3d2c42e5bdfab33d396f85e2", "title": "Black reading floor lamp", "category": "prop", "tags": ["lamp", "lighting", "modern"], "fit": {"height": 1.5}, "budget": 6000, "texture": 1024},
+  {"id": "floor_lamp_shade", "uid": "083c9408b89949d8b201e8a1bb6ce41c", "title": "Floor lamp with shade", "category": "prop", "tags": ["lamp", "lighting"], "fit": {"height": 1.6}, "budget": 8000, "texture": 1024}
  ]
 }

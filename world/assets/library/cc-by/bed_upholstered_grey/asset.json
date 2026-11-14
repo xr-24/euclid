@@ -1,0 +1,26 @@
+{
+ "id": "bed_upholstered_grey",
+ "title": "Double bed with headboard",
+ "category": "furniture",
+ "tags": [
+  "bed",
+  "bedroom"
+ ],
+ "size_m": {
+  "width": 1.725,
+  "depth": 2.1,
+  "height": 1.553
+ },
+ "triangles": 12932,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Game Ready - Double Bed",
+  "page": "https://sketchfab.com/3d-models/game-ready-double-bed-eeafb24592f249f08f9576c2511272d8",
+  "author": "Allan-Jay Branscombe",
+  "author_page": "https://sketchfab.com/AllanJayBranscombe",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

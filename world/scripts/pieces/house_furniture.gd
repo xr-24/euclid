@@ -101,6 +101,32 @@ static func _bedroom(node: Node3D, room: Dictionary, f: Dictionary, main: bool) 
 	var place := _on_wall(spot.side, spot.centre)
 	var bed := Node3D.new()
 	place.add(node, bed)
+	var model := _model(bed, "bed" if main else "bed_guest", f)
+	var headboard := 1.05
+	if model:
+		var fitted: Vector3 = model.get_meta("size")
+		headboard = fitted.y
+		model.position.z = fitted.z * 0.5 + 0.02
+		width = maxf(fitted.x, 1.2)
+		length = fitted.z
+	else:
+		_bed_frame(bed, width, length, f)
+	for side_x: float in [-1.0, 1.0]:
+		if spot.length < width + 1.1:
+			break
+		var x := side_x * (width * 0.5 + 0.34)
+		var stand := _model(bed, "nightstand", f, Vector3(x, 0, 0.27))
+		if stand == null:
+			_part(bed, Vector3(0.48, 0.5, 0.4), Vector3(x, 0.25, 0.22), f.wood)
+		_lamp(bed, Vector3(x, float(stand.get_meta("height")) if stand else 0.5, 0.22), f)
+	_part(bed, Vector3(width + 0.6, 0.012, length + 0.6), Vector3(0, 0.006, length * 0.5 + 0.35), f.rug, false)
+	# Art hangs clear of the headboard.
+	var art_y := maxf(1.2, headboard + 0.12)
+	if _model(bed, "art", f, Vector3(0, art_y, 0.05), 0.0, int(room.index)) == null:
+		_art(bed, Vector3(0, maxf(1.62, art_y + 0.3), 0), Vector2(minf(width, 1.2), 0.6), f, int(room.index))
+	_wardrobe(node, room, spot, f)
+
+static func _bed_frame(bed: Node3D, width: float, length: float, f: Dictionary) -> void:
 	_part(bed, Vector3(width + 0.12, 1.05, 0.08), Vector3(0, 0.525, 0.04), f.dark_wood)
 	_part(bed, Vector3(width + 0.06, 0.3, length), Vector3(0, 0.17, length * 0.5 + 0.08), f.dark_wood)
 	_part(bed, Vector3(width, 0.24, length - 0.06), Vector3(0, 0.44, length * 0.5 + 0.08), f.linen, false)
@@ -111,28 +137,19 @@ static func _bedroom(node: Node3D, room: Dictionary, f: Dictionary, main: bool) 
 		var x := (index - (pillows - 1) * 0.5) * (width * 0.48)
 		var pillow := _part(bed, Vector3(width / pillows - 0.18, 0.11, 0.36), Vector3(x, 0.63, 0.3), f.cushion, false)
 		pillow.rotation.x = -0.35
-	for side_x: float in [-1.0, 1.0]:
-		if spot.length < width + 1.1:
-			break
-		var x := side_x * (width * 0.5 + 0.34)
-		var stand := _model(bed, "nightstand", f, Vector3(x, 0, 0.27))
-		if stand == null:
-			_part(bed, Vector3(0.48, 0.5, 0.4), Vector3(x, 0.25, 0.22), f.wood)
-		_lamp(bed, Vector3(x, float(stand.get_meta("height")) if stand else 0.5, 0.22), f)
-	_part(bed, Vector3(width + 0.6, 0.012, length + 0.6), Vector3(0, 0.006, length * 0.5 + 0.35), f.rug, false)
-	if _model(bed, "art", f, Vector3(0, 1.2, 0.05), 0.0, int(room.index)) == null:
-		_art(bed, Vector3(0, 1.62, 0), Vector2(minf(width, 1.2), 0.6), f, int(room.index))
-	# A wardrobe on another wall.
+
+static func _wardrobe(node: Node3D, room: Dictionary, spot: Dictionary, f: Dictionary) -> void:
 	var closet := _best(room, 1.9, false, false, [spot.side])
-	if not closet.is_empty():
-		var wardrobe := Node3D.new()
-		_on_wall(closet.side, closet.centre).add(node, wardrobe)
-		if _model(wardrobe, "storage", f, Vector3(0, 0, 0.32)) != null:
-			return
-		_part(wardrobe, Vector3(1.8, 2.25, 0.6), Vector3(0, 1.125, 0.3), f.lacquer)
-		for door_x: float in [-0.45, 0.45]:
-			_part(wardrobe, Vector3(0.012, 0.35, 0.02), Vector3(door_x * 0.06 / 0.45, 1.15, 0.61), f.black, false)
-		_part(wardrobe, Vector3(0.006, 2.2, 0.004), Vector3(0, 1.125, 0.602), f.cabinet, false)
+	if closet.is_empty():
+		return
+	var wardrobe := Node3D.new()
+	_on_wall(closet.side, closet.centre).add(node, wardrobe)
+	if _model(wardrobe, "storage", f, Vector3(0, 0, 0.32)) != null:
+		return
+	_part(wardrobe, Vector3(1.8, 2.25, 0.6), Vector3(0, 1.125, 0.3), f.lacquer)
+	for door_x: float in [-0.45, 0.45]:
+		_part(wardrobe, Vector3(0.012, 0.35, 0.02), Vector3(door_x * 0.06 / 0.45, 1.15, 0.61), f.black, false)
+	_part(wardrobe, Vector3(0.006, 2.2, 0.004), Vector3(0, 1.125, 0.602), f.cabinet, false)
 
 static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 	var clear: Dictionary = room.clear
@@ -155,7 +172,10 @@ static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 		if _model(media, "media_unit", f, Vector3(0, 0, 0.3)) == null:
 			_part(media, Vector3(2.0, 0.42, 0.42), Vector3(0, 0.21, 0.21), f.wood)
 			_part(media, Vector3(1.96, 0.012, 0.004), Vector3(0, 0.21, 0.422), f.dark_wood, false)
-		if not _window_above(spot, 0.75):
+		var unit_height := float(media.get_child(0).get_meta("height", 0.42)) if media.get_child_count() > 0 else 0.42
+		if _model(media, "tv", f, Vector3(0, unit_height, 0.3)) != null:
+			pass
+		elif not _window_above(spot, 0.75):
 			_part(media, Vector3(1.45, 0.83, 0.045), Vector3(0, 1.25, 0.03), f.screen, false)
 		else:
 			_part(media, Vector3(1.2, 0.7, 0.06), Vector3(0, 0.77, 0.3), f.screen, false)
@@ -187,9 +207,10 @@ static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 	var lamp := Node3D.new()
 	place.add(node, lamp)
 	lamp.position += place.inward * (gap + 0.75) + place.along * 1.45
-	_part(lamp, Vector3(0.3, 0.03, 0.3), Vector3(0, 0.015, 0), f.black)
-	_cylinder(lamp, 0.015, 1.45, Vector3(0, 0.74, 0), f.black)
-	_cylinder(lamp, 0.2, 0.3, Vector3(0, 1.5, 0), f.shade, 0.16)
+	if _model(lamp, "floor_lamp", f) == null:
+		_part(lamp, Vector3(0.3, 0.03, 0.3), Vector3(0, 0.015, 0), f.black)
+		_cylinder(lamp, 0.015, 1.45, Vector3(0, 0.74, 0), f.black)
+		_cylinder(lamp, 0.2, 0.3, Vector3(0, 1.5, 0), f.shade, 0.16)
 	var pot := place.point + place.inward * 0.45 - place.along * 1.55
 	if _model(node, "plant", f, pot) == null:
 		_plant(node, pot, f)
@@ -364,6 +385,10 @@ static func _bathroom(node: Node3D, room: Dictionary, f: Dictionary, ceiling: fl
 	if not toilet.is_empty():
 		var bowl := Node3D.new()
 		_on_wall(toilet.side, float(toilet.centre)).add(node, bowl)
+		var fixture := _model(bowl, "toilet", f)
+		if fixture:
+			fixture.position.z = (fixture.get_meta("size") as Vector3).z * 0.5 + 0.02
+			return
 		_part(bowl, Vector3(0.38, 0.38, 0.17), Vector3(0, 0.6, 0.1), f.porcelain)
 		_part(bowl, Vector3(0.36, 0.38, 0.5), Vector3(0, 0.19, 0.4), f.porcelain)
 		_part(bowl, Vector3(0.38, 0.03, 0.52), Vector3(0, 0.395, 0.41), f.porcelain, false)
@@ -516,6 +541,7 @@ static func _model(parent: Node3D, slot: String, f: Dictionary, at := Vector3.ZE
 	holder.position = at
 	holder.rotation.y = turn
 	holder.set_meta("height", size.y * fit)
+	holder.set_meta("size", size * fit)
 	holder.set_meta("library_id", id)
 	parent.add_child(holder)
 	model.scale = Vector3.ONE * fit

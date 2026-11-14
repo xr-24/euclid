@@ -1,0 +1,26 @@
+{
+ "id": "floor_lamp_shade",
+ "title": "Floor lamp with shade",
+ "category": "prop",
+ "tags": [
+  "lamp",
+  "lighting"
+ ],
+ "size_m": {
+  "width": 0.415,
+  "depth": 0.415,
+  "height": 1.6
+ },
+ "triangles": 6977,
+ "source": {
+  "site": "Sketchfab",
+  "title": "PBR Floor Lamp (Free Download)",
+  "page": "https://sketchfab.com/3d-models/pbr-floor-lamp-free-download-083c9408b89949d8b201e8a1bb6ce41c",
+  "author": "Justin.Foley",
+  "author_page": "https://sketchfab.com/Justin.Foley",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 1024 px, re-centred."
+ }
+}

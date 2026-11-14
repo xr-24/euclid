@@ -1,0 +1,27 @@
+{
+ "id": "sofa_mid_century",
+ "title": "Mid-century modern sofa",
+ "category": "furniture",
+ "tags": [
+  "sofa",
+  "living room",
+  "mid-century"
+ ],
+ "size_m": {
+  "width": 2.0,
+  "depth": 0.924,
+  "height": 0.854
+ },
+ "triangles": 5403,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Mid Century Modern Sofa",
+  "page": "https://sketchfab.com/3d-models/mid-century-modern-sofa-1f9f52ae17d642b582d0c5ccf9dd64b3",
+  "author": "Tom Seddon",
+  "author_page": "https://sketchfab.com/bloodmeat08",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

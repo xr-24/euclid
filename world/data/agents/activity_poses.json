@@ -941,7 +941,8 @@
   },
   "aliases": {
     "write": "edit",
-    "delete": "edit"
+    "delete": "edit",
+    "reply": "say"
   },
   "props": {
     "book": {

@@ -21,7 +21,7 @@ func configure(url: String, token: String, capability: String) -> void:
 func _run() -> void:
 	_running = true
 	while is_inside_tree():
-		if Graphics.agent_activity == "off" or _url.is_empty():
+		if not _wanted() or _url.is_empty():
 			# Off: skip what happened meanwhile rather than replaying it later.
 			_since = -1
 			await get_tree().create_timer(1.0).timeout
@@ -35,7 +35,7 @@ func _run() -> void:
 			await get_tree().create_timer(3.0).timeout
 			continue
 		var next := int(reply.get("next", 0))
-		if not first and Graphics.agent_activity != "off":
+		if not first and _wanted():
 			for entry in reply.events:
 				if entry is Dictionary:
 					activity.emit(entry)
@@ -55,3 +55,7 @@ func _post(body: Dictionary) -> Dictionary:
 		return {}
 	var data: Variant = JSON.parse_string(reply[3].get_string_from_utf8())
 	return data if data is Dictionary else {}
+
+## Panels need the feed, and so do spoken replies while the panels are off.
+func _wanted() -> bool:
+	return Graphics.agent_activity != "off" or Graphics.speak_replies

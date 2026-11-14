@@ -14,6 +14,7 @@ const ApplicationWindow = preload("res://scripts/ui/application_window.gd")
 const Presence = preload("res://scripts/agents/agent_presence.gd")
 const ChatHistory = preload("res://scripts/agents/chat_history.gd")
 const SpeechPlayer = preload("res://scripts/agents/speech_player.gd")
+const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const CONSOLE_SCROLLBACK := 300
 
 ## The local Workbench capability the launcher handed over. Empty without one.
@@ -25,6 +26,8 @@ var workbench_panel: Control
 var console_lines := PackedStringArray()
 var busy := false
 var _voice := SpeechPlayer.new()
+## The last reply spoken for each agent, so a reply heard with chat closed is not repeated when it opens.
+var _spoken := {}
 var _world
 var _session: DevelopmentSession
 var _cli_process := -1
@@ -57,6 +60,7 @@ func connect_gateway(url: String, token: String) -> void:
 	if capability.is_empty() or url.is_empty() or token.is_empty():
 		return
 	_voice.configure(url, token, capability)
+	_restore_voice()
 	client = WorldDevelopment.new()
 	add_child(client)
 	client.configure(url, token, capability)
@@ -72,6 +76,7 @@ func connect_gateway(url: String, token: String) -> void:
 	activity.name = "Activity"
 	add_child(activity)
 	activity.activity.connect(_world._agent_activity)
+	activity.activity.connect(_hear)
 	activity.configure(url, token, capability)
 	_tasks.addressed.connect(func(peer: String) -> void:
 		if _chat_agents.has(peer):
@@ -253,7 +258,7 @@ func open_console(peer := "") -> void:
 	console.cli_requested.connect(_open_native_cli)
 	console.minimize_requested.connect(Callable(_world, "_close_panel"))
 	console.layout_requested.connect(_layout_console)
-	console.voice_requested.connect(_voice.toggle)
+	console.voice_requested.connect(_set_voice)
 	console.voice_selected.connect(_voice.select)
 	console.voice_preview_requested.connect(_voice.preview)
 	console.voice_retry_requested.connect(_voice.retry)
@@ -379,7 +384,7 @@ func _poll_chat() -> void:
 			if history != _conversations.get(peer):
 				var previous: Dictionary = _conversations.get(peer, {})
 				if peer == chat_peer and not previous.is_empty() and not history.reply.is_empty() and history.reply != previous.reply:
-					speak(history.reply.text)
+					_speak_once(peer, history.reply.text)
 				_conversations[peer] = history
 				changed = true
 	if changed:
@@ -511,6 +516,7 @@ func notice(line: String) -> void:
 func resume(path: String) -> void:
 	_session = DevelopmentSession.new(path)
 	_voice.selected = _session.voice_id
+	_restore_voice()
 	console_lines = _session.lines
 	CodexConsole.prompts = _session.prompts
 	_chat_tabs = _session.chat_tabs.duplicate()
@@ -570,6 +576,39 @@ func _open_native_cli() -> void:
 
 func speak(text: String) -> void:
 	_voice.speak(text)
+
+func _set_voice(on: bool) -> void:
+	_voice.toggle(on)
+	if _session:
+		_session.save_voice_enabled(on)
+
+## Voice comes back on at launch if it was on when Euclid closed.
+func _restore_voice() -> void:
+	if _session and _session.voice_enabled and not _voice._url.is_empty():
+		_voice.resume()
+
+## A reply from the activity feed. Chat speaks the open conversation's replies itself; any other
+## reply is spoken here, unless replies should only be spoken in chat.
+func _hear(entry: Dictionary) -> void:
+	if str(entry.get("kind", "")) != "reply":
+		return
+	var peer := str(entry.get("actor", ""))
+	if is_instance_valid(console) and _world.overlay.visible and peer == chat_peer:
+		return
+	if Graphics.speak_replies:
+		_speak_once(peer, str(entry.get("text", "")))
+
+func _speak_once(peer: String, text: String) -> void:
+	var said := _plain(text)
+	var last: String = _spoken.get(peer, "")
+	if said.is_empty() or (not last.is_empty() and (said == last or said.ends_with(last) or last.ends_with(said))):
+		return
+	_spoken[peer] = said
+	_voice.say(text)
+
+## Replies compared without spacing differences or the status label chat puts in front of them.
+static func _plain(text: String) -> String:
+	return RegEx.create_from_string("\\s+").sub(text, " ", true).strip_edges()
 
 func _refresh_voice() -> void:
 	if is_instance_valid(console):

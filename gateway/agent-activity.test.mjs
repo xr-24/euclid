@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createActivityFeed, createStreamTracker, createToolObserver, diffLines, isHiddenPath, redact } from './agent-activity.mjs';
+import { createActivityFeed, createStreamTracker, createToolObserver, diffLines, isHiddenPath, redact, replyFromBoard } from './agent-activity.mjs';
 
 test('activity redacts token-like strings and hides secret files', () => {
   assert.equal(redact('key = sk-abcdefghijklmnopqrstuvwx'), 'key = [redacted]');
@@ -110,5 +110,38 @@ test('a Codex stream shows shell reads, searches and file changes', async () => 
     assert.equal(events[2].added, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('replies to the player on the task board reach the activity feed', async () => {
+  const { createTaskBoard } = await import('./agent-tasks.mjs');
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'euclid-replies-'));
+  try {
+    const feed = createActivityFeed();
+    const board = await createTaskBoard(join(dir, 'tasks.json'), { onChange(event, actor, value) {
+      const reply = replyFromBoard(event, value);
+      if (reply) feed.record(reply.actor, reply);
+    } });
+    const { task } = await board.player('assign', { to: 'scout', text: 'Find the fountain.' });
+    await board.agent('scout', 'claim_task', {});
+    await board.agent('scout', 'task_progress', { id: task.id, text: 'Checking the courtyard.' });
+    await board.agent('scout', 'send_message', { to: 'builder', text: 'Not for the player.' });
+    await board.agent('scout', 'send_message', { to: 'you', text: 'It is by the pool.\n\nWant me to light it?' });
+    await board.agent('scout', 'finish_task', { id: task.id, status: 'completed', text: 'Found it by the pool.' });
+    await board.player('send_message', { to: 'scout', text: 'Thanks!' });
+    const { events } = feed.since(0);
+    assert.deepEqual(events.map(event => [event.actor, event.kind, event.title, event.text]), [
+      ['scout', 'reply', 'Update', 'Checking the courtyard.'],
+      ['scout', 'reply', 'Says', 'It is by the pool.\n\nWant me to light it?'],
+      ['scout', 'reply', 'Done', 'Found it by the pool.'],
+    ]);
+    const long = 'word '.repeat(700);
+    assert.equal(feed.record('scout', { kind: 'reply', text: long }).text.length, 3499);
+    assert.ok(feed.record('scout', { kind: 'say', text: long }).text.length <= 600);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

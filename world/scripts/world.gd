@@ -682,6 +682,8 @@ func _agent_activity(entry: Dictionary) -> void:
 	var actor := str(entry.get("actor", ""))
 	if not actor.is_valid_identifier() and not actor.replace("-", "_").replace(".", "_").is_valid_identifier():
 		return
+	if Graphics.agent_activity == "off":
+		return
 	if not agent_presence.has_agent(actor):
 		if str(entry.get("kind", "")) == "think" or str(entry.get("kind", "")) == "say":
 			return

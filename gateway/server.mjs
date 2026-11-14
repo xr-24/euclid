@@ -19,7 +19,7 @@ import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
 import { createRelayLink } from './relay-link.mjs';
 import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
-import { createActivityFeed, createToolObserver } from './agent-activity.mjs';
+import { createActivityFeed, createToolObserver, replyFromBoard } from './agent-activity.mjs';
 import { createSpeechService, SpeechError } from './speech.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -58,7 +58,12 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   // A third capability, for agents: source reads, drafts and checks, without commit or preview.
   const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
   const developmentExpected = Buffer.from(developmentSecret);
-  const tasks = await createTaskBoard(path.join(dataDir, 'tasks.json'));
+  // Replies to the player also reach the world's activity feed, so they show above the agent and
+  // can be spoken while the chat window is closed.
+  const tasks = await createTaskBoard(path.join(dataDir, 'tasks.json'), { onChange(event, actor, value) {
+    const reply = replyFromBoard(event, value);
+    if (reply) activity.record(reply.actor, reply);
+  } });
   const views = createAgentViews();
   const development = createDevelopmentBridge(workbench, { tasks, extraTools: viewTools, observer,
     callExtra: (agent, name, args, signal) => name === 'look_at_world'

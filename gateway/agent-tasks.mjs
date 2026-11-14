@@ -18,7 +18,9 @@ const target = (name, extra) => {
   return name;
 };
 
-export async function createTaskBoard(file) {
+// onChange(event, actor, value) hears each saved change except task activity; the gateway turns
+// replies to the player into activity events from it.
+export async function createTaskBoard(file, { onChange } = {}) {
   let state = await readFile(file, 'utf8').then(JSON.parse, error => {
     if (error.code !== 'ENOENT') throw error;
     return { version: 1, tasks: [], messages: [], journal: [] };
@@ -40,6 +42,9 @@ export async function createTaskBoard(file) {
       await writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
       await rename(file + '.tmp', file);
       state = next;
+      if (event !== 'activity') {
+        try { onChange?.(event, actor, structuredClone(value)); } catch (error) { console.error('Euclid task board listener:', error.message); }
+      }
       return { ok: true, [event === 'message' ? 'message' : 'task']: value };
     });
     queue = operation.catch(() => {});

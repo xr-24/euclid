@@ -16,6 +16,8 @@ var tab := ""
 var chat_tabs: Array[String] = []
 var chat_peer := ""
 var voice_id := ""
+## Whether voice was on when Euclid last closed.
+var voice_enabled := false
 var legacy_chat_tabs: Array[String] = []
 var legacy_chat_peer := ""
 var _path: String
@@ -36,6 +38,7 @@ func _init(path: String) -> void:
 	if version == 2:
 		if state.get("voice_id") is String and RegEx.create_from_string("^[a-zA-Z0-9_-]{1,80}$").search(state.voice_id):
 			voice_id = state.voice_id
+		voice_enabled = state.get("voice_enabled") == true
 		chat_tabs = _peers(state.get("chat_tabs"))
 		if state.get("chat_peer") in chat_tabs:
 			chat_peer = state.chat_peer
@@ -72,6 +75,11 @@ func save_chat_tabs(tabs: Array[String], selected: String, migrated := false) ->
 		legacy_chat_peer = ""
 	_save()
 
+func save_voice_enabled(on: bool) -> void:
+	if on != voice_enabled:
+		voice_enabled = on
+		_save()
+
 func save_voice(id: String) -> void:
 	if id != voice_id:
 		voice_id = id
@@ -80,7 +88,8 @@ func save_voice(id: String) -> void:
 func _save() -> void:
 	Store.write_json(_path, {"schema_version": 2, "lines": Array(lines), "prompts": Array(prompts),
 		"view": {"file": file, "tab": tab}, "chat_tabs": chat_tabs, "chat_peer": chat_peer,
-		"legacy_chat_tabs": legacy_chat_tabs, "legacy_chat_peer": legacy_chat_peer, "voice_id": voice_id})
+		"legacy_chat_tabs": legacy_chat_tabs, "legacy_chat_peer": legacy_chat_peer, "voice_id": voice_id,
+		"voice_enabled": voice_enabled})
 
 static func _peers(values: Variant) -> Array[String]:
 	var peers: Array[String] = []

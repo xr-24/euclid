@@ -12,6 +12,8 @@ const AGENT_ACTIVITY := ["full", "icons", "off"]
 static var agent_activity := "full"
 ## Whether those panels show the code itself; off draws bars in its place, for recording or streaming.
 static var show_code := true
+## Whether agents' chat replies are spoken aloud while the chat window is closed (voice must be on).
+static var speak_replies := true
 
 static func configure(viewport: Viewport, automated: bool) -> void:
 	current = "balanced"
@@ -21,6 +23,7 @@ static func configure(viewport: Viewport, automated: bool) -> void:
 			current = str(config.get_value("graphics", "profile", "balanced"))
 			agent_activity = str(config.get_value("agents", "activity", "full"))
 			show_code = bool(config.get_value("agents", "show_code", true))
+			speak_replies = bool(config.get_value("agents", "speak_replies", true))
 	if agent_activity not in AGENT_ACTIVITY:
 		agent_activity = "full"
 	for arg in OS.get_cmdline_user_args():
@@ -64,6 +67,11 @@ static func select(profile: String, viewport: Viewport) -> void:
 	apply(viewport)
 	_save()
 
+## Speak agents' chat replies while the chat window is closed, or only inside chat.
+static func set_speak_replies(on: bool) -> void:
+	speak_replies = on
+	_save()
+
 ## Set what agents show above their heads, and whether their panels show code.
 static func set_agent_activity(mode: String, code: bool) -> void:
 	assert(mode in AGENT_ACTIVITY)
@@ -77,6 +85,7 @@ static func _save() -> void:
 	config.set_value("graphics", "profile", current)
 	config.set_value("agents", "activity", agent_activity)
 	config.set_value("agents", "show_code", show_code)
+	config.set_value("agents", "speak_replies", speak_replies)
 	config.save(PATH)
 
 static func label() -> String:

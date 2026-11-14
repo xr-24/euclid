@@ -7,6 +7,8 @@ signal voice_selected(id: String)
 const REQUEST_TIMEOUT := 32.0
 const MAX_RESPONSE_BYTES := 4 * 1024 * 1024
 const DEFAULT_SAMPLE := "This is how I’ll sound in Euclid."
+## Replies waiting for the current one to finish. Past this many, the oldest are dropped.
+const QUEUE := 4
 
 var enabled := false
 var selected := ""
@@ -19,9 +21,11 @@ var _headers := PackedStringArray()
 var _audio := AudioStreamPlayer.new()
 var _speech: HTTPRequest
 var _catalog_request: HTTPRequest
+var _pending: Array[String] = []
 
 func _ready() -> void:
 	add_child(_audio)
+	_audio.finished.connect(_next)
 
 func configure(url: String, token: String, capability: String) -> void:
 	_url = url
@@ -30,12 +34,36 @@ func configure(url: String, token: String, capability: String) -> void:
 func toggle(value: bool) -> void:
 	enabled = value
 	if not enabled:
+		_pending.clear()
 		stop()
 		status = ""
 		can_connect = false
 	changed.emit()
 	if enabled and not loading:
 		_load_voices(true)
+
+## Turn voice back on at launch, without starting a sign-in.
+func resume() -> void:
+	if enabled:
+		return
+	enabled = true
+	changed.emit()
+	_load_voices(false)
+
+## Speak a reply after whatever is playing now, instead of cutting it off.
+func say(line: String) -> void:
+	if not enabled or line.strip_edges().is_empty():
+		return
+	if is_instance_valid(_speech) or _audio.playing:
+		_pending.append(line)
+		while _pending.size() > QUEUE:
+			_pending.pop_front()
+		return
+	speak(line)
+
+func _next() -> void:
+	if not _pending.is_empty() and not is_instance_valid(_speech) and not _audio.playing:
+		speak(_pending.pop_front())
 
 func retry() -> void:
 	if enabled and not loading:
@@ -84,10 +112,12 @@ func _play(result: int, code: int, _response_headers: PackedStringArray, data: P
 			_audio.play()
 			return
 		status = "Could not play the audio returned by ElevenLabs."
+		_next()
 	else:
 		var reply := _json_reply(result, data)
 		status = str(reply.get("error", "Could not play the ElevenLabs voice."))
 		can_connect = bool(reply.get("connect", false))
+		_pending.clear()
 	changed.emit()
 
 func _load_voices(connect_if_needed: bool) -> void:

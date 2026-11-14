@@ -14,7 +14,8 @@ const WIDTH = 160;
 const HUNKS = 4;
 const HUNK_LINES = 28;
 const CONTEXT = 2;
-export const KINDS = ['read', 'search', 'edit', 'write', 'delete', 'run', 'tool', 'think', 'say', 'start', 'done', 'error'];
+// reply is what an agent tells the player in chat: a message, a task update or a task's result.
+export const KINDS = ['read', 'search', 'edit', 'write', 'delete', 'run', 'tool', 'think', 'say', 'reply', 'start', 'done', 'error'];
 
 const hiddenPath = /(^|[\\/])(\.env[^\\/]*|\.ssh|\.local|\.git|node_modules)([\\/]|$)|secret|credential|password|token|private[-_]?key|id_(rsa|ed25519)|\.(pem|key|p12|pfx|keystore)$/i;
 const tokenLike = [
@@ -37,6 +38,13 @@ const clipLine = line => {
 const splitLines = text => String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
 const sentence = (text, limit = 220) => {
   const value = redact(String(text ?? '').replace(/\s+/g, ' ').trim());
+  return value.length > limit ? value.slice(0, limit - 1) + '…' : value;
+};
+
+// Like sentence, but keeps paragraph breaks, for replies long enough to read in parts.
+const paragraphs = (text, limit) => {
+  const value = redact(String(text ?? '').replace(/\r\n?/g, '\n').replace(/[^\S\n]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
   return value.length > limit ? value.slice(0, limit - 1) + '…' : value;
 };
 
@@ -178,7 +186,7 @@ function clean(event) {
     }
     if (typeof event.command === 'string') out.command = clipLine(event.command);
     if (Array.isArray(event.output)) out.output = event.output.slice(-16).map(clipLine);
-    if (typeof event.text === 'string') out.text = sentence(event.text, 600);
+    if (typeof event.text === 'string') out.text = event.kind === 'reply' ? paragraphs(event.text, 4000) : sentence(event.text, 600);
     if (Array.isArray(event.results)) out.results = event.results.slice(0, 12).map(clipLine);
   }
   if (typeof event.ok === 'boolean') out.ok = event.ok;
@@ -378,4 +386,17 @@ export function createStreamTracker(feed, { actor, provider, workspace = '', ori
     }
   }
   return { handle, settled: () => queue };
+}
+
+// What an agent tells the player through the task board, as a reply event: a message to the
+// player, an update on a task, or the result a task finished with. Returns null for anything else.
+export function replyFromBoard(event, value) {
+  if (!value || typeof value !== 'object') return null;
+  if (event === 'message') {
+    return value.to === '@player' && typeof value.text === 'string'
+      ? { actor: value.from, kind: 'reply', title: 'Says', text: value.text } : null;
+  }
+  if (!['task_progress', 'finish_task'].includes(event) || typeof value.update !== 'string' || !value.owner) return null;
+  const title = event === 'task_progress' ? 'Update' : value.status === 'completed' ? 'Done' : `Task ${value.status}`;
+  return { actor: value.owner, kind: 'reply', title, text: value.update, ok: value.status !== 'failed' };
 }

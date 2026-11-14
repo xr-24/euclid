@@ -85,6 +85,8 @@ func _system() -> Dictionary:
 			"run": _cycle_agent_activity},
 		{"label": "SHOW CODE", "value": "ON" if Graphics.show_code else "OFF", "tone": "good" if Graphics.show_code else "",
 			"run": func() -> void: Graphics.set_agent_activity(Graphics.agent_activity, not Graphics.show_code)},
+		{"label": "SPEAK REPLIES", "value": "ALWAYS" if Graphics.speak_replies else "IN CHAT", "tone": "good" if Graphics.speak_replies else "",
+			"run": func() -> void: Graphics.set_speak_replies(not Graphics.speak_replies)},
 		{"label": "QUIT", "confirm": "ENTER AGAIN TO QUIT", "run": Callable(_world, "_quit")},
 	]}
 

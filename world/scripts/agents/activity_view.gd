@@ -12,8 +12,10 @@ const LINE := 24
 const FONT_SIZE := 17
 const TITLE_SIZE := 19
 const TYPE_RATE := 240.0
+## Characters a spoken reply covers per second.
+const SPEAK_RATE := 15.0
 const LABELS := {"read": "READ", "search": "SEARCH", "edit": "EDIT", "write": "WRITE", "delete": "DELETE", "run": "RUN",
-	"tool": "TOOL", "think": "THINK", "say": "SAYS", "start": "TASK", "done": "DONE", "error": "ERROR"}
+	"tool": "TOOL", "think": "THINK", "say": "SAYS", "reply": "REPLY", "start": "TASK", "done": "DONE", "error": "ERROR"}
 const REMOVED_BG := Color(0.62, 0.13, 0.17, 0.55)
 const REMOVED_INK := Color("ffadb6")
 const ADDED_BG := Color(0.1, 0.5, 0.3, 0.5)
@@ -28,6 +30,8 @@ var show_code := true
 var fade := 1.0
 var _rows: Array = []
 var _rows_for := -1
+var _reply_lines := PackedStringArray()
+var _reply_for := -1
 
 ## How long an event takes to play, before any speed-up for a backlog.
 static func duration(entry: Dictionary) -> float:
@@ -49,6 +53,9 @@ static func duration(entry: Dictionary) -> float:
 			return 1.4 + minf(entry.get("results", []).size(), 12) * 0.1
 		"think", "say":
 			return clampf(str(entry.get("text", "")).length() / 70.0, 1.8, 4.5)
+		"reply":
+			# Roughly the pace of the spoken reply, so the text and the voice end together.
+			return clampf(str(entry.get("text", "")).length() / SPEAK_RATE + 1.5, 3.0, 45.0)
 	return 2.0
 
 func _ready() -> void:
@@ -92,6 +99,8 @@ func _draw() -> void:
 			_draw_list(font, body, alpha, str(event.get("title", "")), event.get("results", []))
 		"delete":
 			_text(font, body.position + Vector2(0, 30), "The file is removed.", 18, REMOVED_INK * Color(1, 1, 1, alpha))
+		"reply":
+			_draw_reply(font, body, alpha)
 		"tool":
 			_draw_paragraph(font, body, alpha, str(event.get("title", "")) + ("\n" + str(event.text) if event.has("text") else ""), true)
 		_:
@@ -207,6 +216,37 @@ func _draw_paragraph(font: Font, body: Rect2, alpha: float, text: String, typed:
 		_text(font, Vector2(body.position.x, y), line, 18, Look.INK * Color(1, 1, 1, alpha))
 		y += 26
 
+## A reply long enough to need scrolling: it writes out at the pace it is spoken, and the
+## panel scrolls to keep the newest line in view.
+func _draw_reply(font: Font, body: Rect2, alpha: float) -> void:
+	var text := str(event.get("text", ""))
+	var seq := int(event.get("seq", -1))
+	if seq != _reply_for or seq < 0:
+		_reply_for = seq
+		_reply_lines = _wrap(font, text, body.size.x, 18)
+	var spoken := maxf(duration(event) - 1.5, 1.0)
+	var shown := int(time / spoken * text.length())
+	var rows := maxi(1, int((body.size.y - 4.0) / 26.0))
+	var used := 0
+	var last := _reply_lines.size() - 1
+	for index in _reply_lines.size():
+		used += _reply_lines[index].length() + 1
+		if used > shown:
+			last = index
+			break
+	var first := maxi(0, last - rows + 1)
+	var budget := shown
+	for index in first:
+		budget -= _reply_lines[index].length() + 1
+	var y := body.position.y + 22
+	for index in range(first, last + 1):
+		var line := _reply_lines[index]
+		_text(font, Vector2(body.position.x, y), line.left(maxi(0, budget)) if index == last else line, 18, Look.INK * Color(1, 1, 1, alpha))
+		budget -= line.length() + 1
+		y += 26
+	if first > 0:
+		draw_rect(Rect2(body.position.x, body.position.y, body.size.x, 3), highlight * Color(1, 1, 1, 0.5 * alpha))
+
 func _code_row(font: Font, body: Rect2, y: float, number: int, code: String, ink: Color, alpha: float, mark := " ") -> void:
 	_text(font, Vector2(body.position.x + 44, y + 18), str(number) if number > 0 else "", 14, Look.DIM * Color(1, 1, 1, alpha), HORIZONTAL_ALIGNMENT_RIGHT, 44)
 	if mark != " ":
@@ -289,7 +329,7 @@ func _kind_color(kind: String) -> Color:
 			return Color("ffc46b")
 		"read", "search":
 			return Color("4fdcff")
-		"think", "say":
+		"think", "say", "reply":
 			return highlight
 	return tint.lightened(0.25)
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Architectural styles for house pieces: finishes, roof, and window and door proportions by room kind. Sizes are metres. Material entries use the piece material format (see types.json).",
+  "about": "Architectural styles for house pieces: finishes, roof, and window and door proportions by room kind. Sizes are metres. Material entries use the piece material format (see types.json) or name a wall finish (wall_finishes.json). walls are the default wall rules (the house type's walls field explains them); backsplash is the kitchen splashback finish.",
   "styles": {
     "modern": {
       "label": "Modern",
@@ -9,6 +9,8 @@
       "eaves": 0.65,
       "exterior_wall": 0.3,
       "interior_wall": 0.12,
+      "walls": [{"finish": "paint_white"}, {"room": "bathroom", "finish": "tile_stone"}, {"room": "living", "side": "feature", "finish": "concrete_board"}, {"room": "bedroom", "side": "feature", "finish": "paint_greige"}],
+      "backsplash": "tile_white",
       "materials": {
         "exterior": {"color": "e4e0d8", "roughness": 0.88},
         "interior": {"color": "efece6", "roughness": 0.92},
@@ -50,6 +52,8 @@
       "exterior_wall": 0.42,
       "interior_wall": 0.14,
       "vigas": true,
+      "walls": [{"finish": "paint_warm_white"}, {"room": "bathroom", "finish": "tile_mosaic"}, {"room": "living", "side": "feature", "finish": "stone_stacked"}, {"room": "bedroom", "side": "feature", "finish": "plaster_clay"}],
+      "backsplash": "tile_terrazzo",
       "materials": {
         "exterior": {"texture": "patterned_clay_plaster", "texture_size": 3.5, "color": "e7c7a1"},
         "interior": {"color": "efe3d2", "roughness": 0.95},
@@ -92,6 +96,8 @@
       "eaves": 0.45,
       "exterior_wall": 0.28,
       "interior_wall": 0.12,
+      "walls": [{"finish": "paint_warm_white"}, {"room": "bathroom", "finish": "paint_sage"}, {"room": "bathroom", "finish": "tile_white", "height": 1.2}, {"room": "living", "side": "feature", "finish": "brick_whitewashed"}, {"room": "bedroom", "side": "feature", "finish": "wood_shiplap"}],
+      "backsplash": "tile_white",
       "materials": {
         "exterior": {"color": "f1eee7", "roughness": 0.8},
         "interior": {"color": "f2efe8", "roughness": 0.92},

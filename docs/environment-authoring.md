@@ -116,10 +116,10 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   painted wall linings, framed doors and windows with handles, ceilings with downlights, the
   roof (flat with eaves, parapet with vigas, or gable), entrance steps and lights, a gravel
   apron, stepping stones and a patio deck; `house_furniture.gd` furnishes each room against
-  walls free of openings, using real models where installed: `world/data/pieces/house_furnishings.json` lists, per furniture slot and style, the library models to try (fitted to the slot, never enlarged) before falling back to a simple stand-in, and `scripts/build-furniture.ps1` downloads and prepares the CC0 Poly Haven ones. `pool: true` swaps the deck for a stone terrace with an in-ground
+  walls free of openings, using real models where installed: `world/data/pieces/house_furnishings.json` lists, per furniture slot and style, the library models to try (fitted to the slot, never enlarged) before falling back to a simple stand-in, and `scripts/build-furniture.ps1` downloads and prepares them (CC0 Poly Haven models and CC-BY Sketchfab ones, credited in `world/assets/library/CREDITS.md`). A record's `furnishings` names the model for any slot (`{"bathtub": "bathtub_clawfoot", "range": "range_gas"}`), or `none` for the stand-in. Walls take finishes from `world/data/pieces/wall_finishes.json` (flat paints, plasters, brick, shiplap and panelling, tiles, concrete, cladding): a style's `walls` rules, then the record's, paint every room and cover chosen rooms or sides (`feature` is the wall the bed or the TV is against; `height` makes a wainscot or splash band). `backsplash` sets the kitchen splashback, and any `materials` entry may name a finish, such as `"exterior": "cladding_panels"`. `pool: true` swaps the deck for a stone terrace with an in-ground
   pool; parented to a terrain, the house digs the basin. Styles live in
-  `world/data/pieces/house_styles.json` (finishes, roof, proportions); `materials` on the
-  piece overrides any finish. Static surfaces are merged per material when built, so a house
+  `world/data/pieces/house_styles.json` (finishes, wall rules, roof, proportions); `materials` on the
+  piece overrides any of the style's materials. Static surfaces are merged per material when built, so a house
   draws in a few dozen calls. Preview any record outside the game with
   `xvfb-run godot --rendering-method gl_compatibility --path world --script
   res://scripts/diagnostics/house_preview.gd -- <output dir> '<record JSON>'`.

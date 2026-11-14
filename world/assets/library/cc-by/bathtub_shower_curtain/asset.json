@@ -1,0 +1,27 @@
+{
+ "id": "bathtub_shower_curtain",
+ "title": "Alcove bathtub with shower curtain",
+ "category": "furniture",
+ "tags": [
+  "bathtub",
+  "shower",
+  "bathroom"
+ ],
+ "size_m": {
+  "width": 1.55,
+  "depth": 0.966,
+  "height": 2.194
+ },
+ "triangles": 17578,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bathtub with Shower",
+  "page": "https://sketchfab.com/3d-models/bathtub-with-shower-22e187363dd14bc3a3e1b4611830236a",
+  "author": "HippoStance",
+  "author_page": "https://sketchfab.com/hippostance",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

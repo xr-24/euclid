@@ -1,0 +1,28 @@
+{
+ "id": "fridge_french_door",
+ "title": "French door refrigerator, stainless",
+ "category": "furniture",
+ "tags": [
+  "fridge",
+  "refrigerator",
+  "kitchen",
+  "appliance"
+ ],
+ "size_m": {
+  "width": 0.94,
+  "depth": 0.608,
+  "height": 1.78
+ },
+ "triangles": 1566,
+ "source": {
+  "site": "Sketchfab",
+  "title": "French Door Refrigerator - Stainless",
+  "page": "https://sketchfab.com/3d-models/french-door-refrigerator-stainless-ebe62ed6dd9b446a9c9b7d7d6a8086e7",
+  "author": "Smokahontas",
+  "author_page": "https://sketchfab.com/Smokahontas",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

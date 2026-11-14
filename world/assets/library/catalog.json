@@ -232,6 +232,121 @@
    "title": "Bar chair round 01",
    "triangles": 6000
   },
+  "bathtub_clawfoot": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bathtub_clawfoot/bathtub_clawfoot.glb",
+   "size_m": {
+    "depth": 0.816,
+    "height": 0.652,
+    "width": 1.7
+   },
+   "source": {
+    "author": "3ddominator",
+    "author_page": "https://sketchfab.com/roughdominator",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bathtub-3350f81025974c53808a2efd2b31d4fd",
+    "site": "Sketchfab",
+    "title": "Bathtub"
+   },
+   "tags": [
+    "bathtub",
+    "bath",
+    "bathroom",
+    "clawfoot"
+   ],
+   "title": "Clawfoot bathtub with mixer",
+   "triangles": 8639
+  },
+  "bathtub_clawfoot_classic": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bathtub_clawfoot_classic/bathtub_clawfoot_classic.glb",
+   "size_m": {
+    "depth": 0.681,
+    "height": 0.645,
+    "width": 1.7
+   },
+   "source": {
+    "author": "Igrium",
+    "author_page": "https://sketchfab.com/Sam54123",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/photorealistic-bathtub-ba60ba7d0a4a4b6899021741f450395b",
+    "site": "Sketchfab",
+    "title": "Photorealistic Bathtub"
+   },
+   "tags": [
+    "bathtub",
+    "bath",
+    "bathroom",
+    "clawfoot"
+   ],
+   "title": "Cast iron clawfoot bathtub",
+   "triangles": 19694
+  },
+  "bathtub_freestanding": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bathtub_freestanding/bathtub_freestanding.glb",
+   "size_m": {
+    "depth": 0.991,
+    "height": 0.936,
+    "width": 1.801
+   },
+   "source": {
+    "author": "mohamed ouartassi",
+    "author_page": "https://sketchfab.com/mohamedouartassi",
+    "changes": "Reduced from 284462 to 39985 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bathtub-e6c857bc74814226ba44f02b40479baa",
+    "site": "Sketchfab",
+    "title": "Bathtub"
+   },
+   "tags": [
+    "bathtub",
+    "bath",
+    "bathroom",
+    "modern"
+   ],
+   "title": "Freestanding bathtub with floor tap",
+   "triangles": 39985
+  },
+  "bathtub_shower_curtain": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/bathtub_shower_curtain/bathtub_shower_curtain.glb",
+   "size_m": {
+    "depth": 0.966,
+    "height": 2.194,
+    "width": 1.55
+   },
+   "source": {
+    "author": "HippoStance",
+    "author_page": "https://sketchfab.com/hippostance",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bathtub-with-shower-22e187363dd14bc3a3e1b4611830236a",
+    "site": "Sketchfab",
+    "title": "Bathtub with Shower"
+   },
+   "tags": [
+    "bathtub",
+    "shower",
+    "bathroom"
+   ],
+   "title": "Alcove bathtub with shower curtain",
+   "triangles": 17578
+  },
   "bed_upholstered_dark": {
    "category": "furniture",
    "licence": "cc-by",
@@ -506,6 +621,36 @@
    "title": "Coffee table round 01",
    "triangles": 4044
   },
+  "cooktop_gas_glass": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/cooktop_gas_glass/cooktop_gas_glass.glb",
+   "size_m": {
+    "depth": 0.466,
+    "height": 0.051,
+    "width": 0.86
+   },
+   "source": {
+    "author": "Yousof Hajizeinali",
+    "author_page": "https://sketchfab.com/Yousof_hz",
+    "changes": "Reduced from 29273 to 19991 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/gas-stove-kitchen-f82172b787854191a55b3a5dfd5ede0b",
+    "site": "Sketchfab",
+    "title": "Gas Stove Kitchen"
+   },
+   "tags": [
+    "cooktop",
+    "hob",
+    "stove",
+    "kitchen",
+    "appliance"
+   ],
+   "title": "Five-burner glass gas cooktop",
+   "triangles": 19991
+  },
   "crystalline_iceplant": {
    "category": "prop",
    "licence": "cc0",
@@ -756,6 +901,64 @@
    "tags": [],
    "title": "Flower gazania",
    "triangles": 6993
+  },
+  "fridge_dispenser": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fridge_dispenser/fridge_dispenser.glb",
+   "size_m": {
+    "depth": 0.691,
+    "height": 1.78,
+    "width": 1.012
+   },
+   "source": {
+    "author": "Tesnime Ben Salah",
+    "author_page": "https://sketchfab.com/tesnimebensalah",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/refrigerator-3d-model-kitchen-appliance-9ff8d1e498fa46598eb22647ae594e34",
+    "site": "Sketchfab",
+    "title": "Refrigerator 3D Model - Kitchen Appliance"
+   },
+   "tags": [
+    "fridge",
+    "refrigerator",
+    "kitchen",
+    "appliance"
+   ],
+   "title": "Four-door refrigerator with dispenser",
+   "triangles": 1963
+  },
+  "fridge_french_door": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fridge_french_door/fridge_french_door.glb",
+   "size_m": {
+    "depth": 0.608,
+    "height": 1.78,
+    "width": 0.94
+   },
+   "source": {
+    "author": "Smokahontas",
+    "author_page": "https://sketchfab.com/Smokahontas",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/french-door-refrigerator-stainless-ebe62ed6dd9b446a9c9b7d7d6a8086e7",
+    "site": "Sketchfab",
+    "title": "French Door Refrigerator - Stainless"
+   },
+   "tags": [
+    "fridge",
+    "refrigerator",
+    "kitchen",
+    "appliance"
+   ],
+   "title": "French door refrigerator, stainless",
+   "triangles": 1566
   },
   "grass_medium_02": {
    "category": "prop",
@@ -1413,6 +1616,36 @@
    "title": "Potted plant 02",
    "triangles": 69806
   },
+  "range_gas": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/range_gas/range_gas.glb",
+   "size_m": {
+    "depth": 0.661,
+    "height": 1.091,
+    "width": 0.762
+   },
+   "source": {
+    "author": "MUSHROOM_BUILDS",
+    "author_page": "https://sketchfab.com/MUSHROOM_BUILDS",
+    "changes": "Reduced from 53740 to 24992 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/ikea-range-with-gas-cooktop-0568b8cf6a8444099c55eab7ca1a7de0",
+    "site": "Sketchfab",
+    "title": "IKEA Range with Gas Cooktop"
+   },
+   "tags": [
+    "range",
+    "stove",
+    "oven",
+    "kitchen",
+    "appliance"
+   ],
+   "title": "Gas range with oven",
+   "triangles": 24992
+  },
   "rock_face_01": {
    "category": "prop",
    "licence": "cc0",
@@ -2022,6 +2255,121 @@
    ],
    "title": "Flat screen television",
    "triangles": 2706
+  },
+  "vanity_dark_wood": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/vanity_dark_wood/vanity_dark_wood.glb",
+   "size_m": {
+    "depth": 0.593,
+    "height": 0.867,
+    "width": 1.2
+   },
+   "source": {
+    "author": "jimbogies",
+    "author_page": "https://sketchfab.com/jimbogies",
+    "changes": "Reduced from 20538 to 19963 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/bathroom-sink-cabinet-e5cf10304ffb4c11bc7841b584ccd706",
+    "site": "Sketchfab",
+    "title": "Bathroom Sink Cabinet"
+   },
+   "tags": [
+    "vanity",
+    "sink",
+    "bathroom"
+   ],
+   "title": "Dark wood vanity with granite top",
+   "triangles": 19963
+  },
+  "vanity_floating": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/vanity_floating/vanity_floating.glb",
+   "size_m": {
+    "depth": 0.572,
+    "height": 1.464,
+    "width": 1.0
+   },
+   "source": {
+    "author": "Timothy Ahene",
+    "author_page": "https://sketchfab.com/timothyahene",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/sink-and-vanity-6e20541ed8f543b28d2e71aef79b7b5e",
+    "site": "Sketchfab",
+    "title": "Sink and vanity"
+   },
+   "tags": [
+    "vanity",
+    "sink",
+    "mirror",
+    "bathroom",
+    "modern"
+   ],
+   "title": "Floating vanity with vessel sink, mirror and cabinet",
+   "triangles": 8032
+  },
+  "vanity_vessel_wood": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/vanity_vessel_wood/vanity_vessel_wood.glb",
+   "size_m": {
+    "depth": 0.601,
+    "height": 1.015,
+    "width": 0.9
+   },
+   "source": {
+    "author": "attilakozma",
+    "author_page": "https://sketchfab.com/attilakozma",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/designer-vessel-on-wooden-vanity-unit-b0b478131827419c8965132a19eb8993",
+    "site": "Sketchfab",
+    "title": "Designer vessel on wooden vanity unit"
+   },
+   "tags": [
+    "vanity",
+    "sink",
+    "bathroom",
+    "modern"
+   ],
+   "title": "Wood vanity with vessel basin and wall tap",
+   "triangles": 19674
+  },
+  "vanity_white_shaker": {
+   "category": "furniture",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/vanity_white_shaker/vanity_white_shaker.glb",
+   "size_m": {
+    "depth": 0.493,
+    "height": 1.184,
+    "width": 0.76
+   },
+   "source": {
+    "author": "allenbranch",
+    "author_page": "https://sketchfab.com/allenbranch",
+    "changes": "rescaled to real size, textures capped at 1024 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/legion-single-sink-bathroom-vanity-sink-750dfa5fab444c28baf30e063d2b56d3",
+    "site": "Sketchfab",
+    "title": "Legion Single Sink Bathroom Vanity & Sink"
+   },
+   "tags": [
+    "vanity",
+    "sink",
+    "bathroom"
+   ],
+   "title": "White shaker vanity with shelf",
+   "triangles": 2455
   },
   "venus_dockive": {
    "category": "statue",

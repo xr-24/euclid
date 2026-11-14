@@ -1,5 +1,5 @@
-# Download and prepare the Poly Haven (CC0) and Sketchfab furnishings that house pieces use, then index and import
-# them. Only the furniture models are fetched and rebuilt; the rest of the art is left alone.
+# Download and prepare the Poly Haven (CC0) and Sketchfab furnishings and the wall finish textures that house pieces
+# use, then index and import them. Only these are fetched and rebuilt; the rest of the art is left alone.
 #   powershell -ExecutionPolicy Bypass -File scripts\build-furniture.ps1
 param([string]$BlenderPath = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe')
 $ErrorActionPreference = 'Stop'
@@ -13,6 +13,9 @@ Write-Host "Fetching $($ids.Count) Poly Haven furnishings..."
 if ($LASTEXITCODE -ne 0) { throw 'Poly Haven download failed' }
 & $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'blender\optimize_models.py') -- @ids
 if ($LASTEXITCODE -ne 0) { throw 'Model optimisation failed' }
+Write-Host 'Fetching Poly Haven textures (wall finishes)...'
+& $BlenderPath --background --factory-startup --python-exit-code 1 --python (Join-Path $PSScriptRoot 'blender\fetch_polyhaven.py') -- --textures
+if ($LASTEXITCODE -ne 0) { throw 'Poly Haven texture download failed' }
 $sketchfab = @($list.sketchfab)
 if ($sketchfab.Count -gt 0) {
     Write-Host "Fetching $($sketchfab.Count) Sketchfab furnishings (needs .local\sketchfab-key.txt)..."

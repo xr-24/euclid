@@ -326,6 +326,93 @@
           "bed_upholstered_dark"
         ]
       }
+    },
+    "fridge": {
+      "size": [
+        0.92,
+        1.85,
+        0.8
+      ],
+      "models": {
+        "default": [
+          "fridge_french_door",
+          "fridge_dispenser"
+        ],
+        "farmhouse": [
+          "fridge_dispenser",
+          "fridge_french_door"
+        ]
+      }
+    },
+    "range": {
+      "size": [
+        0.78,
+        1.15,
+        0.7
+      ],
+      "models": {
+        "default": [],
+        "farmhouse": [
+          "range_gas"
+        ],
+        "desert": [
+          "range_gas"
+        ]
+      }
+    },
+    "cooktop": {
+      "size": [
+        0.9,
+        0.1,
+        0.55
+      ],
+      "models": {
+        "default": [
+          "cooktop_gas_glass"
+        ]
+      }
+    },
+    "bathtub": {
+      "size": [
+        1.8,
+        2.3,
+        1.0
+      ],
+      "models": {
+        "default": [
+          "bathtub_freestanding",
+          "bathtub_shower_curtain"
+        ],
+        "farmhouse": [
+          "bathtub_clawfoot",
+          "bathtub_clawfoot_classic"
+        ],
+        "desert": [
+          "bathtub_clawfoot_classic",
+          "bathtub_freestanding"
+        ]
+      }
+    },
+    "vanity": {
+      "size": [
+        1.1,
+        2.0,
+        0.62
+      ],
+      "models": {
+        "default": [
+          "vanity_floating",
+          "vanity_vessel_wood"
+        ],
+        "farmhouse": [
+          "vanity_white_shaker",
+          "vanity_dark_wood"
+        ],
+        "desert": [
+          "vanity_dark_wood",
+          "vanity_vessel_wood"
+        ]
+      }
     }
   },
   "turn": {},
@@ -337,6 +424,18 @@
     "toilet_ceramic",
     "tv_flat_screen",
     "floor_lamp_reading",
-    "floor_lamp_shade"
+    "floor_lamp_shade",
+    "fridge_french_door",
+    "fridge_dispenser",
+    "range_gas",
+    "cooktop_gas_glass",
+    "bathtub_freestanding",
+    "bathtub_shower_curtain",
+    "bathtub_clawfoot",
+    "bathtub_clawfoot_classic",
+    "vanity_floating",
+    "vanity_vessel_wood",
+    "vanity_white_shaker",
+    "vanity_dark_wood"
   ]
 }

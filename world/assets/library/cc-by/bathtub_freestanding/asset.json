@@ -1,0 +1,28 @@
+{
+ "id": "bathtub_freestanding",
+ "title": "Freestanding bathtub with floor tap",
+ "category": "furniture",
+ "tags": [
+  "bathtub",
+  "bath",
+  "bathroom",
+  "modern"
+ ],
+ "size_m": {
+  "width": 1.801,
+  "depth": 0.991,
+  "height": 0.936
+ },
+ "triangles": 39985,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bathtub",
+  "page": "https://sketchfab.com/3d-models/bathtub-e6c857bc74814226ba44f02b40479baa",
+  "author": "mohamed ouartassi",
+  "author_page": "https://sketchfab.com/mohamedouartassi",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 284462 to 39985 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

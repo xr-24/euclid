@@ -56,6 +56,12 @@ TEXTURES = {
     'marble_mosaic_tiles': '2k',   # mosaic niches and fountain
     'sandstone_blocks_08': '2k',   # retaining walls and foundations
     'leafy_grass': '2k',           # lawns in the inner peristyle
+    # House wall finishes (world/data/pieces/wall_finishes.json names these).
+    'plastered_wall_04': '2k', 'white_stucco': '2k', 'beige_wall_001': '2k',
+    'plaster_grey_04': '2k', 'whitewashed_brick': '2k', 'brick_wall_001': '2k', 'large_red_bricks': '2k',
+    'white_planks_clean': '2k', 'wooden_panels': '2k', 'long_white_tiles': '2k', 'rounded_square_tiled_wall': '2k',
+    'stone_tile_wall': '2k', 'terrazzo_tiles': '2k', 'granite_tile_03': '2k', 'concrete_slab_wall': '2k',
+    'exterior_wall_cladding_03': '2k', 'stacked_stone_wall': '2k', 'weathered_plank_siding': '2k',
 }
 TEXTURE_MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor_gl', 'arm': 'arm'}
 MODELS = [
@@ -123,8 +129,21 @@ def fetch_models_only():
     print('CONSTRUCT_FETCH_OK', len(ids), flush=True)
 
 
+def fetch_textures_only():
+    """Fetch just the texture sets (after "-- --textures"), without HDRIs, models or a credits rewrite."""
+    for asset, res in TEXTURES.items():
+        files = get_json('/files/' + asset)
+        for key, suffix in TEXTURE_MAPS.items():
+            info = files[key][res]['jpg']
+            download(info['url'], GODOT_ASSETS / 'textures' / asset / f'{asset}_{suffix}_{res}.jpg', info['size'])
+        print('TEXTURE', asset, flush=True)
+    print('CONSTRUCT_FETCH_OK', len(TEXTURES), flush=True)
+
+
 def main():
     credits = []
+    if '--textures' in sys.argv:
+        return fetch_textures_only()
     if '--' in sys.argv:
         return fetch_models_only()
     for asset, res in HDRIS.items():

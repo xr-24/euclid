@@ -1,0 +1,28 @@
+{
+ "id": "vanity_vessel_wood",
+ "title": "Wood vanity with vessel basin and wall tap",
+ "category": "furniture",
+ "tags": [
+  "vanity",
+  "sink",
+  "bathroom",
+  "modern"
+ ],
+ "size_m": {
+  "width": 0.9,
+  "depth": 0.601,
+  "height": 1.015
+ },
+ "triangles": 19674,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Designer vessel on wooden vanity unit",
+  "page": "https://sketchfab.com/3d-models/designer-vessel-on-wooden-vanity-unit-b0b478131827419c8965132a19eb8993",
+  "author": "attilakozma",
+  "author_page": "https://sketchfab.com/attilakozma",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

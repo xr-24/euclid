@@ -1,0 +1,28 @@
+{
+ "id": "fridge_dispenser",
+ "title": "Four-door refrigerator with dispenser",
+ "category": "furniture",
+ "tags": [
+  "fridge",
+  "refrigerator",
+  "kitchen",
+  "appliance"
+ ],
+ "size_m": {
+  "width": 1.012,
+  "depth": 0.691,
+  "height": 1.78
+ },
+ "triangles": 1963,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Refrigerator 3D Model - Kitchen Appliance",
+  "page": "https://sketchfab.com/3d-models/refrigerator-3d-model-kitchen-appliance-9ff8d1e498fa46598eb22647ae594e34",
+  "author": "Tesnime Ben Salah",
+  "author_page": "https://sketchfab.com/tesnimebensalah",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

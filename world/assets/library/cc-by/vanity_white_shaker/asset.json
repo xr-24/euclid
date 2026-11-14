@@ -1,0 +1,27 @@
+{
+ "id": "vanity_white_shaker",
+ "title": "White shaker vanity with shelf",
+ "category": "furniture",
+ "tags": [
+  "vanity",
+  "sink",
+  "bathroom"
+ ],
+ "size_m": {
+  "width": 0.76,
+  "depth": 0.493,
+  "height": 1.184
+ },
+ "triangles": 2455,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Legion Single Sink Bathroom Vanity & Sink",
+  "page": "https://sketchfab.com/3d-models/legion-single-sink-bathroom-vanity-sink-750dfa5fab444c28baf30e063d2b56d3",
+  "author": "allenbranch",
+  "author_page": "https://sketchfab.com/allenbranch",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 1024 px, re-centred."
+ }
+}

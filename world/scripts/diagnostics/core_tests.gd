@@ -69,6 +69,7 @@ const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
+const WallFinishes = preload("res://scripts/pieces/wall_finishes.gd")
 const HousePiece = preload("res://scripts/pieces/house_piece.gd")
 const HouseLayout = preload("res://scripts/pieces/house_layout.gd")
 const BuildingOpening = preload("res://scripts/pieces/building_opening.gd")
@@ -992,6 +993,49 @@ func _check_houses() -> void:
 	_check(pool_home.find_children("*", "", true, false).any(func(node: Node) -> bool: return node.has_meta("water_piece")),
 		"fill the house's pool with registered water")
 	pool_home.free()
+	_check_house_finishes(record)
+
+func _check_house_finishes(record: Dictionary) -> void:
+	var named := []
+	for style: Dictionary in HousePiece.styles().values():
+		for rule: Dictionary in style.get("walls", []):
+			named.append(str(rule.get("finish", "paint_white")))
+		named.append(str(style.get("backsplash", "tile_white")))
+	_check(not named.is_empty() and named.all(func(id: String) -> bool: return WallFinishes.has(id)),
+		"name only wall finishes that exist in the house styles")
+	var dressed := record.duplicate(true)
+	dressed.merge({"walls": [{"finish": "paint_sage"}, {"room": "bathroom", "finish": "tile_marble", "height": 1.2},
+		{"room": "bedroom", "side": "feature", "finish": "wood_panels"}], "backsplash": "brick_whitewashed",
+		"materials": {"exterior": "cladding_panels"}, "furnishings": {"fridge": "none", "bathtub": "bathtub_clawfoot"}}, true)
+	_check(PieceTypes.valid(dressed), "accept wall rules, a splashback, finish names and furnishing picks on a house")
+	var bad := record.duplicate(true)
+	bad["walls"] = [{"room": "bathroom", "side": "ceiling", "finish": "tile_white"}]
+	_check(not PieceTypes.valid(bad), "reject a wall rule for a side that is not a wall")
+	var style := HousePiece.style_for(dressed)
+	var rules := HousePiece.wall_rules(dressed, style)
+	_check(str(style.materials.exterior.get("texture", "")) == "exterior_wall_cladding_03"
+		and rules.size() == style.get("walls", []).size() + 3 and rules.back().finish == "wood_panels",
+		"resolve a finish name for the exterior and put the record's wall rules after the style's")
+	var plain := record.duplicate(true)
+	plain["furnish"] = false
+	plain["walls"] = [{"finish": "paint_white"}]
+	plain["style"] = "modern"
+	var tiled := plain.duplicate(true)
+	tiled["walls"] = [{"finish": "paint_white"}, {"room": "bathroom", "finish": "tile_white"}, {"room": "living", "side": "feature", "finish": "brick_red"}]
+	var plain_home := HousePiece.build(plain)
+	var tiled_home := HousePiece.build(tiled)
+	_check(_vertices(tiled_home.get_node("Walls")) > _vertices(plain_home.get_node("Walls")) + 100,
+		"cover the bathroom and the living room's feature wall in their own finishes")
+	plain_home.free()
+	tiled_home.free()
+
+func _vertices(node: Node) -> int:
+	var count := 0
+	for found: Node in node.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (found as MeshInstance3D).mesh
+		if mesh:
+			count += mesh.get_faces().size()
+	return count
 
 func _check_pool_basin() -> void:
 	var zone := Node3D.new()

@@ -1,0 +1,28 @@
+{
+ "id": "bathtub_clawfoot_classic",
+ "title": "Cast iron clawfoot bathtub",
+ "category": "furniture",
+ "tags": [
+  "bathtub",
+  "bath",
+  "bathroom",
+  "clawfoot"
+ ],
+ "size_m": {
+  "width": 1.7,
+  "depth": 0.681,
+  "height": 0.645
+ },
+ "triangles": 19694,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Photorealistic Bathtub",
+  "page": "https://sketchfab.com/3d-models/photorealistic-bathtub-ba60ba7d0a4a4b6899021741f450395b",
+  "author": "Igrium",
+  "author_page": "https://sketchfab.com/Sam54123",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

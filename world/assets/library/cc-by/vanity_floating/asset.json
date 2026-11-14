@@ -1,0 +1,29 @@
+{
+ "id": "vanity_floating",
+ "title": "Floating vanity with vessel sink, mirror and cabinet",
+ "category": "furniture",
+ "tags": [
+  "vanity",
+  "sink",
+  "mirror",
+  "bathroom",
+  "modern"
+ ],
+ "size_m": {
+  "width": 1.0,
+  "depth": 0.572,
+  "height": 1.464
+ },
+ "triangles": 8032,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Sink and vanity",
+  "page": "https://sketchfab.com/3d-models/sink-and-vanity-6e20541ed8f543b28d2e71aef79b7b5e",
+  "author": "Timothy Ahene",
+  "author_page": "https://sketchfab.com/timothyahene",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

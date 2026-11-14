@@ -1,0 +1,28 @@
+{
+ "id": "bathtub_clawfoot",
+ "title": "Clawfoot bathtub with mixer",
+ "category": "furniture",
+ "tags": [
+  "bathtub",
+  "bath",
+  "bathroom",
+  "clawfoot"
+ ],
+ "size_m": {
+  "width": 1.7,
+  "depth": 0.816,
+  "height": 0.652
+ },
+ "triangles": 8639,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bathtub",
+  "page": "https://sketchfab.com/3d-models/bathtub-3350f81025974c53808a2efd2b31d4fd",
+  "author": "3ddominator",
+  "author_page": "https://sketchfab.com/roughdominator",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

@@ -39,13 +39,15 @@ const LOOK := {
 
 static var _choices := _load_choices()
 
-static func furnish(root: Node3D, list: Array[Dictionary], walls: Array[Dictionary], ceiling: float, outer: float,
-		inner: float, look: Dictionary) -> void:
-	var finish := {"style": str(look.get("style_name", "modern"))}
+## Furnishes each room (from Layout.room_sides) and returns, by room index, the side each room's
+## furniture is arranged against (the bed's or the media wall), for feature-wall finishes.
+static func furnish(root: Node3D, rooms: Array[Dictionary], ceiling: float, look: Dictionary) -> Dictionary:
+	var finish := {"style": str(look.get("style_name", "modern")), "focus": {}, "furnishings": look.get("furnishings", {})}
 	for key: String in LOOK:
 		finish[key] = Finishes.make(LOOK[key])
 	finish["baseboard"] = look.baseboard
-	var rooms := Layout.room_sides(list, walls, outer, inner)
+	if look.has("backsplash"):
+		finish["tile"] = look.backsplash
 	for room: Dictionary in rooms:
 		var node := Node3D.new()
 		node.name = str(room.name).replace(" ", "")
@@ -66,6 +68,7 @@ static func furnish(root: Node3D, list: Array[Dictionary], walls: Array[Dictiona
 				_office(node, room, finish)
 			"hall":
 				_hall(node, room, finish)
+	return finish.focus
 
 static func _largest(rooms: Array[Dictionary], kind: String) -> int:
 	var best := -1
@@ -98,6 +101,7 @@ static func _bedroom(node: Node3D, room: Dictionary, f: Dictionary, main: bool) 
 		spot = _best(room, width + 0.1, false, false)
 	if spot.is_empty():
 		return
+	f.focus[room.index] = spot.side
 	var place := _on_wall(spot.side, spot.centre)
 	var bed := Node3D.new()
 	place.add(node, bed)
@@ -165,6 +169,7 @@ static func _living(node: Node3D, room: Dictionary, f: Dictionary) -> void:
 		spot = _focus(room)
 	if spot.is_empty():
 		return
+	f.focus[room.index] = spot.side
 	var place := _on_wall(spot.side, spot.centre)
 	if media_wall:
 		var media := Node3D.new()
@@ -248,33 +253,59 @@ static func _kitchen(node: Node3D, room: Dictionary, f: Dictionary, ceiling: flo
 	var counter := length - (0.92 if fridge else 0.0)
 	var start := -length * 0.5 + (0.92 if fridge else 0.0)
 	var mid := start + counter * 0.5
-	_part(run, Vector3(counter, 0.1, 0.56), Vector3(mid, 0.05, 0.25), f.black, false)
-	_part(run, Vector3(counter, 0.76, 0.58), Vector3(mid, 0.48, 0.29), f.cabinet)
-	_part(run, Vector3(counter + 0.02, 0.04, 0.64), Vector3(mid, 0.88, 0.32), f.stone)
-	var doors := int(counter / 0.6)
-	for index in doors:
-		var x := start + (index + 0.5) * counter / doors
-		_part(run, Vector3(counter / doors - 0.006, 0.7, 0.008), Vector3(x, 0.47, 0.584), f.cabinet, false)
-		_part(run, Vector3(0.16, 0.012, 0.02), Vector3(x, 0.8, 0.598), f.steel, false)
-	# Sink under the window if there is one, otherwise left of centre; cooktop to the right.
+	# Sink under the window if there is one, otherwise left of centre; the cooker to the other side.
 	var sink_x := mid - counter * 0.2
 	for opening: Dictionary in spot.side.openings:
 		if opening.kind == "window":
 			var local := (float(opening.at) - float(spot.centre)) * place.sign
 			if local > start + 0.4 and local < start + counter - 0.4:
 				sink_x = local
+	var cook_x := clampf(sink_x + 1.3 * (1.0 if sink_x < mid else -1.0), start + 0.42, start + counter - 0.42)
+	# A freestanding range stands in a gap in the run; otherwise a cooktop is set into the counter.
+	var cooker := Node3D.new()
+	run.add_child(cooker)
+	cooker.position.x = cook_x
+	var oven: Node3D = _model(cooker, "range", f) if counter >= 2.2 else null
+	var gap := 0.0
+	if oven:
+		var size: Vector3 = oven.get_meta("size")
+		oven.position.z = size.z * 0.5 + 0.02
+		gap = size.x + 0.01
+	var segments := [[start, start + counter]] if gap == 0.0 else \
+		[[start, cook_x - gap * 0.5], [cook_x + gap * 0.5, start + counter]]
+	for segment: Array in segments:
+		var width: float = segment[1] - segment[0]
+		if width < 0.1:
+			continue
+		var centre: float = (segment[0] + segment[1]) * 0.5
+		_part(run, Vector3(width, 0.1, 0.56), Vector3(centre, 0.05, 0.25), f.black, false)
+		_part(run, Vector3(width, 0.76, 0.58), Vector3(centre, 0.48, 0.29), f.cabinet)
+		_part(run, Vector3(width + 0.02, 0.04, 0.64), Vector3(centre, 0.88, 0.32), f.stone)
+		var doors := maxi(1, int(width / 0.6))
+		for index in doors:
+			var x: float = segment[0] + (index + 0.5) * width / doors
+			_part(run, Vector3(width / doors - 0.006, 0.7, 0.008), Vector3(x, 0.47, 0.584), f.cabinet, false)
+			_part(run, Vector3(0.16, 0.012, 0.02), Vector3(x, 0.8, 0.598), f.steel, false)
 	_part(run, Vector3(0.6, 0.012, 0.42), Vector3(sink_x, 0.902, 0.3), f.steel, false)
 	_cylinder(run, 0.014, 0.32, Vector3(sink_x, 1.06, 0.08), f.steel)
 	_part(run, Vector3(0.03, 0.03, 0.18), Vector3(sink_x, 1.22, 0.16), f.steel, false)
-	var cook_x := clampf(sink_x + 1.3 * (1.0 if sink_x < mid else -1.0), start + 0.35, start + counter - 0.35)
-	_part(run, Vector3(0.6, 0.008, 0.52), Vector3(cook_x, 0.904, 0.3), f.screen, false)
+	if oven == null and _model(cooker, "cooktop", f, Vector3(0, 0.885, 0.32)) == null:
+		_part(cooker, Vector3(0.6, 0.008, 0.52), Vector3(0, 0.904, 0.3), f.screen, false)
 	if not _window_above(spot, 1.4):
 		_part(run, Vector3(counter, 0.72, 0.36), Vector3(mid, 1.86, 0.18), f.cabinet)
 		_part(run, Vector3(counter, 0.02, 0.36), Vector3(mid, 1.49, 0.18), f.black, false)
-		_part(run, Vector3(counter - 0.01, 0.62, 0.01), Vector3(mid, 1.14, 0.005), f.tile, false)
+		# The splashback stands proud of any wall covering.
+		_part(run, Vector3(counter - 0.01, 0.62, 0.01), Vector3(mid, 1.14, 0.027), f.tile, false)
 	if fridge:
-		_part(run, Vector3(0.88, 2.02, 0.7), Vector3(-length * 0.5 + 0.45, 1.01, 0.35), f.steel)
-		_part(run, Vector3(0.02, 0.7, 0.03), Vector3(-length * 0.5 + 0.85, 1.3, 0.715), f.black, false)
+		var cold := Node3D.new()
+		run.add_child(cold)
+		cold.position.x = -length * 0.5 + 0.45
+		var model := _model(cold, "fridge", f)
+		if model:
+			model.position.z = (model.get_meta("size") as Vector3).z * 0.5 + 0.02
+		else:
+			_part(cold, Vector3(0.88, 2.02, 0.7), Vector3(0, 1.01, 0.35), f.steel)
+			_part(cold, Vector3(0.02, 0.7, 0.03), Vector3(0.4, 1.3, 0.715), f.black, false)
 	# An island when the room is deep enough, and a dining table when it is large.
 	var depth := _depth(spot.side, clear)
 	var across := _width(spot.side, clear)
@@ -341,34 +372,41 @@ static func _chair(chair: Node3D, f: Dictionary) -> void:
 
 static func _bathroom(node: Node3D, room: Dictionary, f: Dictionary, ceiling: float) -> void:
 	var clear: Dictionary = room.clear
-	# Tiled wet walls to door height.
-	for side: Dictionary in room.sides:
-		for span: Array in side.free:
-			var length: float = span[1] - span[0]
-			if length > 0.2:
-				_on_wall(side, (span[0] + span[1]) * 0.5).add(node, _box(Vector3(length, 1.2, 0.012), Vector3(0, 0.6, 0.006), f.tile, false))
+	# Wall tiles come from the house's wall rules (house_styles.json "walls").
 	var used: Array = []
 	var vanity := _best(room, 1.1, false, false)
 	if not vanity.is_empty():
 		used.append(vanity.side)
 		var unit := Node3D.new()
 		_on_wall(vanity.side, vanity.centre).add(node, unit)
-		_part(unit, Vector3(1.0, 0.5, 0.48), Vector3(0, 0.6, 0.24), f.wood)
-		_part(unit, Vector3(1.02, 0.03, 0.5), Vector3(0, 0.865, 0.25), f.stone)
-		_cylinder(unit, 0.2, 0.12, Vector3(0, 0.94, 0.27), f.porcelain)
-		_cylinder(unit, 0.012, 0.22, Vector3(0, 1.0, 0.06), f.steel)
-		_part(unit, Vector3(0.8, 0.9, 0.02), Vector3(0, 1.6, 0.012), f.mirror, false)
-		_part(unit, Vector3(0.84, 0.94, 0.012), Vector3(0, 1.6, 0.005), f.black, false)
+		var basin := _model(unit, "vanity", f)
+		var mirror := true
+		if basin:
+			var size: Vector3 = basin.get_meta("size")
+			basin.position.z = size.z * 0.5 + 0.02
+			# A tall model brings its own mirror.
+			mirror = size.y < 1.4
+		else:
+			_part(unit, Vector3(1.0, 0.5, 0.48), Vector3(0, 0.6, 0.24), f.wood)
+			_part(unit, Vector3(1.02, 0.03, 0.5), Vector3(0, 0.865, 0.25), f.stone)
+			_cylinder(unit, 0.2, 0.12, Vector3(0, 0.94, 0.27), f.porcelain)
+			_cylinder(unit, 0.012, 0.22, Vector3(0, 1.0, 0.06), f.steel)
+		if mirror:
+			_part(unit, Vector3(0.8, 0.9, 0.02), Vector3(0, 1.6, 0.034), f.mirror, false)
+			_part(unit, Vector3(0.84, 0.94, 0.012), Vector3(0, 1.6, 0.026), f.black, false)
 	var bath := _best(room, 1.6, false, false, used)
 	if not bath.is_empty() and float(bath.length) >= 1.7 and _depth(bath.side, clear) >= 1.8:
 		used.append(bath.side)
 		var tub := Node3D.new()
 		var place := _on_wall(bath.side, bath.centre)
 		place.add(node, tub)
-		var long := minf(1.7, float(bath.length) - 0.02)
-		_part(tub, Vector3(long, 0.56, 0.75), Vector3(0, 0.28, 0.375), f.porcelain)
-		_part(tub, Vector3(long - 0.16, 0.02, 0.6), Vector3(0, 0.56, 0.37), f.mirror, false)
-		_part(tub, Vector3(long, 1.0, 0.012), Vector3(0, 1.4, 0.006), f.tile, false)
+		var model := _model(tub, "bathtub", f)
+		if model:
+			model.position.z = (model.get_meta("size") as Vector3).z * 0.5 + 0.03
+		else:
+			var long := minf(1.7, float(bath.length) - 0.02)
+			_part(tub, Vector3(long, 0.56, 0.75), Vector3(0, 0.28, 0.375), f.porcelain)
+			_part(tub, Vector3(long - 0.16, 0.02, 0.6), Vector3(0, 0.56, 0.37), f.mirror, false)
 	else:
 		var shower := _best(room, 0.95, false, false, used)
 		if not shower.is_empty():
@@ -377,7 +415,6 @@ static func _bathroom(node: Node3D, room: Dictionary, f: Dictionary, ceiling: fl
 			_on_wall(shower.side, shower.centre).add(node, stall)
 			_part(stall, Vector3(0.9, 0.05, 0.9), Vector3(0, 0.025, 0.45), f.porcelain)
 			_part(stall, Vector3(0.9, 2.0, 0.012), Vector3(0, 1.05, 0.9), f.shower_glass, false)
-			_part(stall, Vector3(0.9, 2.1, 0.012), Vector3(0, 1.05, 0.006), f.tile, false)
 			_cylinder(stall, 0.1, 0.01, Vector3(0, 2.05, 0.2), f.steel)
 	var toilet := _best(room, 0.75, false, false, used)
 	if toilet.is_empty():
@@ -521,6 +558,12 @@ static func _model(parent: Node3D, slot: String, f: Dictionary, at := Vector3.ZE
 	var rule: Dictionary = _choices.get("slots", {}).get(slot, {})
 	var options: Dictionary = rule.get("models", {})
 	var ids: Array = options.get(str(f.get("style", "")), options.get("default", []))
+	# A house record may name the model for a slot ("furnishings"); "none" keeps the stand-in.
+	var chosen := str(f.get("furnishings", {}).get(slot, ""))
+	if chosen == "none":
+		return null
+	if Library.has(chosen):
+		ids = [chosen]
 	var installed := ids.filter(func(id: Variant) -> bool: return Library.has(str(id)))
 	if installed.is_empty():
 		return null

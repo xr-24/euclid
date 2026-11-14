@@ -10,8 +10,11 @@ const Finishes = preload("res://scripts/pieces/piece_material.gd")
 const Furniture = preload("res://scripts/pieces/house_furniture.gd")
 const Water = preload("res://scripts/pieces/water_piece.gd")
 const Opening = preload("res://scripts/pieces/building_opening.gd")
+const WallFinishes = preload("res://scripts/pieces/wall_finishes.gd")
 const STYLES_PATH := "res://data/pieces/house_styles.json"
 const LINING := 0.016
+## Thickness of a room's wall covering (tile, brick, panelling) laid over the wall face.
+const COVER := 0.01
 ## Stone between the house and the pool's edge.
 const WALKWAY := 1.8
 const LIGHT_COLOR := Color("ffd9ae")
@@ -29,10 +32,25 @@ static func style_for(record: Dictionary) -> Dictionary:
 	var style: Dictionary = _styles.get(str(record.get("style", "modern")), _styles.get("modern", {})).duplicate(true)
 	var overrides: Dictionary = record.get("materials", {})
 	for key: String in overrides:
-		var base: Dictionary = style.materials.get(key, {})
+		# A finish name replaces the style's material; a material spec is merged over it.
+		if overrides[key] is String:
+			style.materials[key] = WallFinishes.spec(overrides[key]).duplicate(true)
+			continue
+		var base: Dictionary = WallFinishes.spec(style.materials.get(key, {})).duplicate(true)
 		base.merge(overrides[key], true)
 		style.materials[key] = base
 	return style
+
+## The style's wall rules followed by the record's; later rules win. Each rule gives a finish (a
+## wall_finishes.json name) or a material for a room ("all", a room kind or a room name) and a
+## side ("all", "feature", "front", "back", "left" or "right"), optionally only up to a height.
+static func wall_rules(record: Dictionary, style: Dictionary) -> Array:
+	var rules: Array = style.get("walls", []).duplicate(true)
+	# A record's interior material repaints the whole house, over the style's paint.
+	if record.get("materials", {}).has("interior"):
+		rules.append({"material": WallFinishes.spec(style.materials.interior)})
+	rules.append_array(record.get("walls", []))
+	return rules
 
 ## The rooms and walls a record produces, for agents and editors.
 static func plan(record: Dictionary) -> Dictionary:
@@ -64,10 +82,19 @@ static func build(record: Dictionary) -> Node3D:
 		return root
 	var walls := Layout.walls(record, list, style)
 	var look := _materials(style)
+	var rules := wall_rules(record, style)
+	var paint := _base_finish(rules)
+	if not paint.is_empty():
+		look["interior"] = Finishes.make(paint)
+	var splash := WallFinishes.spec(record.get("backsplash", style.get("backsplash", "")))
+	if not splash.is_empty():
+		look["backsplash"] = Finishes.make(splash)
+	look["furnishings"] = record.get("furnishings", {})
 	var floor_y := float(record.get("foundation_height", 0.3))
 	var ceiling := float(record.get("ceiling_height", 2.7))
 	var outer := float(style.get("exterior_wall", 0.3))
 	var inner := float(style.get("interior_wall", 0.12))
+	var sides := Layout.room_sides(list, walls, outer, inner)
 	var base := Node3D.new()
 	base.name = "Floors"
 	root.add_child(base)
@@ -89,13 +116,15 @@ static func build(record: Dictionary) -> Node3D:
 	_roof(roof, record, style, list, walls, floor_y + ceiling, outer, look)
 	_outside(root, record, walls, floor_y, outer, look)
 	_grounds(root, walls, floor_y, ceiling, outer, style, look)
+	var focus := {}
 	if record.get("furnish", true):
 		var furniture := Node3D.new()
 		furniture.name = "Furniture"
 		furniture.position.y = floor_y
 		root.add_child(furniture)
 		look["style_name"] = str(record.get("style", "modern"))
-		Furniture.furnish(furniture, list, walls, ceiling, outer, inner, look)
+		focus = Furniture.furnish(furniture, sides, ceiling, look)
+	_cover(shell, sides, rules, paint, focus, ceiling)
 	# Batch each part of the house separately, so the roof or ceilings can still be hidden.
 	for part: Node in root.get_children():
 		if part is Node3D:
@@ -154,7 +183,7 @@ static func _materials(style: Dictionary) -> Dictionary:
 	var look := {}
 	var specs: Dictionary = style.get("materials", {})
 	for key: String in specs:
-		look[key] = Finishes.make(specs[key])
+		look[key] = Finishes.make(WallFinishes.spec(specs[key]))
 	for key in ["exterior", "interior", "ceiling", "plinth", "trim", "baseboard", "roof", "fascia", "door",
 			"entry_door", "glass", "frosted", "accent"]:
 		if not look.has(key):
@@ -586,6 +615,122 @@ static func _grounds(root: Node3D, walls: Array[Dictionary], floor_y: float, cei
 				Building.wall(panel, high - low, ceiling + 0.06, 0.036, look.accent, look.accent,
 					[{"kind": "archway", "offset": -(low + high) * 0.5, "width": float(opening.width) + 0.1,
 						"height": float(opening.height) + 0.05}])
+
+# --- Wall coverings ------------------------------------------------------------------------------
+
+## The finish every interior wall is painted with: the last rule for all rooms and all sides.
+static func _base_finish(rules: Array) -> Dictionary:
+	var paint := {}
+	for rule: Dictionary in rules:
+		if str(rule.get("room", "all")) == "all" and str(rule.get("side", "all")) == "all" and not rule.has("height"):
+			var spec := _rule_spec(rule)
+			if not spec.is_empty():
+				paint = spec
+	return paint
+
+static func _rule_spec(rule: Dictionary) -> Dictionary:
+	return WallFinishes.spec(rule.get("material", rule.get("finish", "")))
+
+static func _rule_room(rule: Dictionary, room: Dictionary) -> bool:
+	var want := str(rule.get("room", "all")).to_lower()
+	return want == "all" or want == str(room.kind) or want == str(room.name).to_lower()
+
+static func _rule_side(rule: Dictionary, side: Dictionary, feature: Variant) -> bool:
+	var normal: Vector2 = side.normal
+	match str(rule.get("side", "all")):
+		"all": return true
+		"feature": return side == feature
+		"front": return normal.y < -0.5
+		"back": return normal.y > 0.5
+		"left": return normal.x < -0.5
+		"right": return normal.x > 0.5
+	return false
+
+## Lays each room's own finishes over its wall faces where they differ from the house's paint: a
+## full-height covering, and a lower band (wainscot, splash tiles) in front of it.
+static func _cover(parent: Node3D, rooms: Array[Dictionary], rules: Array, paint: Dictionary, focus: Dictionary, ceiling: float) -> void:
+	var holder := Node3D.new()
+	holder.name = "Coverings"
+	parent.add_child(holder)
+	for room: Dictionary in rooms:
+		var feature: Variant = focus.get(room.index, _feature_side(room))
+		for side: Dictionary in room.sides:
+			var full := paint
+			var band := {}
+			var band_height := 0.0
+			for rule: Dictionary in rules:
+				if not _rule_room(rule, room) or not _rule_side(rule, side, feature):
+					continue
+				var spec := _rule_spec(rule)
+				if spec.is_empty():
+					continue
+				if rule.has("height"):
+					band = spec
+					band_height = clampf(float(rule.height), 0.05, ceiling)
+				else:
+					full = spec
+					band = {}
+			if not full.recursive_equal(paint, 4):
+				_clad(holder, side, ceiling, Finishes.make(full), 0.0)
+			if not band.is_empty():
+				_clad(holder, side, band_height, Finishes.make(band), COVER)
+
+## A room's feature wall when no furniture claimed one: the side with the most unbroken wall.
+static func _feature_side(room: Dictionary) -> Variant:
+	var best: Variant = null
+	var most := 0.0
+	for side: Dictionary in room.sides:
+		var length := 0.0
+		for span: Array in side.free:
+			length += float(span[1]) - float(span[0])
+		if length > most:
+			most = length
+			best = side
+	return best
+
+## Covers one side of a room up to `height`, leaving its doors and windows open.
+static func _clad(holder: Node3D, side: Dictionary, height: float, material: Material, offset: float) -> void:
+	var normal: Vector2 = side.normal
+	var inward := Vector3(-normal.x, 0, -normal.y)
+	var turn := atan2(inward.x, inward.z)
+	for span: Array in side.solid:
+		var a := maxf(float(side.low), float(span[0]))
+		var b := minf(float(side.high), float(span[1]))
+		if b - a < 0.05:
+			continue
+		# Holes along the span, in plan positions, clipped to it and merged where they overlap.
+		var holes := []
+		for opening: Dictionary in side.openings:
+			var half := float(opening.width) * 0.5
+			var low := maxf(a, float(opening.at) - half)
+			var high := minf(b, float(opening.at) + half)
+			var sill := float(opening.get("sill", 0.0))
+			if high - low < 0.02 or sill >= height - 0.02:
+				continue
+			holes.append([low, high, sill, minf(height, sill + float(opening.height))])
+		holes.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+		var pieces := []
+		var at := a
+		for hole: Array in holes:
+			if hole[0] > at:
+				pieces.append([at, hole[0], 0.0, height])
+			if hole[2] > 0.01:
+				pieces.append([maxf(at, hole[0]), hole[1], 0.0, hole[2]])
+			if hole[3] < height - 0.01:
+				pieces.append([maxf(at, hole[0]), hole[1], hole[3], height])
+			at = maxf(at, hole[1])
+		if b > at:
+			pieces.append([at, b, 0.0, height])
+		for piece: Array in pieces:
+			var length: float = piece[1] - piece[0]
+			var rise: float = piece[3] - piece[2]
+			if length < 0.01 or rise < 0.01:
+				continue
+			var middle: float = (piece[0] + piece[1]) * 0.5
+			var point := Vector3(middle, 0, float(side.face)) if int(side.axis) == 0 else Vector3(float(side.face), 0, middle)
+			var part := _box(holder, point + inward * (offset + COVER * 0.5 + 0.0005) + Vector3(0, (piece[2] + piece[3]) * 0.5, 0),
+				Vector3(length, rise, COVER), material, false)
+			part.rotation.y = turn
 
 static func _box(parent: Node3D, at: Vector3, size: Vector3, material: Material, collision := true) -> Node3D:
 	var part := Shapes.build({"size": [size.x, size.y, size.z], "shape": "box", "collision": collision})

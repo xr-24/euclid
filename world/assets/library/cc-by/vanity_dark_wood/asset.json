@@ -1,0 +1,27 @@
+{
+ "id": "vanity_dark_wood",
+ "title": "Dark wood vanity with granite top",
+ "category": "furniture",
+ "tags": [
+  "vanity",
+  "sink",
+  "bathroom"
+ ],
+ "size_m": {
+  "width": 1.2,
+  "depth": 0.593,
+  "height": 0.867
+ },
+ "triangles": 19963,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Bathroom Sink Cabinet",
+  "page": "https://sketchfab.com/3d-models/bathroom-sink-cabinet-e5cf10304ffb4c11bc7841b584ccd706",
+  "author": "jimbogies",
+  "author_page": "https://sketchfab.com/jimbogies",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 20538 to 19963 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

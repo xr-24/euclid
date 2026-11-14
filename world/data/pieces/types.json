@@ -316,20 +316,43 @@
         "pool_depth": {"type": "number", "minimum": 0.6, "maximum": 3},
         "furnish": {"type": "boolean"},
         "lights": {"type": "boolean"},
+        "walls": {
+          "type": "array",
+          "description": "Wall finish rules over the style's own (later rules win). finish names an entry in data/pieces/wall_finishes.json (paint_white, paint_sage, plaster_lime, brick_whitewashed, brick_red, wood_shiplap, wood_panels, tile_white, tile_mosaic, tile_terrazzo, tile_marble, concrete_board, stone_stacked, ...) or give a material instead. room is all, a room kind or a room name; side is all, feature (the wall the bed or the sofa and TV are arranged against), or front, back, left or right (-Z, +Z, -X, +X). height covers only the lower part of the wall (wainscot, splash tiles).",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": [],
+            "properties": {
+              "room": {"type": "string", "maxLength": 40},
+              "side": {"type": "string", "enum": ["all", "feature", "front", "back", "left", "right"]},
+              "finish": {"type": "string", "maxLength": 40},
+              "material": {"$ref": "#/$defs/piece_material"},
+              "height": {"type": "number", "minimum": 0.05, "maximum": 4.5}
+            }
+          }
+        },
+        "backsplash": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}], "description": "Kitchen splashback: a wall finish name or a material"},
+        "furnishings": {
+          "type": "object",
+          "description": "The library model for a furniture slot, overriding the style's picks (see data/pieces/house_furnishings.json for slots and suggested models). none keeps the simple stand-in.",
+          "required": [],
+          "properties": {"sofa": {"type": "string", "maxLength": 80}, "armchair": {"type": "string", "maxLength": 80}, "coffee_table": {"type": "string", "maxLength": 80}, "side_table": {"type": "string", "maxLength": 80}, "media_unit": {"type": "string", "maxLength": 80}, "dining_chair": {"type": "string", "maxLength": 80}, "bar_stool": {"type": "string", "maxLength": 80}, "nightstand": {"type": "string", "maxLength": 80}, "storage": {"type": "string", "maxLength": 80}, "bookshelf": {"type": "string", "maxLength": 80}, "plant": {"type": "string", "maxLength": 80}, "pendant": {"type": "string", "maxLength": 80}, "art": {"type": "string", "maxLength": 80}, "bed": {"type": "string", "maxLength": 80}, "toilet": {"type": "string", "maxLength": 80}, "tv": {"type": "string", "maxLength": 80}, "floor_lamp": {"type": "string", "maxLength": 80}, "bed_guest": {"type": "string", "maxLength": 80}, "fridge": {"type": "string", "maxLength": 80}, "range": {"type": "string", "maxLength": 80}, "cooktop": {"type": "string", "maxLength": 80}, "bathtub": {"type": "string", "maxLength": 80}, "vanity": {"type": "string", "maxLength": 80}}
+        },
         "materials": {
           "type": "object",
-          "description": "Material overrides merged over the style",
+          "description": "Material overrides merged over the style. Each may name a wall finish (data/pieces/wall_finishes.json) instead, for example exterior: cladding_panels",
           "required": [],
           "properties": {
-            "exterior": {"$ref": "#/$defs/piece_material"},
-            "interior": {"$ref": "#/$defs/piece_material"},
-            "trim": {"$ref": "#/$defs/piece_material"},
-            "roof": {"$ref": "#/$defs/piece_material"},
-            "fascia": {"$ref": "#/$defs/piece_material"},
-            "plinth": {"$ref": "#/$defs/piece_material"},
-            "door": {"$ref": "#/$defs/piece_material"},
-            "entry_door": {"$ref": "#/$defs/piece_material"},
-            "accent": {"$ref": "#/$defs/piece_material"}
+            "exterior": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "interior": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "trim": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "roof": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "fascia": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "plinth": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "door": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "entry_door": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},
+            "accent": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]}
           }
         }
       }

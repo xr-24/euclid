@@ -1,0 +1,29 @@
+{
+ "id": "cooktop_gas_glass",
+ "title": "Five-burner glass gas cooktop",
+ "category": "furniture",
+ "tags": [
+  "cooktop",
+  "hob",
+  "stove",
+  "kitchen",
+  "appliance"
+ ],
+ "size_m": {
+  "width": 0.86,
+  "depth": 0.466,
+  "height": 0.051
+ },
+ "triangles": 19991,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Gas Stove Kitchen",
+  "page": "https://sketchfab.com/3d-models/gas-stove-kitchen-f82172b787854191a55b3a5dfd5ede0b",
+  "author": "Yousof Hajizeinali",
+  "author_page": "https://sketchfab.com/Yousof_hz",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 29273 to 19991 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "id": "range_gas",
+ "title": "Gas range with oven",
+ "category": "furniture",
+ "tags": [
+  "range",
+  "stove",
+  "oven",
+  "kitchen",
+  "appliance"
+ ],
+ "size_m": {
+  "width": 0.762,
+  "depth": 0.661,
+  "height": 1.091
+ },
+ "triangles": 24992,
+ "source": {
+  "site": "Sketchfab",
+  "title": "IKEA Range with Gas Cooktop",
+  "page": "https://sketchfab.com/3d-models/ikea-range-with-gas-cooktop-0568b8cf6a8444099c55eab7ca1a7de0",
+  "author": "MUSHROOM_BUILDS",
+  "author_page": "https://sketchfab.com/MUSHROOM_BUILDS",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 53740 to 24992 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

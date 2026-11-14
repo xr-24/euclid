@@ -75,6 +75,8 @@ var _player_motor := PlayerMotor.new()
 ## Euclid's menu: areas, build tools, Codex, Workbench and settings on the left wrist (Tab).
 var wrist: WristComputer
 var environment: Environment
+## The camera's exposure behaviour (eye adaptation), shared by every camera through the environment.
+var camera_attributes: CameraAttributesPractical
 var sky_material: ProceduralSkyMaterial
 var sun: DirectionalLight3D
 var hud: Label
@@ -242,6 +244,8 @@ func _setup_lighting() -> void:
 		environment.glow_intensity = 0.22
 	var world_environment := WorldEnvironment.new()
 	world_environment.environment = environment
+	camera_attributes = CameraAttributesPractical.new()
+	world_environment.camera_attributes = camera_attributes
 	add_child(world_environment)
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-36, -32, 0)

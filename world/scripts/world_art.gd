@@ -14,6 +14,7 @@ const AssetLibrary = preload("res://scripts/asset_library.gd")
 const ZoneEffects = preload("res://scripts/rendering/zone_effects.gd")
 const Weather = preload("res://scripts/rendering/weather.gd")
 const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
+const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
 
 static var _cache := {}
@@ -42,17 +43,7 @@ static func spawn(zone: String) -> Dictionary:
 
 ## Albedo, normal and ORM maps of a downloaded texture set, at whichever resolution was fetched.
 static func texture_set(id: String) -> Dictionary:
-	if _cache.has(id):
-		return _cache[id]
-	var base := PH + "textures/%s/%s_" % [id, id]
-	for res in ["2k", "4k", "1k"]:
-		var maps := {"albedo": base + "diff_%s.jpg" % res, "normal": base + "nor_gl_%s.jpg" % res, "orm": base + "arm_%s.jpg" % res}
-		if maps.values().all(func(path: String) -> bool: return ResourceLoader.exists(path)):
-			for map in maps:
-				maps[map] = res(maps[map])
-			_cache[id] = maps
-			return maps
-	return {}
+	return WaterAssets.texture_set(id)
 
 ## World-space triplanar PBR material, so it works on any mesh regardless of UVs.
 static func pbr(id: String, size_m: float, tint := Color.WHITE, fallback := Color(0.7, 0.7, 0.7)) -> BaseMaterial3D:
@@ -269,12 +260,34 @@ static func apply_state(world: Node3D, a: Dictionary, b: Dictionary, t: float) -
 	sun.light_energy = lerpf(a.sun_energy, b.sun_energy, t)
 	sun.directional_shadow_max_distance = lerpf(a.shadow_distance, b.shadow_distance, t)
 	env.tonemap_exposure = lerpf(a.exposure, b.exposure, t)
+	# Bounce light fills rooms and shadows: global illumination plus its screen-space detail.
+	var bounce := lerpf(float(a.get("bounce_light", 1.0)), float(b.get("bounce_light", 1.0)), t)
+	env.sdfgi_energy = bounce
+	env.sdfgi_bounce_feedback = clampf(0.35 + bounce * 0.25, 0.0, 0.99)
+	env.ssil_intensity = 0.9 * bounce
+	env.adjustment_contrast = lerpf(float(a.get("contrast", Atmosphere.DEFAULT_CONTRAST)), float(b.get("contrast", Atmosphere.DEFAULT_CONTRAST)), t)
+	_adapt(world, lerpf(float(a.get("eye_adaptation", Atmosphere.DEFAULT_ADAPTATION)),
+		float(b.get("eye_adaptation", Atmosphere.DEFAULT_ADAPTATION)), t))
 	env.volumetric_fog_density = lerpf(a.fog_density, b.fog_density, t)
 	env.volumetric_fog_albedo = (a.fog_albedo as Color).lerp(b.fog_albedo, t)
 	env.volumetric_fog_anisotropy = lerpf(a.fog_anisotropy, b.fog_anisotropy, t)
 	# Aerial perspective (the shore uses it so headlands and horizon recede into haze).
 	env.fog_density = lerpf(a.get("haze", 0.0), b.get("haze", 0.0), t)
 	env.fog_light_color = (a.get("haze_color", Color.WHITE) as Color).lerp(b.get("haze_color", Color.WHITE), t)
+
+## Eye adaptation: the camera's exposure follows the scene's brightness, within a range that widens
+## with strength, so stepping indoors brightens the room and stepping out dims the glare.
+static func _adapt(world: Node3D, strength: float) -> void:
+	if not "camera_attributes" in world or world.camera_attributes == null:
+		return
+	var camera: CameraAttributesPractical = world.camera_attributes
+	camera.auto_exposure_enabled = strength > 0.001
+	camera.auto_exposure_speed = 0.8
+	camera.auto_exposure_scale = lerpf(0.4, 0.75, strength)
+	# Sensitivity is ISO-like: 100 matches the authored exposure outdoors; the range around it is
+	# how far adaptation may brighten dim rooms (max) and darken bright scenes (min).
+	camera.auto_exposure_min_sensitivity = lerpf(100.0, 60.0, strength)
+	camera.auto_exposure_max_sensitivity = lerpf(100.0, 800.0, strength)
 
 static func _setup_features(world: Node3D, state: Dictionary) -> void:
 	var env: Environment = world.environment
@@ -310,9 +323,12 @@ static func _setup_features(world: Node3D, state: Dictionary) -> void:
 	env.sdfgi_bounce_feedback = 0.45
 	env.sdfgi_energy = 1.0
 	env.ssao_enabled = true
-	env.ssao_radius = 0.9
-	env.ssao_intensity = 1.3
-	env.ssao_detail = 0.6
+	env.ssao_radius = 1.0
+	env.ssao_intensity = 2.0
+	env.ssao_power = 1.4
+	env.ssao_detail = 0.7
+	# A little occlusion in direct light too, so furniture sits on the floor and corners read.
+	env.ssao_light_affect = 0.15
 	env.ssil_enabled = true
 	env.ssil_radius = 2.5
 	env.ssil_intensity = 0.6

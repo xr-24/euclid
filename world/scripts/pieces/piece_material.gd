@@ -3,6 +3,7 @@ extends RefCounted
 ## immutable templates; the construct effect converts them per instance.
 
 const Assets = preload("res://scripts/assets/asset_library.gd")
+const Surfaces = preload("res://scripts/pieces/finishes.gd")
 const DEFAULT_COLOR := Color("b8b4ac")
 const STYLES := {
 	"lattice": preload("res://shaders/grid_floor.gdshader"),
@@ -13,6 +14,8 @@ static var _cache := {}
 static var _mutex := Mutex.new()
 
 static func make(spec: Dictionary) -> Material:
+	if spec.has("finish"):
+		spec = Surfaces.spec(spec)
 	var key := JSON.stringify(spec, "", true)
 	_mutex.lock()
 	var cached := _cache.get(key) as Material

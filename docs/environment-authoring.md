@@ -50,8 +50,10 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   (`gateway/assets.mjs`, `spawn_asset`).
 - **New environments** from an installed package as a template (`create_environment`).
 - **Atmosphere**: sun direction, height (night below the horizon), colour and strength; sky
-  (installed HDRI or painted gradient), its brightness and stars; exposure, fill light and
-  shadow reach; fog density, colour and glow toward the sun; distance haze and its colour.
+  (installed HDRI or painted gradient), its brightness and stars; exposure, eye adaptation (how
+  far exposure follows the scene, so rooms brighten as you step indoors), bounce light (global
+  illumination strength), contrast, fill light and shadow reach; fog density, colour and glow
+  toward the sun; distance haze and its colour. Zone packages may set the same fields as defaults.
   `rendering/atmosphere.gd`, `ui/atmosphere_panel.gd` (Tab → Build → Atmosphere) and the
   `inspect_atmosphere`, `preview_atmosphere`, `save_atmosphere` and `discard_atmosphere` tools.
 - **Environment documents** use the piece registry (`group`, `shape`, `light`, `model`) and
@@ -116,13 +118,15 @@ grows *or* shrinks without the file being updated, so fixes are locked in.
   painted wall linings, framed doors and windows with handles, ceilings with downlights, the
   roof (flat with eaves, parapet with vigas, or gable), entrance steps and lights, a gravel
   apron, stepping stones and a patio deck; `house_furniture.gd` furnishes each room against
-  walls free of openings, using real models where installed: `world/data/pieces/house_furnishings.json` lists, per furniture slot and style, the library models to try (fitted to the slot, never enlarged) before falling back to a simple stand-in, and `scripts/build-furniture.ps1` downloads and prepares them (CC0 Poly Haven models and CC-BY Sketchfab ones, credited in `world/assets/library/CREDITS.md`). A record's `furnishings` names the model for any slot (`{"bathtub": "bathtub_clawfoot", "range": "range_gas"}`), or `none` for the stand-in. Walls take finishes from `world/data/pieces/wall_finishes.json` (flat paints, plasters, brick, shiplap and panelling, tiles, concrete, cladding): a style's `walls` rules, then the record's, paint every room and cover chosen rooms or sides (`feature` is the wall the bed or the TV is against; `height` makes a wainscot or splash band). `backsplash` sets the kitchen splashback, and any `materials` entry may name a finish, such as `"exterior": "cladding_panels"`. `pool: true` swaps the deck for a stone terrace with an in-ground
+  walls free of openings, using real models where installed: `world/data/pieces/house_furnishings.json` lists, per furniture slot and style, the library models to try (fitted to the slot, never enlarged) before falling back to a simple stand-in, and `scripts/build-furniture.ps1` downloads and prepares them (CC0 Poly Haven models and CC-BY Sketchfab ones, credited in `world/assets/library/CREDITS.md`). A record's `furnishings` names the model for any slot (`{"bathtub": "bathtub_clawfoot", "range": "range_gas"}`), or `none` for the stand-in. Walls take finishes from `world/data/pieces/finishes.json` (flat paints, plasters, brick, shiplap and panelling, tiles, concrete, cladding, carpets, wood and tile floors, paving and pool mosaics): a style's `walls` rules, then the record's, paint every room and cover chosen rooms or sides (`feature` is the wall the bed or the TV is against; `height` makes a wainscot or splash band). `backsplash` sets the kitchen splashback, and any `materials` entry may name a finish, such as `"exterior": "cladding_panels"`. `floors` rules pick each room's floor the same way, and `pool_finish` sets the pool's basin, waterline band, coping and deck (the generated `pool_*` mosaics and tiles come from `scripts/blender/make_tiles.py`). Any piece material can start from a finish with `{"finish": name}` and override its tint. `storeys: 2` (or rooms with `level: 1`) builds an upstairs: rooms upstairs must stand over ground-floor rooms, and a `stairs` room (at least 1.9 by 3.0 m) over a `stairs` room below holds a U-shaped stair that starts and arrives on its side open to a hall or living room; the landing upstairs is guarded, and lower rooms with nothing above get a flat terrace roof. `pool: true` swaps the deck for a stone terrace with an in-ground
   pool; parented to a terrain, the house digs the basin. Styles live in
   `world/data/pieces/house_styles.json` (finishes, wall rules, roof, proportions); `materials` on the
   piece overrides any of the style's materials. Static surfaces are merged per material when built, so a house
-  draws in a few dozen calls. Preview any record outside the game with
+  draws in a few dozen calls. Ceiling lights are shadowed, so each stays in its room; `light_energy` and
+  `light_color` tune them. Preview any record outside the game with
   `xvfb-run godot --rendering-method gl_compatibility --path world --script
-  res://scripts/diagnostics/house_preview.gd -- <output dir> '<record JSON>'`.
+  res://scripts/diagnostics/house_preview.gd -- <output dir> '<record JSON>' [views] [zone] [atmosphere edits]`;
+  with a zone (and a GPU, for Forward+) the house is lit exactly as that zone lights the game.
 - **Building plans** support multiple rooms within a rectangular footprint. Specify
   `partitions` as wall segments with `start` and `end` in local `[x,z]` metres,
   plus optional `openings`. Opening `offset` is measured along the wall from its

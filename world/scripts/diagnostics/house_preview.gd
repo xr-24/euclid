@@ -1,11 +1,20 @@
 extends SceneTree
 ## Renders a house piece from several views into PNG files, for reviewing house styles and plans.
 ## Run with a display (or xvfb-run): godot --path world --script res://scripts/diagnostics/house_preview.gd
-## -- <output directory> [record JSON]
+## -- <output directory> [record JSON] [view name prefixes, comma-separated] [zone id] [atmosphere edits JSON]
+## With a zone, the house is lit exactly as that zone lights the game (world_art.gd: sky, sun, GI,
+## exposure, fog); that needs the Forward+ renderer, so run it on a machine with a GPU.
 
 const House = preload("res://scripts/pieces/house_piece.gd")
 const Shapes = preload("res://scripts/pieces/shape_piece.gd")
 const Library = preload("res://scripts/asset_library.gd")
+const WorldArt = preload("res://scripts/world_art.gd")
+
+## Holds what world_art.gd expects of the game world: its environment and its sun.
+class Stage extends Node3D:
+	var environment: Environment
+	var sun: DirectionalLight3D
+	var camera_attributes: CameraAttributesPractical
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -17,7 +26,8 @@ func _initialize() -> void:
 			record.merge(parsed, true)
 	DirAccess.make_dir_recursive_absolute(output)
 	Library.load_catalog()
-	var world := Node3D.new()
+	var zone := args[3] if args.size() > 3 and not args[3].is_empty() else ""
+	var world := Stage.new()
 	root.add_child(world)
 	var environment := WorldEnvironment.new()
 	var settings := Environment.new()
@@ -43,6 +53,13 @@ func _initialize() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 60.0
 	world.add_child(sun)
+	world.environment = settings
+	world.sun = sun
+	world.camera_attributes = CameraAttributesPractical.new()
+	environment.camera_attributes = world.camera_attributes
+	if not zone.is_empty():
+		var edits: Variant = JSON.parse_string(args[4]) if args.size() > 4 else {}
+		WorldArt.apply_environment(world, zone, edits if edits is Dictionary else {})
 	# The ground, with a hole where a terrain would be dug out for the house's pool.
 	var cut := House.terrain_cut(record)
 	var hole := Rect2(-0.01, -0.01, 0.02, 0.02)
@@ -71,14 +88,20 @@ func _initialize() -> void:
 		["front", Vector3(-reach * 0.55, 1.7, -reach * 1.05), Vector3(0, 1.4, 0)],
 		["back", Vector3(reach * 0.8, 2.2, reach * 0.95), Vector3(0, 1.2, 0)],
 		["aerial", Vector3(-reach * 0.6, reach * 1.1, -reach * 0.9), Vector3(0, 0, 0)],
-		["cutaway", Vector3(reach * 0.35, reach * 1.15, -reach * 0.75), Vector3(0, 0, 0.5)],
+		["cutaway", Vector3(reach * 0.35, reach * 1.15, -reach * 0.75), Vector3(0, 0, 0.5), int(plan.storeys) - 1],
 	]
+	# Each lower floor with the floors above it lifted off.
+	for level in int(plan.storeys) - 1:
+		var lift := HousePiece_level(record, level)
+		views.append(["cutaway_level%d" % level, Vector3(reach * 0.35, lift + reach * 1.15, -reach * 0.75), Vector3(0, lift, 0.5), level])
 	if not cut.is_empty():
 		var centre: Vector2 = cut.center
 		views.append(["pool", Vector3(centre.x, 0, centre.y) + Vector3(-6, 3.2, -6).rotated(Vector3.UP, 0.4), Vector3(centre.x, 0, centre.y)])
-	var floor_y := float(record.get("foundation_height", 0.3))
+		views.append(["pool_dry", Vector3(centre.x, 0, centre.y) + Vector3(-2.5, 5.5, -2.5).rotated(Vector3.UP, 0.4), Vector3(centre.x, 0, centre.y)])
+		views.append(["pool_above", Vector3(centre.x, 0, centre.y) + Vector3(-2.5, 5.5, -2.5).rotated(Vector3.UP, 0.4), Vector3(centre.x, 0, centre.y)])
 	for room: Dictionary in plan.rooms:
-		if room.kind in ["living", "kitchen", "bedroom", "bathroom"]:
+		var floor_y := HousePiece_level(record, int(room.level))
+		if room.kind in ["living", "kitchen", "bedroom", "bathroom", "stairs"]:
 			var rect: Array = room.rect
 			var centre := Vector3((rect[0] + rect[2]) * 0.5, floor_y + 1.6, (rect[1] + rect[3]) * 0.5)
 			var corner := Vector3(rect[2] - 0.5, floor_y + 0.5, rect[3] - 0.5)
@@ -88,14 +111,40 @@ func _initialize() -> void:
 			var back_corner := Vector3(rect[0] + 0.5, floor_y + 0.5, rect[1] + 0.5)
 			var back_eye := centre.lerp(Vector3(rect[2] - 0.5, floor_y + 1.6, rect[3] - 0.5), 0.55)
 			views.append(["inside_" + str(room.name).to_snake_case() + "_back", back_eye, back_corner])
+			if room.kind == "stairs" and int(room.level) < int(plan.storeys) - 1:
+				# Close over the stair with the floors above lifted off.
+				views.append(["stair_top_" + str(room.name).to_snake_case(), Vector3((rect[0] + rect[2]) * 0.5 + 0.01, floor_y + 7.0, (rect[1] + rect[3]) * 0.5 + 0.01),
+					Vector3((rect[0] + rect[2]) * 0.5, floor_y, (rect[1] + rect[3]) * 0.5), int(room.level)])
+				views.append(["stair_cutaway_" + str(room.name).to_snake_case(), Vector3(rect[2] + 0.9, floor_y + 3.2, rect[1] - 0.9),
+					Vector3((rect[0] + rect[2]) * 0.5, floor_y + 0.9, (rect[1] + rect[3]) * 0.5), int(room.level)])
+			if room.kind == "stairs":
+				# From the hall in front of the stairwell, looking in and up.
+				views.append(["inside_" + str(room.name).to_snake_case() + "_from_hall",
+					Vector3((rect[0] + rect[2]) * 0.5 + 0.3, floor_y + 1.65, rect[1] - 1.1), Vector3((rect[0] + rect[2]) * 0.5, floor_y + 1.2, (rect[1] + rect[3]) * 0.5)])
+	# An optional third argument keeps only views whose names start with one of its comma-separated prefixes.
+	var only := args[2].split(",", false) if args.size() > 2 else PackedStringArray()
+	if not only.is_empty():
+		views = views.filter(func(view: Array) -> bool: return Array(only).any(func(prefix: String) -> bool: return str(view[0]).begins_with(prefix)))
 	for view: Array in views:
-		var cutaway: bool = view[0] == "cutaway"
+		var cutaway: bool = view.size() > 3
 		(house.get_node("Roof") as Node3D).visible = not cutaway
 		(house.get_node("Ceilings") as Node3D).visible = not cutaway
+		for part: Node in house.get_children():
+			for child: Node in part.get_children():
+				if str(child.name).begins_with("Level") and child is Node3D:
+					(child as Node3D).visible = not cutaway or int(str(child.name).trim_prefix("Level")) <= int(view[3])
+		# The dry pool view hides the water, to show the basin's tiles.
+		for found: Node in house.find_children("*", "", true, false):
+			if found.has_meta("water_piece"):
+				(found.get_meta("water_piece").surface as Node3D).visible = view[0] != "pool_dry"
 		camera.look_at_from_position(view[1], view[2])
-		for frame in 4:
+		# Global illumination and temporal antialiasing need a few more frames to settle.
+		for frame in (40 if not zone.is_empty() else 4):
 			await process_frame
 		var image := root.get_viewport().get_texture().get_image()
 		image.save_png(output.path_join(str(view[0]) + ".png"))
 		print("HOUSE_VIEW ", view[0])
 	quit()
+
+func HousePiece_level(record: Dictionary, level: int) -> float:
+	return House.level_height(record, level)

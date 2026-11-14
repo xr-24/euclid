@@ -1,0 +1,29 @@
+{
+ "id": "fountain_valencia",
+ "title": "Stone fountain with lion spouts",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "plaza",
+  "stone",
+  "water",
+  "spanish"
+ ],
+ "size_m": {
+  "width": 3.38,
+  "depth": 3.4,
+  "height": 1.168
+ },
+ "triangles": 15321,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Valencia Fountain",
+  "page": "https://sketchfab.com/3d-models/valencia-fountain-0198556e1b6648289693b0bac4fe496d",
+  "author": "guillemvilah",
+  "author_page": "https://sketchfab.com/guillemvilah",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

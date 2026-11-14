@@ -3,7 +3,7 @@
   "commands": [
     {
       "name": "inspect_atmosphere",
-      "description": "Inspect the current environment's atmosphere: sun direction, height, color and strength, sky (installed HDRI or gradient), stars, exposure, ambient light, fog, haze and shadow distance, time, cloud cover and rain, which of them are edited, and the installed skies.",
+      "description": "Inspect the current environment's atmosphere: sun direction, height, color and strength, sky (installed HDRI or gradient), stars, exposure, eye adaptation, bounce light, contrast, ambient light, fog, haze and shadow distance, time, cloud cover and rain, which of them are edited, and the installed skies.",
       "service": "world",
       "handler": "_inspect_atmosphere",
       "effect": "read",
@@ -37,6 +37,9 @@
         "stars": "star_brightness",
         "exposure": "exposure",
         "ambient": "ambient_energy",
+        "eye_adaptation": "eye_adaptation",
+        "bounce_light": "bounce_light",
+        "contrast": "contrast",
         "fog_density": "fog_density",
         "fog_color": "color",
         "fog_direction": "fog_direction",

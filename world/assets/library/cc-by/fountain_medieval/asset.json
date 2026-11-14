@@ -1,0 +1,28 @@
+{
+ "id": "fountain_medieval",
+ "title": "Carved stone fountain (dry)",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "garden",
+  "stone",
+  "old"
+ ],
+ "size_m": {
+  "width": 3.0,
+  "depth": 3.0,
+  "height": 3.019
+ },
+ "triangles": 4540,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Medieval Fountain Empty (Free)",
+  "page": "https://sketchfab.com/3d-models/medieval-fountain-empty-free-952a9c257db641229902c36abb97e8bc",
+  "author": "wolfgar74",
+  "author_page": "https://sketchfab.com/wolfgar74",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

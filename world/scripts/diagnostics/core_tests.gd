@@ -69,7 +69,7 @@ const TransformGizmo = preload("res://scripts/workshop/transform_gizmo.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const WorldArt = preload("res://scripts/world_art.gd")
 const PieceTypes = preload("res://scripts/pieces/piece_types.gd")
-const WallFinishes = preload("res://scripts/pieces/wall_finishes.gd")
+const Surfaces = preload("res://scripts/pieces/finishes.gd")
 const HousePiece = preload("res://scripts/pieces/house_piece.gd")
 const HouseLayout = preload("res://scripts/pieces/house_layout.gd")
 const BuildingOpening = preload("res://scripts/pieces/building_opening.gd")
@@ -994,6 +994,7 @@ func _check_houses() -> void:
 		"fill the house's pool with registered water")
 	pool_home.free()
 	_check_house_finishes(record)
+	_check_house_storeys()
 
 func _check_house_finishes(record: Dictionary) -> void:
 	var named := []
@@ -1001,7 +1002,7 @@ func _check_house_finishes(record: Dictionary) -> void:
 		for rule: Dictionary in style.get("walls", []):
 			named.append(str(rule.get("finish", "paint_white")))
 		named.append(str(style.get("backsplash", "tile_white")))
-	_check(not named.is_empty() and named.all(func(id: String) -> bool: return WallFinishes.has(id)),
+	_check(not named.is_empty() and named.all(func(id: String) -> bool: return Surfaces.has(id)),
 		"name only wall finishes that exist in the house styles")
 	var dressed := record.duplicate(true)
 	dressed.merge({"walls": [{"finish": "paint_sage"}, {"room": "bathroom", "finish": "tile_marble", "height": 1.2},
@@ -1028,6 +1029,38 @@ func _check_house_finishes(record: Dictionary) -> void:
 		"cover the bathroom and the living room's feature wall in their own finishes")
 	plain_home.free()
 	tiled_home.free()
+
+func _check_house_storeys() -> void:
+	var record := {"id": "tall", "type": "house", "style": "farmhouse", "storeys": 2, "bedrooms": 3, "bathrooms": 2}
+	_check(PieceTypes.valid(record), "accept a two-storey house described by its programme")
+	var rooms := HouseLayout.rooms(record)
+	var floors := HouseLayout.levels(rooms)
+	var upstairs: Array = floors[1] if floors.size() > 1 else []
+	_check(floors.size() == 2 and upstairs.filter(func(room: Dictionary) -> bool: return room.kind == "bedroom").size() == 3
+		and upstairs.any(func(room: Dictionary) -> bool: return not HouseLayout.stairwell(floors[0], room).is_empty()),
+		"put the bedrooms upstairs around a stairwell over the ground floor's")
+	var home := HousePiece.build(record)
+	_check(home.has_node("Walls/Level1") and home.find_children("Stair", "", true, false).size() == 1
+		and home.find_children("Guard", "", true, false).size() >= 1, "build both storeys, a stair and a guarded landing")
+	_check(HousePiece.plan(record).storeys == 2 and HousePiece.level_height(record, 1) > HousePiece.level_height(record, 0) + 2.5,
+		"report two storeys a full storey apart")
+	home.free()
+	var floating := {"id": "bad", "type": "house", "rooms": [{"kind": "living", "rect": [0, 0, 6, 5]}, {"kind": "stairs", "rect": [6, 0, 8.4, 3.6]},
+		{"kind": "stairs", "level": 1, "rect": [6, 0, 8.4, 3.6]}, {"kind": "bedroom", "level": 1, "rect": [8.4, 0, 12, 3.6]}]}
+	_check(not PieceTypes.valid(floating), "reject an upstairs room with nothing under it")
+	var stairless := {"id": "bad", "type": "house", "rooms": [{"kind": "living", "rect": [0, 0, 6, 5]},
+		{"kind": "bedroom", "level": 1, "rect": [0, 0, 6, 5]}]}
+	_check(not PieceTypes.valid(stairless), "reject an upstairs without a stair up to it")
+	var dressed := {"id": "dressed", "type": "house", "floors": [{"room": "bedroom", "finish": "carpet_sisal"}],
+		"pool": true, "pool_finish": {"basin": "pool_mosaic_aqua", "waterline": "pool_tile_talavera"}}
+	_check(PieceTypes.valid(dressed), "accept floor rules and pool finishes")
+	var bedroom := {"kind": "bedroom", "name": "Bedroom 1"}
+	_check(HousePiece.floor_finish(dressed, HousePiece.style_for(dressed), bedroom).get("texture") == "hessian_230"
+		and HousePiece.pool_finishes(dressed).waterline.get("texture") == "pool_tile_talavera",
+		"resolve a room's floor and the pool's tiles from named finishes")
+	var tinted := Surfaces.spec({"finish": "tile_white", "color": "dfe8ee"})
+	_check(tinted.get("texture") == "long_white_tiles" and tinted.get("color") == "dfe8ee",
+		"start any piece material from a named finish and override its tint")
 
 func _vertices(node: Node) -> int:
 	var count := 0

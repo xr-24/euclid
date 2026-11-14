@@ -41,6 +41,9 @@ def decimate(obj, ratio: float):
     if ratio >= 0.999:
         return
     bpy.context.view_layer.objects.active = obj
+    # Modifiers cannot be applied over shape keys (animated water, for example): keep the rest pose.
+    if obj.data.shape_keys:
+        obj.shape_key_clear()
     mod = obj.modifiers.new('Budget', 'DECIMATE')
     mod.ratio = max(ratio, 0.002)
     mod.use_collapse_triangulate = True

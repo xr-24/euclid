@@ -110,7 +110,8 @@ static func valid(value: Variant) -> bool:
 		if not profile.get(key) is String or not Color.html_is_valid(profile[key]):
 			return false
 	for entry in [["time_mode", "time_mode"], ["time_of_day", "time_of_day"], ["day_length", "day_length"],
-			["cloud_cover", "weather_amount"], ["rain", "weather_amount"]]:
+			["cloud_cover", "weather_amount"], ["rain", "weather_amount"], ["eye_adaptation", "eye_adaptation"],
+			["bounce_light", "bounce_light"], ["contrast", "contrast"]]:
 		if profile.has(entry[0]) and not Commands.valid_field(entry[1], profile[entry[0]]):
 			return false
 	if not profile.get("hdri") is String and not profile.get("sky_colors") is Array:

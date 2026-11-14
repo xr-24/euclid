@@ -902,6 +902,184 @@
    "title": "Flower gazania",
    "triangles": 6993
   },
+  "fountain_marble_basin": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_marble_basin/fountain_marble_basin.glb",
+   "size_m": {
+    "depth": 2.954,
+    "height": 1.676,
+    "width": 3.0
+   },
+   "source": {
+    "author": "yorre.detavernier",
+    "author_page": "https://sketchfab.com/yorre.detavernier",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/fountain-8580500134194ba5be3f6df7593049f2",
+    "site": "Sketchfab",
+    "title": "Fountain"
+   },
+   "tags": [
+    "fountain",
+    "garden",
+    "water",
+    "classical"
+   ],
+   "title": "Marble basin fountain with spout",
+   "triangles": 2984
+  },
+  "fountain_medieval": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_medieval/fountain_medieval.glb",
+   "size_m": {
+    "depth": 3.0,
+    "height": 3.019,
+    "width": 3.0
+   },
+   "source": {
+    "author": "wolfgar74",
+    "author_page": "https://sketchfab.com/wolfgar74",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/medieval-fountain-empty-free-952a9c257db641229902c36abb97e8bc",
+    "site": "Sketchfab",
+    "title": "Medieval Fountain Empty (Free)"
+   },
+   "tags": [
+    "fountain",
+    "garden",
+    "stone",
+    "old"
+   ],
+   "title": "Carved stone fountain (dry)",
+   "triangles": 4540
+  },
+  "fountain_quatrefoil_tiled": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_quatrefoil_tiled/fountain_quatrefoil_tiled.glb",
+   "size_m": {
+    "depth": 4.0,
+    "height": 0.912,
+    "width": 3.941
+   },
+   "source": {
+    "author": "Scaniverse",
+    "author_page": "https://sketchfab.com/scaniverse",
+    "changes": "Reduced from 168513 to 49998 triangles, rescaled to real size, textures capped at 4096 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/fountain-375d3157cd5c4f48be323203adb838ae",
+    "site": "Sketchfab",
+    "title": "Fountain"
+   },
+   "tags": [
+    "fountain",
+    "tiled",
+    "spanish",
+    "courtyard",
+    "scan"
+   ],
+   "title": "Quatrefoil tiled fountain (scan)",
+   "triangles": 49998
+  },
+  "fountain_star_tiled": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_star_tiled/fountain_star_tiled.glb",
+   "size_m": {
+    "depth": 2.516,
+    "height": 0.46,
+    "width": 3.001
+   },
+   "source": {
+    "author": "Scaniverse",
+    "author_page": "https://sketchfab.com/scaniverse",
+    "changes": "Reduced from 386099 to 59996 triangles, rescaled to real size, textures capped at 4096 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/alcazar-garden-fountain-f3b542ab6ae74abd996759ad4bab1bda",
+    "site": "Sketchfab",
+    "title": "Alcazar Garden Fountain"
+   },
+   "tags": [
+    "fountain",
+    "tiled",
+    "spanish",
+    "moorish",
+    "courtyard",
+    "scan"
+   ],
+   "title": "Star-shaped tiled fountain, Alcazar gardens (scan)",
+   "triangles": 59996
+  },
+  "fountain_tiered_marble": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_tiered_marble/fountain_tiered_marble.glb",
+   "size_m": {
+    "depth": 3.2,
+    "height": 1.398,
+    "width": 3.2
+   },
+   "source": {
+    "author": "UJJWAL CHAUHAN",
+    "author_page": "https://sketchfab.com/Ujjwal-Chauhan",
+    "changes": "Reduced from 165759 to 39993 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/fountain-water-simulation-d6c0f03a8287427692078398cfda4ff1",
+    "site": "Sketchfab",
+    "title": "fountain water simulation"
+   },
+   "tags": [
+    "fountain",
+    "garden",
+    "water",
+    "classical"
+   ],
+   "title": "Three-tier marble fountain with water",
+   "triangles": 39993
+  },
+  "fountain_valencia": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/fountain_valencia/fountain_valencia.glb",
+   "size_m": {
+    "depth": 3.4,
+    "height": 1.168,
+    "width": 3.38
+   },
+   "source": {
+    "author": "guillemvilah",
+    "author_page": "https://sketchfab.com/guillemvilah",
+    "changes": "rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/valencia-fountain-0198556e1b6648289693b0bac4fe496d",
+    "site": "Sketchfab",
+    "title": "Valencia Fountain"
+   },
+   "tags": [
+    "fountain",
+    "plaza",
+    "stone",
+    "water",
+    "spanish"
+   ],
+   "title": "Stone fountain with lion spouts",
+   "triangles": 15321
+  },
   "fridge_dispenser": {
    "category": "furniture",
    "licence": "cc-by",
@@ -2447,6 +2625,35 @@
    "tags": [],
    "title": "Vintage cabinet 01",
    "triangles": 7011
+  },
+  "wall_fountain_tiled": {
+   "category": "prop",
+   "licence": "cc-by",
+   "scene": "res://assets/library/cc-by/wall_fountain_tiled/wall_fountain_tiled.glb",
+   "size_m": {
+    "depth": 0.779,
+    "height": 1.3,
+    "width": 0.795
+   },
+   "source": {
+    "author": "szalokiflora",
+    "author_page": "https://sketchfab.com/szalokiflora",
+    "changes": "Reduced from 12320 to 11997 triangles, rescaled to real size, textures capped at 2048 px, re-centred.",
+    "licence": "by",
+    "licence_label": "CC Attribution",
+    "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+    "page": "https://sketchfab.com/3d-models/water-faucet-12abdc356c994d7dbf06bfb7d396971f",
+    "site": "Sketchfab",
+    "title": "Water Faucet"
+   },
+   "tags": [
+    "fountain",
+    "wall",
+    "tiled",
+    "garden"
+   ],
+   "title": "Tiled wall fountain with spout",
+   "triangles": 11997
   },
   "wild_rooibos_bush": {
    "category": "prop",

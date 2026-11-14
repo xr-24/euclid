@@ -1,0 +1,28 @@
+{
+ "id": "wall_fountain_tiled",
+ "title": "Tiled wall fountain with spout",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "wall",
+  "tiled",
+  "garden"
+ ],
+ "size_m": {
+  "width": 0.795,
+  "depth": 0.779,
+  "height": 1.3
+ },
+ "triangles": 11997,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Water Faucet",
+  "page": "https://sketchfab.com/3d-models/water-faucet-12abdc356c994d7dbf06bfb7d396971f",
+  "author": "szalokiflora",
+  "author_page": "https://sketchfab.com/szalokiflora",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 12320 to 11997 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

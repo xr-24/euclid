@@ -1,0 +1,28 @@
+{
+ "id": "fountain_tiered_marble",
+ "title": "Three-tier marble fountain with water",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "garden",
+  "water",
+  "classical"
+ ],
+ "size_m": {
+  "width": 3.2,
+  "depth": 3.2,
+  "height": 1.398
+ },
+ "triangles": 39993,
+ "source": {
+  "site": "Sketchfab",
+  "title": "fountain water simulation",
+  "page": "https://sketchfab.com/3d-models/fountain-water-simulation-d6c0f03a8287427692078398cfda4ff1",
+  "author": "UJJWAL CHAUHAN",
+  "author_page": "https://sketchfab.com/Ujjwal-Chauhan",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 165759 to 39993 triangles, rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

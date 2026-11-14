@@ -1,0 +1,28 @@
+{
+ "id": "fountain_marble_basin",
+ "title": "Marble basin fountain with spout",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "garden",
+  "water",
+  "classical"
+ ],
+ "size_m": {
+  "width": 3.0,
+  "depth": 2.954,
+  "height": 1.676
+ },
+ "triangles": 2984,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Fountain",
+  "page": "https://sketchfab.com/3d-models/fountain-8580500134194ba5be3f6df7593049f2",
+  "author": "yorre.detavernier",
+  "author_page": "https://sketchfab.com/yorre.detavernier",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "rescaled to real size, textures capped at 2048 px, re-centred."
+ }
+}

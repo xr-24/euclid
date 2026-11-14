@@ -20,6 +20,12 @@ Models in this folder (authors and sources in ../CREDITS.md):
 - `faun_with_kid`
 - `floor_lamp_reading`
 - `floor_lamp_shade`
+- `fountain_marble_basin`
+- `fountain_medieval`
+- `fountain_quatrefoil_tiled`
+- `fountain_star_tiled`
+- `fountain_tiered_marble`
+- `fountain_valencia`
 - `fridge_dispenser`
 - `fridge_french_door`
 - `lycean_apollo`
@@ -40,5 +46,6 @@ Models in this folder (authors and sources in ../CREDITS.md):
 - `vanity_white_shaker`
 - `venus_dockive`
 - `venus_verticordia`
+- `wall_fountain_tiled`
 - `woman_venus`
 - `wounded_amazon_flynn`

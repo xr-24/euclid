@@ -1,0 +1,30 @@
+{
+ "id": "fountain_star_tiled",
+ "title": "Star-shaped tiled fountain, Alcazar gardens (scan)",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "tiled",
+  "spanish",
+  "moorish",
+  "courtyard",
+  "scan"
+ ],
+ "size_m": {
+  "width": 3.001,
+  "depth": 2.516,
+  "height": 0.46
+ },
+ "triangles": 59996,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Alcazar Garden Fountain",
+  "page": "https://sketchfab.com/3d-models/alcazar-garden-fountain-f3b542ab6ae74abd996759ad4bab1bda",
+  "author": "Scaniverse",
+  "author_page": "https://sketchfab.com/scaniverse",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 386099 to 59996 triangles, rescaled to real size, textures capped at 4096 px, re-centred."
+ }
+}

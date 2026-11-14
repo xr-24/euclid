@@ -56,12 +56,18 @@ TEXTURES = {
     'marble_mosaic_tiles': '2k',   # mosaic niches and fountain
     'sandstone_blocks_08': '2k',   # retaining walls and foundations
     'leafy_grass': '2k',           # lawns in the inner peristyle
-    # House wall finishes (world/data/pieces/wall_finishes.json names these).
+    # House wall finishes (world/data/pieces/finishes.json names these).
     'plastered_wall_04': '2k', 'white_stucco': '2k', 'beige_wall_001': '2k',
     'plaster_grey_04': '2k', 'whitewashed_brick': '2k', 'brick_wall_001': '2k', 'large_red_bricks': '2k',
     'white_planks_clean': '2k', 'wooden_panels': '2k', 'long_white_tiles': '2k', 'rounded_square_tiled_wall': '2k',
     'stone_tile_wall': '2k', 'terrazzo_tiles': '2k', 'granite_tile_03': '2k', 'concrete_slab_wall': '2k',
     'exterior_wall_cladding_03': '2k', 'stacked_stone_wall': '2k', 'weathered_plank_siding': '2k',
+    # Floor finishes: carpets (fabric scans), tiles, wood and pool-deck paving.
+    'curly_teddy_natural': '2k', 'hessian_230': '2k', 'knitted_fleece': '2k', 'poly_wool_herringbone': '2k',
+    'large_floor_tiles_02': '2k', 'patio_tiles': '2k', 'interior_tiles': '2k', 'terracotta_floor_tiles': '2k',
+    'patterned_terracotta_tiling': '2k', 'floor_tiles_08': '2k', 'square_tiles': '2k', 'marble_tiles': '2k',
+    'slate_floor_02': '2k', 'herringbone_parquet': '2k', 'laminate_floor_02': '2k', 'wood_floor': '2k',
+    'rectangular_paving': '2k', 'precast_stone_paving': '2k', 'large_square_pattern_01': '2k', 'stone_pavers': '2k',
 }
 TEXTURE_MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor_gl', 'arm': 'arm'}
 MODELS = [

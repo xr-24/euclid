@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Architectural styles for house pieces: finishes, roof, and window and door proportions by room kind. Sizes are metres. Material entries use the piece material format (see types.json) or name a wall finish (wall_finishes.json). walls are the default wall rules (the house type's walls field explains them); backsplash is the kitchen splashback finish.",
+  "about": "Architectural styles for house pieces (floors and pool entries may name a finish from finishes.json): finishes, roof, and window and door proportions by room kind. Sizes are metres. Material entries use the piece material format (see types.json) or name a wall finish (finishes.json). walls are the default wall rules (the house type's walls field explains them); backsplash is the kitchen splashback finish.",
   "styles": {
     "modern": {
       "label": "Modern",
@@ -11,6 +11,7 @@
       "interior_wall": 0.12,
       "walls": [{"finish": "paint_white"}, {"room": "bathroom", "finish": "tile_stone"}, {"room": "living", "side": "feature", "finish": "concrete_board"}, {"room": "bedroom", "side": "feature", "finish": "paint_greige"}],
       "backsplash": "tile_white",
+      "pool": {"basin": "pool_mosaic_midnight", "waterline": "pool_mosaic_midnight", "coping": "paving_granite", "deck": "paving_precast"},
       "materials": {
         "exterior": {"color": "e4e0d8", "roughness": 0.88},
         "interior": {"color": "efece6", "roughness": 0.92},
@@ -27,7 +28,7 @@
         "accent": {"texture": "dark_wooden_planks", "texture_size": 1.4, "color": "d6c3ad"}
       },
       "floors": {
-        "default": {"texture": "oak_wood_planks", "texture_size": 1.6, "color": "e2c6a4"},
+        "default": "wood_floor_light",
         "bathroom": {"texture": "marble_01", "texture_size": 1.2, "color": "ffffff"},
         "laundry": {"texture": "granite_tile", "texture_size": 0.9, "color": "ffffff"}
       },
@@ -54,6 +55,7 @@
       "vigas": true,
       "walls": [{"finish": "paint_warm_white"}, {"room": "bathroom", "finish": "tile_mosaic"}, {"room": "living", "side": "feature", "finish": "stone_stacked"}, {"room": "bedroom", "side": "feature", "finish": "plaster_clay"}],
       "backsplash": "tile_terrazzo",
+      "pool": {"basin": "pool_mosaic_aqua", "waterline": "pool_tile_talavera", "coping": "stone_sandstone", "deck": "floor_tile_mexican"},
       "materials": {
         "exterior": {"texture": "patterned_clay_plaster", "texture_size": 3.5, "color": "e7c7a1"},
         "interior": {"color": "efe3d2", "roughness": 0.95},
@@ -98,6 +100,7 @@
       "interior_wall": 0.12,
       "walls": [{"finish": "paint_warm_white"}, {"room": "bathroom", "finish": "paint_sage"}, {"room": "bathroom", "finish": "tile_white", "height": 1.2}, {"room": "living", "side": "feature", "finish": "brick_whitewashed"}, {"room": "bedroom", "side": "feature", "finish": "wood_shiplap"}],
       "backsplash": "tile_white",
+      "pool": {"basin": "pool_tile_white", "waterline": "pool_waterline_glass", "coping": "floor_travertine", "deck": "paving_travertine"},
       "materials": {
         "exterior": {"color": "f1eee7", "roughness": 0.8},
         "interior": {"color": "f2efe8", "roughness": 0.92},
@@ -116,7 +119,8 @@
       "floors": {
         "default": {"texture": "oak_wood_planks", "texture_size": 1.8, "color": "c9a47c"},
         "kitchen": {"texture": "floor_tiles_02", "texture_size": 1.0, "color": "e9e6df"},
-        "bathroom": {"texture": "marble_01", "texture_size": 1.0, "color": "ffffff"}
+        "bedroom": "carpet_dove",
+        "bathroom": "floor_tile_checker"
       },
       "windows": {
         "living": {"width": 1.1, "height": 1.65, "sill": 0.6, "per": 1.6, "max": 4, "motion": "hinge"},

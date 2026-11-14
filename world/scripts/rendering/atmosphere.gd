@@ -16,8 +16,12 @@ const HDRI_DIR := "res://assets/thirdparty/polyhaven/hdri/"
 const FIELDS := {"sun_azimuth": "sun_azimuth", "sun_elevation": "sun_elevation", "sun_color": "color",
 	"time_mode": "time_mode", "time_of_day": "time_of_day", "day_length": "day_length",
 	"cloud_cover": "weather_amount", "rain": "weather_amount", "sun_energy": "sun_energy", "sky": "sky_choice", "sky_energy": "sky_energy", "stars": "star_brightness",
-	"exposure": "exposure", "ambient": "ambient_energy", "fog_density": "fog_density", "fog_color": "color",
+	"exposure": "exposure", "eye_adaptation": "eye_adaptation", "bounce_light": "bounce_light", "contrast": "contrast",
+	"ambient": "ambient_energy", "fog_density": "fog_density", "fog_color": "color",
 	"fog_direction": "fog_direction", "haze": "haze_density", "haze_color": "color", "shadow_distance": "shadow_distance"}
+## Defaults for zones that do not set these (world_art.gd uses the same).
+const DEFAULT_ADAPTATION := 0.8
+const DEFAULT_CONTRAST := 1.08
 signal changed
 
 static var _skies: Array = []
@@ -180,6 +184,8 @@ static func defaults(zone: String) -> Dictionary:
 		"day_length": float(profile.get("day_length", 15.0)), "cloud_cover": float(profile.get("cloud_cover", 0.0)),
 		"rain": float(profile.get("rain", 0.0)), "sky": hdri if not hdri.is_empty() else "gradient", "sky_energy": float(profile.get("sky_energy", 1.0)),
 		"stars": float(profile.get("stars", 0.0)), "exposure": float(profile.get("exposure", 1.0)),
+		"eye_adaptation": float(profile.get("eye_adaptation", DEFAULT_ADAPTATION)),
+		"bounce_light": float(profile.get("bounce_light", 1.0)), "contrast": float(profile.get("contrast", DEFAULT_CONTRAST)),
 		"ambient": float(profile.get("ambient", 1.0)), "fog_density": float(profile.get("fog_density", 0.0)),
 		"fog_color": str(profile.get("fog_albedo", "ffffff")), "fog_direction": float(profile.get("fog_anisotropy", 0.0)),
 		"haze": float(profile.get("haze", 0.0)), "haze_color": str(profile.get("haze_color", "ffffff")),

@@ -1,0 +1,29 @@
+{
+ "id": "fountain_quatrefoil_tiled",
+ "title": "Quatrefoil tiled fountain (scan)",
+ "category": "prop",
+ "tags": [
+  "fountain",
+  "tiled",
+  "spanish",
+  "courtyard",
+  "scan"
+ ],
+ "size_m": {
+  "width": 3.941,
+  "depth": 4.0,
+  "height": 0.912
+ },
+ "triangles": 49998,
+ "source": {
+  "site": "Sketchfab",
+  "title": "Fountain",
+  "page": "https://sketchfab.com/3d-models/fountain-375d3157cd5c4f48be323203adb838ae",
+  "author": "Scaniverse",
+  "author_page": "https://sketchfab.com/scaniverse",
+  "licence": "by",
+  "licence_label": "CC Attribution",
+  "licence_url": "http://creativecommons.org/licenses/by/4.0/",
+  "changes": "Reduced from 168513 to 49998 triangles, rescaled to real size, textures capped at 4096 px, re-centred."
+ }
+}

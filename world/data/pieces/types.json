@@ -165,6 +165,8 @@
         "basin_mode": {"type": "string", "enum": ["raised", "excavated"]},
         "basin_depth": {"type": "number", "minimum": 0.35, "maximum": 5},
         "basin_material": {"$ref": "#/$defs/piece_material"},
+        "waterline_material": {"$ref": "#/$defs/piece_material", "description": "A band of tile around the inside at the water's surface, for example {\"finish\": \"pool_waterline_glass\"}"},
+        "coping_material": {"$ref": "#/$defs/piece_material", "description": "The stone lip around an excavated pool"},
         "mirror": {"type": "boolean"}
       }
     },
@@ -280,7 +282,7 @@
     },
     "house": {
       "label": "House",
-      "description": "A complete single-storey home: foundation, rooms with doors and windows suited to each room, floors, ceilings and lights, a roof, entrance steps, a patio deck and furniture. Give bedrooms, bathrooms, layout and style and Euclid plans the rooms, or list exact rooms. The entrance faces local -Z.",
+      "description": "A complete home of one or two storeys: foundation, rooms with doors and windows suited to each room, floors, ceilings and lights, a stair between floors, a roof, entrance steps, a patio deck or pool and furniture. Give bedrooms, bathrooms, storeys, layout and style and Euclid plans the rooms, or list exact rooms. The entrance faces local -Z.",
       "script": "res://scripts/pieces/house_piece.gd",
       "placement_yaw": 180,
       "placement_lift": 0.02,
@@ -294,16 +296,18 @@
         "bathrooms": {"type": "number", "description": "Bathrooms when rooms is empty", "minimum": 1, "maximum": 3},
         "layout": {"type": "string", "description": "open joins living, kitchen, dining and hall without walls", "enum": ["open", "closed"]},
         "floor_area": {"type": "number", "description": "Approximate floor area in square metres when rooms is empty", "minimum": 0, "maximum": 400},
+        "storeys": {"type": "number", "description": "Floors when rooms is empty: 2 puts the bedrooms upstairs around a stairwell beside the hall", "minimum": 1, "maximum": 2},
         "rooms": {
           "type": "array",
-          "description": "Exact rooms instead of a generated plan. rect is [x0, z0, x1, z1] in local metres along wall centrelines; -Z is the front. Rooms must not overlap and must touch.",
+          "description": "Exact rooms instead of a generated plan. rect is [x0, z0, x1, z1] in local metres along wall centrelines; -Z is the front. level 1 is upstairs: its rooms must stand over ground-floor rooms, and it needs a stairs room (at least 1.9 by 3.0 m) over a stairs room below, open on one side to a hall, living, dining or kitchen room. Rooms on a floor must not overlap and must touch.",
           "maxItems": 24,
           "items": {
             "type": "object",
             "required": ["kind", "rect"],
             "properties": {
-              "kind": {"type": "string", "enum": ["living", "kitchen", "dining", "bedroom", "bathroom", "hall", "office", "laundry", "closet"]},
+              "kind": {"type": "string", "enum": ["living", "kitchen", "dining", "bedroom", "bathroom", "hall", "office", "laundry", "closet", "stairs"]},
               "name": {"type": "string", "maxLength": 40},
+              "level": {"type": "number", "minimum": 0, "maximum": 1},
               "rect": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number", "minimum": -32, "maximum": 32}}
             }
           }
@@ -316,9 +320,11 @@
         "pool_depth": {"type": "number", "minimum": 0.6, "maximum": 3},
         "furnish": {"type": "boolean"},
         "lights": {"type": "boolean"},
+        "light_energy": {"type": "number", "description": "Brightness of the ceiling lights; 1 is the default", "minimum": 0, "maximum": 4},
+        "light_color": {"$ref": "#/$defs/color", "description": "Colour of the ceiling lights (warm white ffd9ae by default)"},
         "walls": {
           "type": "array",
-          "description": "Wall finish rules over the style's own (later rules win). finish names an entry in data/pieces/wall_finishes.json (paint_white, paint_sage, plaster_lime, brick_whitewashed, brick_red, wood_shiplap, wood_panels, tile_white, tile_mosaic, tile_terrazzo, tile_marble, concrete_board, stone_stacked, ...) or give a material instead. room is all, a room kind or a room name; side is all, feature (the wall the bed or the sofa and TV are arranged against), or front, back, left or right (-Z, +Z, -X, +X). height covers only the lower part of the wall (wainscot, splash tiles).",
+          "description": "Wall finish rules over the style's own (later rules win). finish names an entry in data/pieces/finishes.json (paint_white, paint_sage, plaster_lime, brick_whitewashed, brick_red, wood_shiplap, wood_panels, tile_white, tile_mosaic, tile_terrazzo, tile_marble, concrete_board, stone_stacked, ...) or give a material instead. room is all, a room kind or a room name; side is all, feature (the wall the bed or the sofa and TV are arranged against), or front, back, left or right (-Z, +Z, -X, +X). height covers only the lower part of the wall (wainscot, splash tiles).",
           "maxItems": 32,
           "items": {
             "type": "object",
@@ -332,6 +338,27 @@
             }
           }
         },
+        "floors": {
+          "type": "array",
+          "description": "Floor finish rules over the style's floors (later rules win): room is all, a room kind or a room name; finish names an entry in data/pieces/finishes.json (carpet_cream, carpet_dove, carpet_sisal, carpet_berber, wood_floor_herringbone, wood_floor_walnut, floor_tile_marble, floor_tile_terracotta, floor_tile_checker, floor_slate, ...) or give a material.",
+          "maxItems": 32,
+          "items": {"type": "object", "required": [], "properties": {
+            "room": {"type": "string", "maxLength": 40},
+            "finish": {"type": "string", "maxLength": 40},
+            "material": {"$ref": "#/$defs/piece_material"}
+          }}
+        },
+        "pool_finish": {
+          "type": "object",
+          "description": "The pool's surfaces over the style's: basin lining, waterline band, coping and the terrace deck. Each names a finish (pool_mosaic_blue, pool_mosaic_aqua, pool_mosaic_midnight, pool_mosaic_sand, pool_tile_white, pool_tile_blue, pool_tile_talavera, pool_waterline_glass, paving_travertine, paving_precast, floor_tile_mexican, ...) or gives a material.",
+          "required": [],
+          "properties": {
+            "basin": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}]},
+            "waterline": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}]},
+            "coping": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}]},
+            "deck": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}]}
+          }
+        },
         "backsplash": {"anyOf": [{"type": "string", "maxLength": 40}, {"$ref": "#/$defs/piece_material"}], "description": "Kitchen splashback: a wall finish name or a material"},
         "furnishings": {
           "type": "object",
@@ -341,7 +368,7 @@
         },
         "materials": {
           "type": "object",
-          "description": "Material overrides merged over the style. Each may name a wall finish (data/pieces/wall_finishes.json) instead, for example exterior: cladding_panels",
+          "description": "Material overrides merged over the style. Each may name a wall finish (data/pieces/finishes.json) instead, for example exterior: cladding_panels",
           "required": [],
           "properties": {
             "exterior": {"anyOf": [{"$ref": "#/$defs/piece_material"}, {"type": "string", "maxLength": 40}]},

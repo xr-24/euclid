@@ -32,6 +32,11 @@
       "type": "object",
       "required": [],
       "properties": {
+        "finish": {
+          "type": "string",
+          "description": "Start from a named finish in data/pieces/finishes.json (paints, plasters, brick, tiles, carpets, wood floors, paving, pool mosaics); the other fields override it",
+          "pattern": "^[a-z0-9_]{1,64}$"
+        },
         "style": {
           "type": "string",
           "enum": [
@@ -486,6 +491,24 @@
       "minimum": 0.2,
       "maximum": 3,
       "description": "Camera exposure"
+    },
+    "eye_adaptation": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "How far the camera's exposure adapts between bright outdoors and dim rooms; 0 keeps one fixed exposure"
+    },
+    "bounce_light": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3,
+      "description": "Strength of light bounced off surfaces (global illumination), which fills rooms and shadows"
+    },
+    "contrast": {
+      "type": "number",
+      "minimum": 0.8,
+      "maximum": 1.4,
+      "description": "Image contrast; 1 is neutral"
     },
     "ambient_energy": {
       "type": "number",

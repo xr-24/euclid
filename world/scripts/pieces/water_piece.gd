@@ -88,15 +88,24 @@ static func _build_basin(node: Node3D, size: Vector2, record: Dictionary) -> flo
 	var rim := depth if raised else 0.0
 	var lip := 0.34
 	var material := Finish.make(record.get("basin_material", {"color": "8d9fa6", "roughness": 0.6}))
+	var coping := Finish.make(record.coping_material) if record.has("coping_material") else material
 	_box(node, Vector3(0, rim - depth - 0.07, 0), Vector3(size.x + RIM * 2.0, 0.14, size.y + RIM * 2.0), material)
 	for side in [-1.0, 1.0]:
 		_box(node, Vector3(side * (size.x + RIM) * 0.5, rim - depth * 0.5, 0), Vector3(RIM, depth, size.y + RIM * 2.0), material)
 		_box(node, Vector3(0, rim - depth * 0.5, side * (size.y + RIM) * 0.5), Vector3(size.x, depth, RIM), material)
 		if not raised:
 			_box(node, Vector3(side * (size.x + RIM + lip) * 0.5, rim - 0.05, 0),
-				Vector3(RIM + lip, 0.10, size.y + (RIM + lip) * 2.0), material)
+				Vector3(RIM + lip, 0.10, size.y + (RIM + lip) * 2.0), coping)
 			_box(node, Vector3(0, rim - 0.05, side * (size.y + RIM + lip) * 0.5),
-				Vector3(size.x, 0.10, RIM + lip), material)
+				Vector3(size.x, 0.10, RIM + lip), coping)
+	# A band of waterline tile just proud of the lining, from the rim down past the water's surface.
+	if record.has("waterline_material"):
+		var band := Finish.make(record.waterline_material)
+		var high := rim - (0.1 if not raised else 0.0)
+		var tall := minf(0.22, depth - 0.05)
+		for side in [-1.0, 1.0]:
+			_box(node, Vector3(side * (size.x * 0.5 - 0.006), high - tall * 0.5, 0), Vector3(0.012, tall, size.y), band)
+			_box(node, Vector3(0, high - tall * 0.5, side * (size.y * 0.5 - 0.006)), Vector3(size.x - 0.024, tall, 0.012), band)
 	return rim
 
 static func _box(node: Node3D, position: Vector3, size: Vector3, material: Material) -> void:

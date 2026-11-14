@@ -10,11 +10,15 @@ const Finishes = preload("res://scripts/pieces/piece_material.gd")
 const Furniture = preload("res://scripts/pieces/house_furniture.gd")
 const Water = preload("res://scripts/pieces/water_piece.gd")
 const Opening = preload("res://scripts/pieces/building_opening.gd")
-const WallFinishes = preload("res://scripts/pieces/wall_finishes.gd")
+const Surfaces = preload("res://scripts/pieces/finishes.gd")
 const STYLES_PATH := "res://data/pieces/house_styles.json"
 const LINING := 0.016
 ## Thickness of a room's wall covering (tile, brick, panelling) laid over the wall face.
 const COVER := 0.01
+## Depth of the floor between storeys, from a ceiling below to the floor finish above.
+const FLOOR_DEPTH := 0.3
+## Height of stair and landing guards.
+const GUARD := 1.0
 ## Stone between the house and the pool's edge.
 const WALKWAY := 1.8
 const LIGHT_COLOR := Color("ffd9ae")
@@ -34,21 +38,21 @@ static func style_for(record: Dictionary) -> Dictionary:
 	for key: String in overrides:
 		# A finish name replaces the style's material; a material spec is merged over it.
 		if overrides[key] is String:
-			style.materials[key] = WallFinishes.spec(overrides[key]).duplicate(true)
+			style.materials[key] = Surfaces.spec(overrides[key]).duplicate(true)
 			continue
-		var base: Dictionary = WallFinishes.spec(style.materials.get(key, {})).duplicate(true)
+		var base: Dictionary = Surfaces.spec(style.materials.get(key, {})).duplicate(true)
 		base.merge(overrides[key], true)
 		style.materials[key] = base
 	return style
 
 ## The style's wall rules followed by the record's; later rules win. Each rule gives a finish (a
-## wall_finishes.json name) or a material for a room ("all", a room kind or a room name) and a
+## finishes.json name) or a material for a room ("all", a room kind or a room name) and a
 ## side ("all", "feature", "front", "back", "left" or "right"), optionally only up to a height.
 static func wall_rules(record: Dictionary, style: Dictionary) -> Array:
 	var rules: Array = style.get("walls", []).duplicate(true)
 	# A record's interior material repaints the whole house, over the style's paint.
 	if record.get("materials", {}).has("interior"):
-		rules.append({"material": WallFinishes.spec(style.materials.interior)})
+		rules.append({"material": Surfaces.spec(style.materials.interior)})
 	rules.append_array(record.get("walls", []))
 	return rules
 
@@ -59,20 +63,25 @@ static func plan(record: Dictionary) -> Dictionary:
 	var rooms := []
 	for room: Dictionary in list:
 		var rect: Rect2 = room.rect
-		rooms.append({"name": room.name, "kind": room.kind, "rect": [rect.position.x, rect.position.y, rect.end.x, rect.end.y],
-			"area": snappedf(rect.get_area(), 0.1)})
-	var walls := Layout.walls(record, list, style)
+		rooms.append({"name": room.name, "kind": room.kind, "level": room.level,
+			"rect": [rect.position.x, rect.position.y, rect.end.x, rect.end.y], "area": snappedf(rect.get_area(), 0.1)})
+	var floors := Layout.levels(list)
 	var doors := 0
 	var windows := 0
-	for wall: Dictionary in walls:
-		for opening: Dictionary in wall.openings:
-			if opening.kind == "window":
-				windows += 1
-			else:
-				doors += 1
+	for level in floors.size():
+		for wall: Dictionary in Layout.walls(record, floors[level], style, level):
+			for opening: Dictionary in wall.openings:
+				if opening.kind == "window":
+					windows += 1
+				else:
+					doors += 1
 	var box := Layout.bounds(list)
 	return {"rooms": rooms, "footprint": [snappedf(box.size.x, 0.01), snappedf(box.size.y, 0.01)],
-		"doors": doors, "windows": windows}
+		"storeys": floors.size(), "doors": doors, "windows": windows}
+
+## Height of each floor above the house's base: one ceiling height and one floor depth per storey.
+static func level_height(record: Dictionary, level: int) -> float:
+	return float(record.get("foundation_height", 0.3)) + level * (float(record.get("ceiling_height", 2.7)) + FLOOR_DEPTH)
 
 static func build(record: Dictionary) -> Node3D:
 	var root := Node3D.new()
@@ -80,56 +89,86 @@ static func build(record: Dictionary) -> Node3D:
 	var list := Layout.rooms(record)
 	if list.is_empty():
 		return root
-	var walls := Layout.walls(record, list, style)
+	var floors := Layout.levels(list)
 	var look := _materials(style)
 	var rules := wall_rules(record, style)
 	var paint := _base_finish(rules)
 	if not paint.is_empty():
 		look["interior"] = Finishes.make(paint)
-	var splash := WallFinishes.spec(record.get("backsplash", style.get("backsplash", "")))
+	var splash := Surfaces.spec(record.get("backsplash", style.get("backsplash", "")))
 	if not splash.is_empty():
 		look["backsplash"] = Finishes.make(splash)
 	look["furnishings"] = record.get("furnishings", {})
+	look["style_name"] = str(record.get("style", "modern"))
+	look["light_energy"] = float(record.get("light_energy", 1.0))
+	look["light_color"] = Color.html(str(record.get("light_color", LIGHT_COLOR.to_html(false))))
 	var floor_y := float(record.get("foundation_height", 0.3))
 	var ceiling := float(record.get("ceiling_height", 2.7))
 	var outer := float(style.get("exterior_wall", 0.3))
 	var inner := float(style.get("interior_wall", 0.12))
-	var sides := Layout.room_sides(list, walls, outer, inner)
-	var base := Node3D.new()
-	base.name = "Floors"
-	root.add_child(base)
-	_foundation(base, list, floor_y, outer, look)
-	_floors(base, list, floor_y, inner, style)
-	var shell := Node3D.new()
-	shell.name = "Walls"
-	shell.position.y = floor_y
-	root.add_child(shell)
-	for index in walls.size():
-		_wall(shell, walls[index], index, ceiling, outer, inner, look)
-	var above := Node3D.new()
-	above.name = "Ceilings"
-	root.add_child(above)
-	_ceilings(above, list, floor_y + ceiling, inner, look, record.get("lights", true))
+	var storey := ceiling + FLOOR_DEPTH
+	var top := floors.size() - 1
+	# Floors, walls, ceilings and furniture hold one "Level<n>" node per storey, so a view can cut
+	# the house away above any floor; each is batched on its own.
+	var parts := {}
+	for part: String in ["Floors", "Walls", "Ceilings", "Furniture"]:
+		if part == "Furniture" and not record.get("furnish", true):
+			continue
+		var node := Node3D.new()
+		node.name = part
+		root.add_child(node)
+		parts[part] = node
 	var roof := Node3D.new()
 	roof.name = "Roof"
+	var ground_walls: Array[Dictionary] = []
+	for level in floors.size():
+		var rooms: Array[Dictionary] = floors[level]
+		var below: Array = floors[level - 1] if level > 0 else []
+		var above: Array = floors[level + 1] if level < top else []
+		var y := floor_y + level * storey
+		var walls := Layout.walls(record, rooms, style, level)
+		if level == 0:
+			ground_walls = walls
+		var sides := Layout.room_sides(rooms, walls, outer, inner)
+		var base := _level(parts.Floors, level, 0.0)
+		if level == 0:
+			_foundation(base, rooms, floor_y, outer, look)
+		_floors(base, record, style, rooms, below, y, inner, look)
+		var shell := _level(parts.Walls, level, y)
+		for index in walls.size():
+			_wall(shell, walls[index], index, ceiling, outer, inner, look, level < top)
+		_ceilings(_level(parts.Ceilings, level, 0.0), rooms, above, y + ceiling, inner, look, record.get("lights", true))
+		for room: Dictionary in sides:
+			var info: Dictionary = rooms[room.index]
+			if not Layout.stairwell(above, info).is_empty():
+				_stair(shell, record, style, room, storey, look)
+			elif not Layout.stairwell(below, info).is_empty():
+				_guards(shell, room, look)
+		if level == top:
+			_roof(roof, record, style, rooms, walls, y + ceiling, outer, look)
+		else:
+			_terraces(roof, rooms, above, y + ceiling, storey - ceiling, outer, look)
+		var focus := {}
+		if parts.has("Furniture"):
+			focus = Furniture.furnish(_level(parts.Furniture, level, y), sides, ceiling, look)
+		_cover(shell, sides, rules, paint, focus, ceiling)
 	root.add_child(roof)
-	_roof(roof, record, style, list, walls, floor_y + ceiling, outer, look)
-	_outside(root, record, walls, floor_y, outer, look)
-	_grounds(root, walls, floor_y, ceiling, outer, style, look)
-	var focus := {}
-	if record.get("furnish", true):
-		var furniture := Node3D.new()
-		furniture.name = "Furniture"
-		furniture.position.y = floor_y
-		root.add_child(furniture)
-		look["style_name"] = str(record.get("style", "modern"))
-		focus = Furniture.furnish(furniture, sides, ceiling, look)
-	_cover(shell, sides, rules, paint, focus, ceiling)
-	# Batch each part of the house separately, so the roof or ceilings can still be hidden.
+	_outside(root, record, ground_walls, floor_y, outer, look)
+	_grounds(root, ground_walls, floor_y, ceiling, outer, style, look)
+	# Batch each part (each storey of it) separately, so the roof, ceilings or upper floors can be hidden.
 	for part: Node in root.get_children():
-		if part is Node3D:
-			_batch(part)
+		var levels := part.get_children().filter(func(child: Node) -> bool: return str(child.name).begins_with("Level"))
+		for node: Node in (levels if not levels.is_empty() else [part]):
+			if node is Node3D:
+				_batch(node)
 	return root
+
+static func _level(parent: Node3D, level: int, y: float) -> Node3D:
+	var node := Node3D.new()
+	node.name = "Level%d" % level
+	node.position.y = y
+	parent.add_child(node)
+	return node
 
 ## Merge the house's many still, opaque surfaces into one mesh per material so it draws in a few
 ## calls. Collision bodies, doors and windows that move, lights and water stay as they are.
@@ -183,7 +222,7 @@ static func _materials(style: Dictionary) -> Dictionary:
 	var look := {}
 	var specs: Dictionary = style.get("materials", {})
 	for key: String in specs:
-		look[key] = Finishes.make(WallFinishes.spec(specs[key]))
+		look[key] = Finishes.make(Surfaces.spec(specs[key]))
 	for key in ["exterior", "interior", "ceiling", "plinth", "trim", "baseboard", "roof", "fascia", "door",
 			"entry_door", "glass", "frosted", "accent"]:
 		if not look.has(key):
@@ -205,16 +244,25 @@ static func _foundation(root: Node3D, list: Array[Dictionary], floor_y: float, o
 		_box(root, Vector3(rect.get_center().x, (base + floor_y - 0.05) * 0.5, rect.get_center().y),
 			Vector3(rect.size.x, floor_y - 0.05 - base, rect.size.y), look.plinth)
 
-static func _floors(root: Node3D, list: Array[Dictionary], floor_y: float, inner: float, style: Dictionary) -> void:
-	var floors: Dictionary = style.get("floors", {})
+## Each room's floor finish; upstairs, the floor structure under it too. A stairwell over a stair
+## has no floor.
+static func _floors(root: Node3D, record: Dictionary, style: Dictionary, list: Array[Dictionary], below: Array, floor_y: float,
+		inner: float, look: Dictionary) -> void:
 	for room: Dictionary in list:
+		if not Layout.stairwell(below, room).is_empty():
+			continue
 		var rect: Rect2 = (room.rect as Rect2).grow(inner * 0.5)
-		var finish := Finishes.make(floors.get(room.kind, floors.get("default", {})))
+		var finish := Finishes.make(floor_finish(record, style, room))
 		var slab := _box(root, Vector3(rect.get_center().x, floor_y - 0.03, rect.get_center().y),
 			Vector3(rect.size.x, 0.06, rect.size.y), finish)
 		slab.name = "Floor_" + str(room.name).replace(" ", "")
+		if not below.is_empty():
+			var depth := FLOOR_DEPTH - 0.12
+			_box(root, Vector3(rect.get_center().x, floor_y - 0.06 - depth * 0.5, rect.get_center().y),
+				Vector3(rect.size.x, depth, rect.size.y), look.ceiling)
 
-static func _wall(parent: Node3D, wall: Dictionary, index: int, ceiling: float, outer: float, inner: float, look: Dictionary) -> void:
+static func _wall(parent: Node3D, wall: Dictionary, index: int, ceiling: float, outer: float, inner: float, look: Dictionary,
+		through := false) -> void:
 	var exterior: bool = wall.exterior
 	var thickness := outer if exterior else inner
 	var from := float(wall.from) - (outer * 0.5 if exterior else 0.0)
@@ -229,7 +277,8 @@ static func _wall(parent: Node3D, wall: Dictionary, index: int, ceiling: float, 
 		node.position = Vector3(float(wall.line), 0, middle)
 		node.rotation.y = -PI * 0.5
 	parent.add_child(node)
-	var height := ceiling + (0.06 if exterior else 0.0)
+	# Outside walls run up past the floor above to meet the next storey's walls.
+	var height := ceiling + ((FLOOR_DEPTH if through else 0.06) if exterior else 0.0)
 	var specs := _specs(wall.openings, middle, span, height)
 	var trim: Material = look.trim if exterior else look.baseboard
 	Building.wall(node, span, height, thickness, look.exterior if exterior else look.interior, trim, specs, look.finishes)
@@ -271,8 +320,12 @@ static func _specs(openings: Array, middle: float, span: float, height: float) -
 			specs.pop_back()
 	return specs
 
-static func _ceilings(root: Node3D, list: Array[Dictionary], top: float, inner: float, look: Dictionary, lights: bool) -> void:
+static func _ceilings(root: Node3D, list: Array[Dictionary], above: Array, top: float, inner: float, look: Dictionary,
+		lights: bool) -> void:
 	for room: Dictionary in list:
+		# A stair rises through the ceiling of its stairwell.
+		if not Layout.stairwell(above, room).is_empty():
+			continue
 		var rect: Rect2 = (room.rect as Rect2).grow(inner * 0.5)
 		var centre := rect.get_center()
 		_box(root, Vector3(centre.x, top + 0.03, centre.y), Vector3(rect.size.x, 0.06, rect.size.y), look.ceiling)
@@ -296,10 +349,15 @@ static func _ceilings(root: Node3D, list: Array[Dictionary], top: float, inner: 
 			fixture.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(fixture)
 			# A wide downward spot lights the room without leaking onto the roof and eaves.
+			# Shadowed, so each room's light stays in that room instead of washing through walls.
 			var lamp := SpotLight3D.new()
-			lamp.light_color = LIGHT_COLOR
-			lamp.light_energy = clampf(area / float(count) / 10.0, 0.6, 1.6)
-			lamp.spot_range = top + 0.5
+			lamp.light_color = look.light_color
+			lamp.light_energy = clampf(area / float(count) / 6.0, 1.2, 3.0) * float(look.light_energy)
+			lamp.light_indirect_energy = 1.5
+			lamp.light_size = 0.12
+			lamp.shadow_enabled = true
+			lamp.shadow_bias = 0.04
+			lamp.spot_range = 4.5
 			lamp.spot_angle = 78.0
 			lamp.spot_attenuation = 0.8
 			lamp.rotation.x = -PI * 0.5
@@ -360,6 +418,112 @@ static func _roof(root: Node3D, record: Dictionary, style: Dictionary, list: Arr
 				viga.rotation.x = PI * 0.5
 				viga.position = Vector3(x, base + 0.12, float(wall.line) + normal.y * (outer * 0.5 + 0.22))
 				root.add_child(viga)
+
+## A U-shaped stair rising one storey inside a stairwell: a first flight from the open side (where
+## the hall is) to a landing at the back, and a second flight returning to arrive on the same side.
+static func _stair(parent: Node3D, record: Dictionary, style: Dictionary, room: Dictionary, rise: float, look: Dictionary) -> void:
+	var entry := _stair_entry(room)
+	var clear: Dictionary = room.clear
+	var normal: Vector2 = entry.normal
+	var inward := Vector3(-normal.x, 0, -normal.y)
+	var axis := int(entry.axis)
+	var low := float(clear.x0) if axis == 0 else float(clear.z0)
+	var high := float(clear.x1) if axis == 0 else float(clear.z1)
+	var depth := float(clear.z1) - float(clear.z0) if axis == 0 else float(clear.x1) - float(clear.x0)
+	var width := high - low
+	var middle := (low + high) * 0.5
+	var holder := Node3D.new()
+	holder.name = "Stair"
+	holder.position = (Vector3(middle, 0, float(entry.face)) if axis == 0 else Vector3(float(entry.face), 0, middle))
+	holder.rotation.y = atan2(inward.x, inward.z)
+	parent.add_child(holder)
+	# Plan positions along the entry side map to local X with this sign.
+	var local_x := Vector3(cos(holder.rotation.y), 0, -sin(holder.rotation.y))
+	var sign := local_x.x if axis == 0 else local_x.z
+	var risers := ceili(rise / 0.185)
+	var riser := rise / risers
+	var first := ceili(risers * 0.5)
+	var second := risers - first
+	var flight := minf(1.2, (width - 0.04) * 0.5)
+	var tread := clampf((depth - flight) / first, 0.2, 0.3)
+	var landing := first * tread
+	var lift := first * riser
+	var a_x := (low + flight * 0.5 - middle) * sign
+	var b_x := (high - flight * 0.5 - middle) * sign
+	var finish := Finishes.make(floor_finish(record, style, room))
+	var up := Building.build_steps({"width": flight, "rise": lift, "run": landing, "count": first}, finish)
+	up.position = Vector3(a_x, 0, landing)
+	holder.add_child(up)
+	_box(holder, Vector3(0, lift * 0.5, (landing + depth) * 0.5), Vector3(width, lift, depth - landing), finish)
+	var gap := landing - second * tread
+	var back := Building.build_steps({"width": flight, "rise": rise - lift, "run": second * tread, "count": second}, finish)
+	back.position = Vector3(b_x, lift, gap)
+	back.rotation.y = PI
+	holder.add_child(back)
+	# Closed underneath the second flight, and a short landing at the top where it stops short.
+	_box(holder, Vector3(b_x, lift * 0.5, (gap + landing) * 0.5), Vector3(flight, lift, second * tread), look.interior)
+	if gap > 0.01:
+		_box(holder, Vector3(b_x, rise - FLOOR_DEPTH * 0.5, gap * 0.5), Vector3(flight, FLOOR_DEPTH, gap), finish)
+
+## The stairwell side open to the hall, where the stair starts and arrives: the side with the most
+## wall-free length.
+static func _stair_entry(room: Dictionary) -> Dictionary:
+	var best: Dictionary = room.sides[0]
+	var most := -1.0
+	for side: Dictionary in room.sides:
+		var open := float(side.high) - float(side.low)
+		for span: Array in side.solid:
+			open -= maxf(0.0, minf(float(side.high), float(span[1])) - maxf(float(side.low), float(span[0])))
+		if open > most + 0.01:
+			most = open
+			best = side
+	return best
+
+## Guards around a stairwell on the floor above the stair, leaving the top of the stair open.
+static func _guards(parent: Node3D, room: Dictionary, look: Dictionary) -> void:
+	var entry := _stair_entry(room)
+	var clear: Dictionary = room.clear
+	var axis_entry := int(entry.axis)
+	var low_entry := float(clear.x0) if axis_entry == 0 else float(clear.z0)
+	var high_entry := float(clear.x1) if axis_entry == 0 else float(clear.z1)
+	var flight := minf(1.2, (high_entry - low_entry - 0.04) * 0.5)
+	for side: Dictionary in room.sides:
+		var spans := [[float(side.low), float(side.high)]]
+		for span: Array in side.solid:
+			spans = Layout._cut(spans, float(span[0]), float(span[1]))
+		if side == entry:
+			spans = Layout._cut(spans, high_entry - flight - 0.02, high_entry + 0.01)
+		var normal: Vector2 = side.normal
+		var inward := Vector3(-normal.x, 0, -normal.y)
+		for span: Array in spans:
+			var length: float = span[1] - span[0]
+			if length < 0.1:
+				continue
+			var middle: float = (span[0] + span[1]) * 0.5
+			var at := (Vector3(middle, 0, float(side.face)) if int(side.axis) == 0 else Vector3(float(side.face), 0, middle)) + inward * 0.03
+			var guard := Node3D.new()
+			guard.name = "Guard"
+			guard.position = at
+			guard.rotation.y = atan2(inward.x, inward.z)
+			parent.add_child(guard)
+			_box(guard, Vector3(0, GUARD - 0.025, 0), Vector3(length, 0.05, 0.05), look.trim)
+			_box(guard, Vector3(0, 0.08, 0), Vector3(length, 0.04, 0.04), look.trim, false)
+			var posts := maxi(1, ceili(length / 1.2))
+			for index in posts + 1:
+				_box(guard, Vector3(-length * 0.5 + length * index / posts, GUARD * 0.5, 0), Vector3(0.04, GUARD, 0.04), look.trim, false)
+			_box(guard, Vector3(0, (GUARD + 0.1) * 0.5, 0), Vector3(length, GUARD - 0.15, 0.012), look.glass)
+
+## Flat roofs over rooms that have no floor above them, level with the next floor: a terrace.
+static func _terraces(root: Node3D, list: Array[Dictionary], above: Array, ceiling_y: float, depth: float, outer: float,
+		look: Dictionary) -> void:
+	for room: Dictionary in list:
+		if Layout.supported(above, room.rect):
+			continue
+		var rect: Rect2 = (room.rect as Rect2).grow(outer * 0.5)
+		var bottom := ceiling_y + 0.06
+		var top := ceiling_y + depth - 0.08
+		_box(root, Vector3(rect.get_center().x, (bottom + top) * 0.5, rect.get_center().y), Vector3(rect.size.x, top - bottom, rect.size.y), look.fascia)
+		_box(root, Vector3(rect.get_center().x, top + 0.01, rect.get_center().y), Vector3(rect.size.x - 0.04, 0.02, rect.size.y - 0.04), look.roof, false)
 
 static func _gable(root: Node3D, box: Rect2, base: float, pitch: float, eaves: float, look: Dictionary) -> void:
 	var along_x := box.size.x >= box.size.y
@@ -515,7 +679,8 @@ static func _pool_terrace(root: Node3D, record: Dictionary, point: Vector3, turn
 	terrace.position = point
 	terrace.rotation.y = turn
 	root.add_child(terrace)
-	var stone := Finishes.make({"texture": "granite_tile", "texture_size": 1.2, "color": "f2efe8"})
+	var finish := pool_finishes(record)
+	var stone := Finishes.make(finish.deck)
 	var along := float(frame.along)
 	var out := float(frame.out)
 	var top := float(frame.top)
@@ -532,7 +697,8 @@ static func _pool_terrace(root: Node3D, record: Dictionary, point: Vector3, turn
 	for sign: float in [-1.0, 1.0]:
 		_box(terrace, Vector3(sign * (hole.x + side) * 0.5, top * 0.5, centre_z), Vector3(side, top, hole.y), stone)
 	var pool := Water.build({"id": "pool", "water_kind": "pool", "water_size": [along, out], "basin_mode": "excavated",
-		"basin_depth": float(frame.depth), "basin_material": {"color": "dce9ec", "roughness": 0.35},
+		"basin_depth": float(frame.depth), "basin_material": finish.basin, "waterline_material": finish.waterline,
+		"coping_material": finish.coping,
 		"water_id": str(record.get("id", "house")) + "_pool", "name": "Pool"})
 	pool.position = Vector3(0, top, centre_z)
 	terrace.add_child(pool)
@@ -616,6 +782,27 @@ static func _grounds(root: Node3D, walls: Array[Dictionary], floor_y: float, cei
 					[{"kind": "archway", "offset": -(low + high) * 0.5, "width": float(opening.width) + 0.1,
 						"height": float(opening.height) + 0.05}])
 
+## The pool's surfaces: the style's "pool" finishes with the record's pool_finish laid over them.
+static func pool_finishes(record: Dictionary) -> Dictionary:
+	var style := style_for(record)
+	var chosen: Dictionary = {"basin": "pool_tile_white", "waterline": "pool_waterline_glass", "coping": "paving_granite",
+		"deck": "paving_granite"}
+	chosen.merge(style.get("pool", {}), true)
+	chosen.merge(record.get("pool_finish", {}), true)
+	var result := {}
+	for part: String in chosen:
+		result[part] = Surfaces.spec(chosen[part])
+	return result
+
+## The floor finish of a room: the style's floor for its kind, then the record's floors rules.
+static func floor_finish(record: Dictionary, style: Dictionary, room: Dictionary) -> Dictionary:
+	var floors: Dictionary = style.get("floors", {})
+	var finish: Variant = floors.get(room.kind, floors.get("default", {}))
+	for rule: Dictionary in record.get("floors", []):
+		if _rule_room(rule, room):
+			finish = rule.get("material", rule.get("finish", finish))
+	return Surfaces.spec(finish)
+
 # --- Wall coverings ------------------------------------------------------------------------------
 
 ## The finish every interior wall is painted with: the last rule for all rooms and all sides.
@@ -629,7 +816,7 @@ static func _base_finish(rules: Array) -> Dictionary:
 	return paint
 
 static func _rule_spec(rule: Dictionary) -> Dictionary:
-	return WallFinishes.spec(rule.get("material", rule.get("finish", "")))
+	return Surfaces.spec(rule.get("material", rule.get("finish", "")))
 
 static func _rule_room(rule: Dictionary, room: Dictionary) -> bool:
 	var want := str(rule.get("room", "all")).to_lower()

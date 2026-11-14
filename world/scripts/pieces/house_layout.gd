@@ -3,12 +3,18 @@ extends RefCounted
 ## windows. Pure data, so agents, tests and the house factory all see the same plan.
 ## Plan coordinates are [x, z] metres in the house's local space; the entrance faces -Z.
 
-const KINDS := ["living", "kitchen", "dining", "bedroom", "bathroom", "hall", "office", "laundry", "closet"]
+const KINDS := ["living", "kitchen", "dining", "bedroom", "bathroom", "hall", "office", "laundry", "closet", "stairs"]
 ## Rooms that open into each other without walls in an open layout.
 const SHARED := ["living", "kitchen", "dining", "hall"]
 ## Rooms that need their own door.
 const PRIVATE := ["bedroom", "bathroom", "office", "laundry", "closet"]
-const DOOR_FROM := ["hall", "living", "dining", "kitchen", "bedroom", "office", "laundry", "closet", "bathroom"]
+const DOOR_FROM := ["hall", "living", "dining", "kitchen", "bedroom", "office", "laundry", "closet", "bathroom", "stairs"]
+## A stairwell opens without a wall onto these rooms, on every floor and in every layout.
+const STAIRS_OPEN := ["hall", "living", "dining", "kitchen", "stairs"]
+## Houses have at most this many floors.
+const MAX_LEVELS := 2
+## The width of a generated stairwell (a U-shaped stair of two flights).
+const STAIRWELL := 2.4
 const MIN_ROOM := 1.2
 const LIMIT := 32.0
 const EDGE := 0.35
@@ -20,7 +26,7 @@ static func rooms(record: Dictionary) -> Array[Dictionary]:
 	var listed: Array = record.get("rooms", [])
 	if listed.is_empty():
 		listed = generate(int(record.get("bedrooms", 2)), int(record.get("bathrooms", 1)),
-			float(record.get("floor_area", 0.0)), str(record.get("layout", "open")))
+			float(record.get("floor_area", 0.0)), str(record.get("layout", "open")), int(record.get("storeys", 1)))
 	for index in listed.size():
 		var room: Dictionary = listed[index]
 		var corners: Array = room.rect
@@ -30,13 +36,54 @@ static func rooms(record: Dictionary) -> Array[Dictionary]:
 		var z1 := _snap(maxf(corners[1], corners[3]))
 		# Edges use the exact x0..z1 values; Rect2 is single precision and only for geometry.
 		result.append({"index": index, "kind": str(room.kind), "name": str(room.get("name", _title(room.kind, listed, index))),
-			"x0": x0, "z0": z0, "x1": x1, "z1": z1, "rect": Rect2(x0, z0, x1 - x0, z1 - z0)})
+			"level": int(room.get("level", 0)), "x0": x0, "z0": z0, "x1": x1, "z1": z1, "rect": Rect2(x0, z0, x1 - x0, z1 - z0)})
 	return result
 
+## The rooms on each floor, ground floor first. Each floor's rooms are copies indexed from 0 within
+## that floor (walls and furniture work floor by floor); "id" keeps the index in the whole house.
+static func levels(list: Array[Dictionary]) -> Array:
+	var count := 1
+	for room: Dictionary in list:
+		count = maxi(count, int(room.level) + 1)
+	var result := []
+	for level in count:
+		var floor: Array[Dictionary] = []
+		for room: Dictionary in list:
+			if int(room.level) == level:
+				var copy := room.duplicate()
+				copy["id"] = room.index
+				copy["index"] = floor.size()
+				floor.append(copy)
+		result.append(floor)
+	return result
+
+## The stairwell above or below a room on the next floor (same rectangle), or {}.
+static func stairwell(level_rooms: Array, room: Dictionary) -> Dictionary:
+	if room.kind != "stairs":
+		return {}
+	for other: Dictionary in level_rooms:
+		if other.kind == "stairs" and absf(float(other.x0) - float(room.x0)) < 0.06 and absf(float(other.z0) - float(room.z0)) < 0.06 \
+				and absf(float(other.x1) - float(room.x1)) < 0.06 and absf(float(other.z1) - float(room.z1)) < 0.06:
+			return other
+	return {}
+
+## Whether a rectangle lies over the rooms of the floor below.
+static func supported(below: Array, rect: Rect2) -> bool:
+	var inset := rect.grow(-0.1)
+	for i in 3:
+		for j in 3:
+			var point := inset.position + inset.size * Vector2(i / 2.0, j / 2.0)
+			if not below.any(func(room: Dictionary) -> bool: return (room.rect as Rect2).grow(0.06).has_point(point)):
+				return false
+	return true
+
 ## A single-storey plan: shared rooms across the front, a hall, then bedrooms and baths at the back.
-static func generate(bedrooms: int, bathrooms: int, floor_area := 0.0, layout := "open") -> Array:
+## With two storeys, the bedrooms and most baths go upstairs around a stairwell beside the hall.
+static func generate(bedrooms: int, bathrooms: int, floor_area := 0.0, layout := "open", storeys := 1) -> Array:
 	bedrooms = clampi(bedrooms, 0, 5)
 	bathrooms = clampi(bathrooms, 1, 3)
+	if storeys >= 2:
+		return _two_storeys(bedrooms, bathrooms, floor_area, layout)
 	var back: Array = []
 	var baths := bathrooms
 	for index in bedrooms:
@@ -83,6 +130,105 @@ static func generate(bedrooms: int, bathrooms: int, floor_area := 0.0, layout :=
 		at = next
 	return plan
 
+static func _two_storeys(bedrooms: int, bathrooms: int, floor_area: float, layout: String) -> Array:
+	var down_baths := 1 if bathrooms >= 2 else 0
+	var upper: Array = []
+	var baths := bathrooms - down_baths
+	for index in bedrooms:
+		upper.append(["bedroom", 4.2 if index == 0 else 3.4])
+		if baths > 0 and (index == 0 or bedrooms - index - 1 < baths):
+			upper.append(["bathroom", 2.5])
+			baths -= 1
+	while baths > 0:
+		upper.append(["bathroom", 2.5])
+		baths -= 1
+	if upper.size() < 2:
+		upper.append(["office", 3.0])
+	# Upstairs rooms fill the front row, then the back row beside the stairwell.
+	var total := STAIRWELL
+	for room: Array in upper:
+		total += float(room[1])
+	var front: Array = []
+	var back: Array = []
+	var used := 0.0
+	# Bedrooms take the front row (over the living rooms); baths and the rest go beside the stairwell.
+	for room: Array in upper:
+		if room[0] == "bedroom" and (front.is_empty() or used + float(room[1]) <= total * 0.5 + 0.6):
+			front.append(room)
+			used += float(room[1])
+		else:
+			back.append(room)
+	if front.is_empty():
+		front.append(back.pop_front())
+	if back.is_empty():
+		back.append(front.pop_back())
+	var front_width := 0.0
+	for room: Array in front:
+		front_width += float(room[1])
+	var back_width := STAIRWELL
+	for room: Array in back:
+		back_width += float(room[1])
+	var width := maxf(8.6, maxf(front_width, back_width))
+	var scale := 1.0
+	if floor_area > 0.0:
+		scale = clampf(sqrt(floor_area / (2.0 * width * 10.1)), 0.85, 1.35)
+	width = _snap(width * scale)
+	var front_depth := _snap(5.0 * scale)
+	var back_depth := _snap(maxf(3.8 * scale, 3.4))
+	var hall := 1.3
+	var z0 := _snap(-(front_depth + hall + back_depth) * 0.5)
+	var x0 := _snap(-width * 0.5)
+	var hall_z := z0 + front_depth
+	var back_z := hall_z + hall
+	var stair_x := x0 + STAIRWELL
+	var plan: Array = []
+	# Ground floor: living and kitchen at the front, the hall, then the stairwell, a bath and a study or laundry.
+	var living := _snap(width * (0.56 if layout == "open" else 0.5))
+	plan.append({"kind": "living", "rect": [x0, z0, x0 + living, hall_z]})
+	if layout == "open" or width - living < 5.5:
+		plan.append({"kind": "kitchen", "rect": [x0 + living, z0, -x0, hall_z]})
+	else:
+		var middle := _snap(x0 + living + (width - living) * 0.5)
+		plan.append({"kind": "dining", "rect": [x0 + living, z0, middle, hall_z]})
+		plan.append({"kind": "kitchen", "rect": [middle, z0, -x0, hall_z]})
+	plan.append({"kind": "hall", "rect": [x0, hall_z, -x0, back_z]})
+	plan.append({"kind": "stairs", "name": "Stairs", "rect": [x0, back_z, stair_x, back_z + back_depth]})
+	var ground: Array = []
+	var rest := width - STAIRWELL
+	if down_baths > 0:
+		ground.append(["bathroom", 2.2])
+		rest -= 2.2
+	if rest >= 5.4:
+		ground.append(["office", rest - 2.2])
+		ground.append(["laundry", 2.2])
+	elif rest >= 2.4:
+		ground.append(["office", rest])
+	elif rest >= 1.4:
+		ground.append(["laundry", rest])
+	elif not ground.is_empty():
+		ground[-1][1] += rest
+	plan.append_array(_row(ground, stair_x, -x0, back_z, back_z + back_depth, 0))
+	# Upstairs: the same outline, hall and stairwell.
+	plan.append_array(_row(front, x0, -x0, z0, hall_z, 1))
+	plan.append({"kind": "hall", "name": "Landing", "level": 1, "rect": [x0, hall_z, -x0, back_z]})
+	plan.append({"kind": "stairs", "name": "Stairwell", "level": 1, "rect": [x0, back_z, stair_x, back_z + back_depth]})
+	plan.append_array(_row(back, stair_x, -x0, back_z, back_z + back_depth, 1))
+	return plan
+
+## Rooms side by side from x = start to x = end, widths in proportion to each room's [kind, width].
+static func _row(rooms: Array, start: float, end: float, z0: float, z1: float, level: int) -> Array:
+	var total := 0.0
+	for room: Array in rooms:
+		total += float(room[1])
+	var result := []
+	var at := start
+	for index in rooms.size():
+		var room: Array = rooms[index]
+		var next := end if index == rooms.size() - 1 else _snap(at + (end - start) * float(room[1]) / total)
+		result.append({"kind": room[0], "level": level, "rect": [at, z0, next, z1]})
+		at = next
+	return result
+
 ## Problems with a record's rooms, or an empty string.
 static func problem(record: Dictionary) -> String:
 	var list := rooms(record)
@@ -94,21 +240,43 @@ static func problem(record: Dictionary) -> String:
 			return "%s is smaller than %.1f m across." % [room.name, MIN_ROOM]
 		if absf(rect.position.x) > LIMIT or absf(rect.end.x) > LIMIT or absf(rect.position.y) > LIMIT or absf(rect.end.y) > LIMIT:
 			return "%s is more than %d m from the house origin." % [room.name, int(LIMIT)]
-	for a in list.size():
-		for b in range(a + 1, list.size()):
-			var overlap: Rect2 = (list[a].rect as Rect2).intersection(list[b].rect)
-			if overlap.size.x > SNAP and overlap.size.y > SNAP:
-				return "%s overlaps %s." % [list[a].name, list[b].name]
-	if not _connected(list):
-		return "Every room must touch another room."
+	var floors := levels(list)
+	if floors.size() > MAX_LEVELS:
+		return "A house has at most %d floors (levels 0 to %d)." % [MAX_LEVELS, MAX_LEVELS - 1]
+	for level in floors.size():
+		var rooms: Array[Dictionary] = floors[level]
+		if rooms.is_empty():
+			return "Level %d has no rooms." % level
+		for a in rooms.size():
+			for b in range(a + 1, rooms.size()):
+				var overlap: Rect2 = (rooms[a].rect as Rect2).intersection(rooms[b].rect)
+				if overlap.size.x > SNAP and overlap.size.y > SNAP:
+					return "%s overlaps %s." % [rooms[a].name, rooms[b].name]
+		if not _connected(rooms):
+			return "Every room must touch another room on its floor."
+		if level == 0:
+			continue
+		var below: Array = floors[level - 1]
+		for room: Dictionary in rooms:
+			if not supported(below, room.rect):
+				return "%s is not over rooms on the floor below." % room.name
+		var well: Dictionary = {}
+		for room: Dictionary in rooms:
+			if not stairwell(below, room).is_empty():
+				well = room
+		if well.is_empty():
+			return "Level %d needs a stairs room directly over a stairs room on the floor below." % level
+		var rect: Rect2 = well.rect
+		if minf(rect.size.x, rect.size.y) < 1.9 or maxf(rect.size.x, rect.size.y) < 3.0:
+			return "%s is too small for a stair: it needs at least 1.9 by 3.0 m." % well.name
 	return ""
 
 ## The walls of a plan. Each wall runs from "a" to "b" along one axis and lists its openings with
 ## an "at" position along that axis. Exterior walls carry their outward "normal".
-static func walls(record: Dictionary, list: Array[Dictionary], style: Dictionary) -> Array[Dictionary]:
+static func walls(record: Dictionary, list: Array[Dictionary], style: Dictionary, level := 0) -> Array[Dictionary]:
 	var open_plan: bool = record.get("layout", "open") == "open"
 	var pieces := _edges(list, open_plan)
-	_doors(record, list, pieces, style, open_plan)
+	_doors(record, list, pieces, style, open_plan, level)
 	_windows(record, list, pieces, style)
 	return _merge(pieces)
 
@@ -226,7 +394,9 @@ static func _edges(list: Array[Dictionary], open_plan: bool) -> Array[Dictionary
 				var other := room_at(list, probe)
 				if other != -1 and other < room.index:
 					continue
-				var open: bool = other != -1 and open_plan and room.kind in SHARED and list[other].kind in SHARED
+				var open: bool = other != -1 and ((open_plan and room.kind in SHARED and list[other].kind in SHARED)
+					or (room.kind == "stairs" and list[other].kind in STAIRS_OPEN)
+					or (list[other].kind == "stairs" and room.kind in STAIRS_OPEN))
 				# Corners of rooms elsewhere split this side too; rejoin pieces facing the same room.
 				var last: Dictionary = result[-1] if not result.is_empty() else {}
 				if not last.is_empty() and last.room == room.index and last.axis == axis and last.line == line \
@@ -237,7 +407,8 @@ static func _edges(list: Array[Dictionary], open_plan: bool) -> Array[Dictionary
 					"normal": normal, "open": open, "openings": []})
 	return result
 
-static func _doors(record: Dictionary, list: Array[Dictionary], parts: Array[Dictionary], style: Dictionary, open_plan: bool) -> void:
+static func _doors(record: Dictionary, list: Array[Dictionary], parts: Array[Dictionary], style: Dictionary, open_plan: bool,
+		level := 0) -> void:
 	var door: Dictionary = style.get("door", {})
 	var width := float(door.get("width", 0.86))
 	var height := float(door.get("height", 2.1))
@@ -275,6 +446,8 @@ static func _doors(record: Dictionary, list: Array[Dictionary], parts: Array[Dic
 				var span := minf(1.6, part.to - part.from - EDGE * 2.0)
 				part.openings.append({"kind": "archway", "at": (part.from + part.to) * 0.5, "width": span,
 					"height": height + 0.1})
+	if level > 0:
+		return
 	# The entrance: a front wall of a shared room, nearest the middle of the house.
 	var entry: Dictionary = style.get("entry_door", {"width": 1.0, "height": 2.2})
 	var entrance := _best_exterior(parts, list, ["hall", "living", "dining", "kitchen"], Vector2(0, -1),
@@ -415,7 +588,7 @@ static func _title(kind: Variant, listed: Array, index: int) -> String:
 	var same := 0
 	var total := 0
 	for i in listed.size():
-		if listed[i].kind == kind:
+		if listed[i].kind == kind and not listed[i].has("name"):
 			total += 1
 			if i <= index:
 				same += 1

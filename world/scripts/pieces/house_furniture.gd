@@ -52,7 +52,8 @@ static func furnish(root: Node3D, rooms: Array[Dictionary], ceiling: float, look
 		var node := Node3D.new()
 		node.name = str(room.name).replace(" ", "")
 		root.add_child(node)
-		_skirting(node, room, finish)
+		if room.kind != "stairs":
+			_skirting(node, room, finish)
 		match str(room.kind):
 			"bedroom":
 				_bedroom(node, room, finish, room.index == _largest(rooms, "bedroom"))

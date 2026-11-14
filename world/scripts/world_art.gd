@@ -16,6 +16,9 @@ const Weather = preload("res://scripts/rendering/weather.gd")
 const RuntimeSkies = preload("res://scripts/assets/runtime_skies.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const PH := "res://assets/thirdparty/polyhaven/"
+## Sky shader parameters for the celestial sphere's meridian, west and pole directions.
+const STAR_FRAME := ["star_meridian", "star_west", "star_axis"]
+const DEFAULT_STAR_FRAME := [Vector3(0.0, 0.848, 0.53), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 0.53, -0.848)]
 
 static var _cache := {}
 static var _resources := {}
@@ -178,6 +181,14 @@ static func zone_state(zone: String, edits := {}) -> Dictionary:
 		s.panorama = _gradient_sky(s.get("sky_colors", [Color("6f9fc3"), Color("e5d6b8"), Color("d0c4ab"), Color("74796a")]))
 	var clock: bool = s.get("time_mode", "manual") != "manual"
 	var heading: float = s.sun_azimuth
+	# The stars turn about the same pole as the sun's daily path, by sidereal time. The sky is set
+	# for midsummer, so the Milky Way's core crosses the meridian at midnight; a manual sky shows
+	# midnight's stars.
+	var meridian := _sun_vector(Weather.sun_at(12.0, heading))
+	var west := _sun_vector(Weather.sun_at(18.0, heading))
+	s.star_frame = [meridian, west, meridian.cross(west)]
+	var star_hour := float(s.get("time_of_day", 12.0)) if clock else 0.0
+	s.star_turn = deg_to_rad((star_hour - 6.0) * 15.0)
 	s.hide_photo_sun = Vector4.ZERO
 	if clock or edits.has("sun_elevation"):
 		var solar := Weather.sun_at(float(s.get("time_of_day", 12.0)), heading)
@@ -208,6 +219,11 @@ static func _direction(azimuth: float, elevation: float) -> Vector4:
 	var az := deg_to_rad(azimuth)
 	var el := deg_to_rad(elevation)
 	return Vector4(sin(az) * cos(el), sin(el), cos(az) * cos(el), 0.0)
+
+## A Weather.sun_at() heading and elevation as a unit vector.
+static func _sun_vector(sun: Vector2) -> Vector3:
+	var d := _direction(sun.x, sun.y)
+	return Vector3(d.x, d.y, d.z).normalized()
 
 ## Atmosphere edits (field names from rendering/atmosphere.gd) over a package's environment.
 static func _apply_edits(s: Dictionary, edits: Dictionary) -> void:
@@ -251,6 +267,11 @@ static func apply_state(world: Node3D, a: Dictionary, b: Dictionary, t: float) -
 	sky_mat.set_shader_parameter("hide_sun_a", a.get("hide_photo_sun", Vector4.ZERO))
 	sky_mat.set_shader_parameter("hide_sun_b", b.get("hide_photo_sun", Vector4.ZERO))
 	sky_mat.set_shader_parameter("stars", lerpf(a.get("stars", 0.0), b.get("stars", 0.0), t))
+	var frame_a: Array = a.get("star_frame", DEFAULT_STAR_FRAME)
+	var frame_b: Array = b.get("star_frame", DEFAULT_STAR_FRAME)
+	for i in STAR_FRAME.size():
+		sky_mat.set_shader_parameter(STAR_FRAME[i], (frame_a[i] as Vector3).slerp(frame_b[i], t).normalized())
+	sky_mat.set_shader_parameter("star_turn", lerp_angle(float(a.get("star_turn", 0.0)), float(b.get("star_turn", 0.0)), t))
 	env.ambient_light_energy = lerpf(a.get("ambient", 1.0), b.get("ambient", 1.0), t)
 	sky_mat.set_shader_parameter("blend", t)
 	sky_mat.set_shader_parameter("cloud_cover", lerpf(a.cloud_cover, b.cloud_cover, t))

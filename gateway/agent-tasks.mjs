@@ -5,7 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 export const person = '@player';
 const agentName = /^[a-z0-9_-]{1,32}$/;
 const active = task => task.status === 'queued' || task.status === 'working';
-const publicTask = ({ session, ...task }) => task;
+const publicTask = ({ session, activity, ...task }, includeActivity = false) =>
+  includeActivity && activity ? { ...task, activity } : task;
 const text = value => {
   if (typeof value !== 'string' || !value.trim() || value.length > 4000 || value.includes('\0')) {
     throw new Error('Enter 1 to 4000 characters.');
@@ -32,8 +33,10 @@ export async function createTaskBoard(file) {
       const at = new Date().toISOString();
       const value = apply(next, at);
       if (!value) return { ok: true, task: null };
-      next.journal = [...next.journal, { at, event, actor, id: value.id, to: value.to,
-        status: value.status, text: (value.update ?? value.text).slice(0, 4000) }].slice(-2000);
+      if (event !== 'activity') {
+        next.journal = [...next.journal, { at, event, actor, id: value.id, to: value.to,
+          status: value.status, text: (value.update ?? value.text).slice(0, 4000) }].slice(-2000);
+      }
       await writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
       await rename(file + '.tmp', file);
       state = next;
@@ -48,7 +51,8 @@ export async function createTaskBoard(file) {
       ok: true,
       tasks: state.tasks.filter(task => actor === person
         ? filter(task.owner || task.to)
-        : task.owner === actor || (!task.owner && [actor, '*'].includes(task.to))).slice(-20).map(publicTask),
+        : task.owner === actor || (!task.owner && [actor, '*'].includes(task.to)))
+        .slice(-20).map(task => publicTask(task, actor === person)),
       messages: state.messages.filter(message => message.from === actor && filter(message.to)
         || message.to === actor && filter(message.from)).slice(-12),
     };
@@ -127,6 +131,19 @@ export async function createTaskBoard(file) {
       const result = await call(actor, action, args, signal);
       if (result.task) result.task = publicTask(result.task);
       return result;
+    },
+    async activity(actor, id, kind, content) {
+      if (!['tool', 'message'].includes(kind) || typeof content !== 'string') return;
+      content = content.replaceAll('\0', '').trim().slice(0, 1200);
+      if (!content) return;
+      return change(actor, 'activity', (next, at) => {
+        const task = next.tasks.find(task => task.id === id && task.owner === actor && task.status === 'working');
+        if (!task) return null;
+        const recent = task.activity ?? [];
+        if (recent.at(-1)?.text === content && recent.at(-1)?.kind === kind) return null;
+        task.activity = [...recent, { at, kind, text: content }].slice(-14);
+        return task;
+      });
     },
     claimLocal: actor => state.tasks.some(task => task.status === 'queued' && task.to === actor)
       ? call(actor, 'claim_task', { namedOnly: true }) : { task: null },

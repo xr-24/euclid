@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { createCodexAgent } from './agents/codex.mjs';
 import { createClaudeAgent } from './agents/claude.mjs';
 
+const withoutCredential = (content, key) => typeof content === 'string' ? content.replaceAll(key, '[redacted]') : '';
+
 const workers = {
   'local-codex': { label: 'Codex', create: createCodexAgent },
   'local-claude': { label: 'Claude', create: createClaudeAgent },
@@ -11,6 +13,11 @@ export const listLocalWorkers = () => Object.entries(workers)
   .map(([name, { label }]) => ({ name, label, kind: 'worker' }));
 
 export function createTaskWorkers(board, address) {
+  function report(job, kind, content) {
+    const text = withoutCredential(content, job.key);
+    if (text) void board.activity(job.actor, job.task.id, kind, text)
+      .catch(error => console.error('Euclid task activity:', error.message));
+  }
   const active = new Map();
   let timer;
   async function tick(actor, factory) {
@@ -33,15 +40,16 @@ export function createTaskWorkers(board, address) {
       const result = await factory().task(input, {
         url: `http://127.0.0.1:${address().port}/mcp/task`,
         token: job.key, signal: controller.signal,
+        onMessage: text => report(job, 'message', text),
       });
       if (board.running(actor, task.id)) {
-        const detail = typeof result === 'string' ? result.replaceAll(job.key, '[redacted]').replaceAll('\0', '').slice(0, 3600) : '';
+        const detail = withoutCredential(result, job.key).replaceAll('\0', '').slice(0, 3600);
         await board.agent(actor, 'finish_task', { id: task.id, status: 'blocked',
           text: 'The CLI exited without recording a task result.' + (detail ? '\n' + detail : '') });
       }
     } catch (error) {
       if (job.task && board.running(actor, job.task.id)) {
-        await board.agent(actor, 'finish_task', { id: job.task.id, status: 'blocked', text: error.message.slice(0, 4000) });
+        await board.agent(actor, 'finish_task', { id: job.task.id, status: 'blocked', text: withoutCredential(error.message, job.key).slice(0, 4000) });
       }
     } finally {
       active.delete(actor);
@@ -60,6 +68,11 @@ export function createTaskWorkers(board, address) {
     stop() {
       clearInterval(timer);
       for (const job of active.values()) job.controller.abort(new Error('Gateway stopped.'));
+    },
+    toolActivity(job, name, outcome = '') {
+      if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{0,80}$/.test(name) ||
+          ['inbox', 'task_progress', 'finish_task'].includes(name)) return;
+      report(job, 'tool', (outcome || 'Running') + ' · ' + name.replaceAll('_', ' '));
     },
     identify(key) {
       return [...active.values()].find(job => job.key === key && job.task && board.running(job.actor, job.task.id));

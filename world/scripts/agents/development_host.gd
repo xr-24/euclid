@@ -37,6 +37,7 @@ var _conversations := {}
 var _chat_requests := {}
 var _chat_errors := {}
 var _polling_chat := false
+var _next_chat_poll := 0
 var _chat_dirty := false
 var _directory_due := 0
 
@@ -71,10 +72,16 @@ func connect_gateway(url: String, token: String) -> void:
 					_show_chat_tabs()
 		_poll_chat())
 	var task_poll := Timer.new()
-	task_poll.wait_time = 3
+	task_poll.wait_time = 1
 	add_child(task_poll)
 	task_poll.timeout.connect(func() -> void:
-		if (is_instance_valid(console) and _world.overlay.visible) or _world.wrist.is_open:
+		if is_instance_valid(console) and _world.overlay.visible:
+			var working := _chat_requests.has(chat_peer) or bool(_conversations.get(chat_peer, {}).get("working", false))
+			if working or Time.get_ticks_msec() >= _next_chat_poll:
+				_next_chat_poll = Time.get_ticks_msec() + 3000
+				_poll_chat()
+		elif _world.wrist.is_open and Time.get_ticks_msec() >= _next_chat_poll:
+			_next_chat_poll = Time.get_ticks_msec() + 3000
 			_poll_chat())
 	task_poll.start()
 
@@ -253,7 +260,8 @@ func select_chat(peer: String) -> void:
 		_session.save_chat_tabs(_chat_tabs, peer)
 	if is_instance_valid(console):
 		_show_chat_tabs()
-		console.focus_entry()
+		if _world.overlay.keyboard_active:
+			console.focus_entry()
 	refresh_chat()
 	_poll_chat()
 

@@ -46,6 +46,7 @@ save and quit, which asks you to confirm twice). You can keep walking and lookin
 only typing holds you still. Opening any panel lowers it.
 
 Drag the three-dot handle to move a desktop panel, or drag its edges and corners to resize it.
+Click the world to use movement keys with the panel open. Click the panel to give it keyboard focus again.
 In Grid or Scene tools, click the color swatch and choose **Apply** to save the change.
 
 **Build → Scan Object** opens a live inspector. Frame a prop or water surface
@@ -154,7 +155,7 @@ Codex can propose one cone with a color and scale. Euclid places it at the cross
 
 ## Agent Chat
 
-Press **F2**, or choose **Message** on the wrist’s Agents page. Use **+** to open a conversation with a local worker or an agent registered in Workbench. Use the conversation tabs to switch between open chats. Codex and Claude take requests through their local CLI workers. Registered agents receive messages in their inbox. The arrow on the Codex tab opens the interactive Codex CLI in a native Windows terminal.
+Press **F2**, or choose **Message** on the wrist’s Agents page. Use **+** to open a conversation with a local worker or an agent registered in Workbench. Use the conversation tabs to switch between open chats. Codex and Claude take requests through their local CLI workers. Agent Chat shows their messages and Euclid tool activity as it happens. Registered agents receive messages in their inbox. The arrow on the Codex tab opens the interactive Codex CLI in a native Windows terminal.
 
 An avatar appears when you first contact its agent in a running session. Codex is red, Claude is orange, and cloud agents have a blue gradient. Aim at a nearby avatar and press **E** to open its conversation.
 

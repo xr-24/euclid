@@ -395,6 +395,7 @@ func _show_panel() -> void:
 	if is_instance_valid(wrist):
 		wrist.lower_wrist()
 	overlay.show()
+	overlay.set_keyboard_active(true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _button(title: String, callback: Callable) -> void:
@@ -1004,12 +1005,19 @@ func _process(delta: float) -> void:
 		_refresh_atmosphere(true)
 	_weather.update(camera, 0.0 if shifting else atmosphere.rain_amount(zone_id))
 
+func _movement_allowed() -> bool:
+	if smoke_mode or wrist.blocks_movement() or not get_window().has_focus():
+		return false
+	if overlay.visible and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+		return not overlay.keyboard_active
+	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (not overlay.visible or terrain_brush.looking())
+
 func _physics_process(delta: float) -> void:
 	if not player:
 		return
 	var direction := Vector3.ZERO
-	var controls := (not overlay.visible or terrain_brush.looking()) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not smoke_mode \
-		and not wrist.blocks_movement()
+	var controls := _movement_allowed()
+
 	if controls:
 		var axes := Input.get_vector("left", "right", "forward", "back")
 		direction = player.basis * Vector3(axes.x,0,axes.y)
@@ -1254,6 +1262,8 @@ func _notification(what: int) -> void:
 			terrain_brush.cancel()
 		if is_instance_valid(wrist):
 			wrist.typing = false
+		if is_instance_valid(overlay):
+			overlay.set_keyboard_active(false)
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _quit() -> void:

@@ -8,6 +8,7 @@ const schemaLimit = 24000;
 // No user or project customizations, no MCP servers, and nothing saved to disk.
 const isolated = ['--safe-mode', '--strict-mcp-config', '--disallowedTools', 'mcp__*', '--no-session-persistence'];
 const planPrompt = 'Follow the instructions and input supplied on standard input. Reply only with the structured output.';
+const authenticationFailure = /oauth session expired|failed to authenticate|not logged in/i;
 const authorPrompt = 'Carry out the instructions supplied on standard input in the current directory.';
 
 export async function resolveClaudeBinary(env = process.env) {
@@ -47,7 +48,7 @@ export function createClaudeAgent({ env = process.env,
     id: 'claude',
     label: 'Claude',
 
-    async task(input, { url, token, signal }) {
+    async task(input, { url, token, signal, onMessage = () => {} }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
       try {
@@ -60,9 +61,25 @@ export function createClaudeAgent({ env = process.env,
           '--permission-mode', 'dontAsk', '--no-session-persistence', ...model, 'Carry out the Euclid task supplied on standard input.',
         ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
           input, timeoutMessage: 'Claude exceeded the ten-minute task limit.',
-          onEvent(event) { if (event.type === 'result') result = event.result; } });
-        if (code !== 0) throw new Error('Claude exited before completing the task. Check its sign-in and CLI availability.');
-        return result;
+          onEvent(event) {
+            if (event.type === 'result') result = event;
+            if (event.type !== 'assistant' || event.message?.error || event.error || event.parent_tool_use_id ||
+                !Array.isArray(event.message?.content)) return;
+            for (const block of event.message.content) {
+              if (block.type === 'text' && typeof block.text === 'string' && !authenticationFailure.test(block.text)) {
+                onMessage(block.text);
+              }
+            }
+          } });
+        if (code !== 0 || result?.is_error) {
+          const detail = [result?.result, ...(Array.isArray(result?.errors) ? result.errors : [])]
+            .filter(text => typeof text === 'string').join(' ');
+          if (authenticationFailure.test(detail)) {
+            throw new Error('Claude Code needs a fresh sign-in. Run claude auth login and resend the request.');
+          }
+          throw new Error(detail || 'Claude exited before completing the task. Check its sign-in and CLI availability.');
+        }
+        return result?.result;
       } finally {
         await rmdir(cwd).catch(() => {});
       }

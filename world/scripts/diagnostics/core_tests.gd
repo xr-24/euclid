@@ -263,6 +263,7 @@ func _run() -> void:
 	_check_terminal_keys()
 	_check_agents_panel()
 	_check_wrist_computer()
+	_check_desktop_focus()
 	_check_spring_follow()
 	_check_atmosphere()
 	_check(is_equal_approx(TransformGizmo._segment_distance(Vector2(5, 3), Vector2.ZERO, Vector2(10, 0)), 3.0)
@@ -1670,6 +1671,28 @@ func _check_wrist_computer() -> void:
 	_check(wrist.handle(back) and not wrist.typing and wrist.is_open, "M2 backs out of a wrist edit")
 	_check(wrist.handle(back) and not wrist.is_open, "M2 lowers the wrist from a top-level page")
 	wrist.free()
+
+func _check_desktop_focus() -> void:
+	const Chrome = preload("res://scripts/ui/desktop_panel.gd")
+	var panel := Chrome.new()
+	root.add_child(panel)
+	panel.position = Vector2(80, 60)
+	panel.size = Vector2(440, 280)
+	var entry := LineEdit.new()
+	panel.content.add_child(entry)
+	panel.set_keyboard_active(true)
+	entry.grab_focus()
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = Vector2(20, 20)
+	panel._input(click)
+	_check(panel.visible and not panel.keyboard_active and not entry.has_focus(),
+		"clicking the world leaves a desktop panel visible and frees the movement keys")
+	click.position = Vector2(280, 200)
+	panel._input(click)
+	_check(panel.keyboard_active and entry.has_focus(), "clicking the desktop panel restores its previous keyboard focus")
+	panel.free()
 
 func _check_agents_panel() -> void:
 	var connected := {"state": "connected", "url": "https://relay.test", "agent_url": "https://relay.test/mcp"}

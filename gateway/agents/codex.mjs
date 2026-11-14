@@ -34,11 +34,12 @@ export function createCodexAgent({ env = process.env,
     id: 'codex',
     label: 'Codex',
 
-    async task(input, { url, token, signal }) {
+    async task(input, { url, token, signal, onMessage = () => {} }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
       try {
         let last = '';
+        let failure = '';
         const code = await streamEvents(file, [...args, '-a', 'never', 'exec', ...isolated, ...offline,
           '--sandbox', 'read-only', '--disable', 'shell_tool',
           '-c', `mcp_servers.euclid.url=${JSON.stringify(url)}`,
@@ -48,12 +49,15 @@ export function createCodexAgent({ env = process.env,
         ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
           input, timeoutMessage: 'Codex exceeded the ten-minute task limit.',
           onEvent(event) {
-            if (event.type === 'error' && typeof event.message === 'string') last = event.message;
-            if (event.type === 'turn.failed' && typeof event.error?.message === 'string') last = event.error.message;
-            if (event.type === 'item.completed' && event.item?.type === 'agent_message') last = event.item.text;
+            if (event.type === 'error' && typeof event.message === 'string') failure = event.message;
+            if (event.type === 'turn.failed' && typeof event.error?.message === 'string') failure = event.error.message;
+            if (event.type === 'item.completed' && event.item?.type === 'agent_message' && typeof event.item.text === 'string') {
+              last = event.item.text;
+              onMessage(last);
+            }
           },
         });
-        if (code !== 0 && !last) throw new Error('Codex exited before completing the task. Check its sign-in and CLI availability.');
+        if (code !== 0) throw new Error(failure || 'Codex exited before completing the task. Check its sign-in and CLI availability.');
         return last;
       } finally {
         await rmdir(cwd).catch(() => {});

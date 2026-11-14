@@ -201,7 +201,10 @@ func update_display(lines: PackedStringArray, busy: bool) -> void:
 	_history.clear()
 	for index in lines.size():
 		var line := lines[index]
-		_history.push_color(ACCENT if line.begins_with("> ") else INK)
+		var color := ACCENT if line.begins_with("> ") else INK
+		if line.begins_with("  · "):
+			color = MUTED
+		_history.push_color(color)
 		_history.add_text(line)
 		_history.pop()
 		if index < lines.size() - 1:

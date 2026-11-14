@@ -115,7 +115,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         res.end(page);
         return;
       }
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 32 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 33 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
@@ -126,6 +126,8 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         res.once('close', () => controller.abort());
         const signal = AbortSignal.any([controller.signal, job.controller.signal]);
         const policy = { tools: name => name !== 'claim_task' };
+        const tool = body?.method === 'tools/call' ? body.params?.name : null;
+        if (tool) workers.toolActivity(job, tool);
         let result = await development.rpc(job.actor, body, signal, policy);
         if (job.task.session && body?.method === 'tools/list' && result?.result) {
           const world = await bridge.rpc(job.task.session, body, signal);
@@ -133,6 +135,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
           result.result.tools.push(...world.result.tools.filter(tool => !names.has(tool.name)));
         } else if (job.task.session && body?.method === 'tools/call' && result?.error?.message === 'Unknown workbench tool') {
           result = await bridge.rpc(job.task.session, body, signal, job.actor);
+        }
+        if (tool && result && !signal.aborted) {
+          workers.toolActivity(job, tool, result.error || result.result?.isError ? 'Failed' : 'Finished');
         }
         if (res.destroyed) return;
         return result === null ? res.writeHead(202).end() : reply(res, 200, result);

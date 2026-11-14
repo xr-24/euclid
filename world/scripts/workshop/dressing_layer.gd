@@ -130,7 +130,10 @@ static func _apply_collision(node: Node3D, entry: Dictionary, value: Dictionary)
 		picker.disabled = value.hidden or value.collision
 	for shape: CollisionShape3D in entry.shapes:
 		shape.disabled = value.hidden or entry.shapes[shape] or (not value.collision and shape.get_parent() is PhysicsBody3D)
+	var collision_changed: bool = node.get_meta("collision_enabled", true) != value.collision
 	node.set_meta("collision_enabled", value.collision)
+	if node is RigidBody3D and collision_changed:
+		EntityTypes.set_locked(node, value.hidden or value.get("locked", entry.rigid.freeze))
 
 static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
 	if not entry.has("color_surfaces"):
@@ -208,6 +211,7 @@ func reset_motion(id: String) -> void:
 	if entry.has("rigid"):
 		var value := record(id, {})
 		_apply_rigid(entry.node, entry, value, value, true)
+		_apply_collision(entry.node, entry, value)
 
 static func _apply_rigid(body: RigidBody3D, entry: Dictionary, value: Dictionary, previous: Dictionary,
 		reset := false, keep_pose := false) -> void:

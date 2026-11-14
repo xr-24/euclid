@@ -96,3 +96,20 @@ test('Sketchfab routes store panorama attribution, and failed material conversio
   await assert.rejects(materials.importMaterial(id), /textured material sample/);
   assert.deepEqual(await readdir(path.join(directory, 'materials')), []);
 });
+
+test('the sky catalog lists every Pure Sky and skips panoramas with scenery', async () => {
+  const catalog = {
+    bright_afternoon: { name: 'Bright Afternoon', type: 0, category: 'Pure Skies' },
+    quiet_morning: { name: 'A Quiet Morning', type: 0, categories: ['pure skies'] },
+    park: { name: 'Park', type: 0, categories: ['outdoor', 'skies'] },
+    bad_type: { name: 'Wrong type', type: 1, category: 'Pure Skies' },
+  };
+  for (let index = 0; index < 15; index++) {
+    catalog[`test_sky_${index}`] = { name: `Sky ${index}`, type: 0, category: 'Pure Skies' };
+  }
+  const skies = createSkyService('', async () => Response.json(catalog));
+  const list = await skies.catalog();
+  assert.equal(list.length, 17);
+  assert.deepEqual(list.slice(0, 2).map(item => item.id), ['quiet_morning', 'bright_afternoon']);
+  assert.equal(list[0].page, 'https://polyhaven.com/a/quiet_morning');
+});

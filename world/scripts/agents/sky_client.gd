@@ -3,11 +3,17 @@ extends Node
 
 const Cache = preload("res://scripts/assets/runtime_skies.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
+class Download extends RefCounted:
+	signal finished(result: Dictionary)
+
 var _assets: Node
 var _pending := {}
 
 func configure(assets: Node) -> void:
 	_assets = assets
+
+func catalog() -> Dictionary:
+	return await _assets.request_json("/v1/skies/catalog")
 
 func search(query: String, provider := "polyhaven") -> Dictionary:
 	return await _assets.request_json("/v1/skies/search", {"query": query, "provider": provider})
@@ -16,14 +22,16 @@ func import_sky(id: String) -> Dictionary:
 	if not Cache.valid_id(id):
 		return _error("Invalid sky ID.")
 	if _pending.has(id):
-		return _error("This sky is already importing.")
+		return await (_pending[id] as Download).finished
 	var key := Cache.key_for(id)
 	if Cache.texture(key) != null:
 		var info := Cache.info(key)
 		return {"ok": true, "sky": info if not info.is_empty() else {"id": id, "key": key, "name": Cache.label(key)}}
-	_pending[id] = true
+	var download := Download.new()
+	_pending[id] = download
 	var result := await _download(id, key)
 	_pending.erase(id)
+	download.finished.emit(result)
 	return result
 
 func _download(id: String, key: String) -> Dictionary:

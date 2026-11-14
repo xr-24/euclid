@@ -3,6 +3,7 @@ extends RefCounted
 
 const LIMIT := 12 * 1024 * 1024
 const PREFIX := "polyhaven_"
+const SAMPLES := "res://data/texture_samples.json"
 static var directory := "user://runtime-skies"
 static var _key := RegEx.create_from_string("^polyhaven_[a-z0-9_]{1,64}\\.hdr$")
 static var _sketchfab_id := RegEx.create_from_string("^sf_[a-f0-9]{32}$")
@@ -32,6 +33,16 @@ static func info(key: String) -> Dictionary:
 static func label(key: String) -> String:
 	var item := info(key)
 	return str(item.get("name", key.trim_prefix(PREFIX).get_basename().capitalize()))
+
+static func starter_catalog() -> Array[Dictionary]:
+	var samples: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAMPLES))
+	var result: Array[Dictionary] = []
+	if samples is Dictionary:
+		for item: Dictionary in samples.sky.polyhaven:
+			result.append(item.merged({"license": "CC0", "page": "https://polyhaven.com/a/" + item.id}))
+		for item: Dictionary in samples.sky.sketchfab:
+			result.append(item.merged({"license": "CC BY"}))
+	return result
 
 static func installed() -> Array:
 	if not DirAccess.dir_exists_absolute(directory):

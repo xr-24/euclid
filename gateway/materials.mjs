@@ -33,11 +33,13 @@ export function createMaterialService(directory, fetcher = fetch, sketchfab = cr
 }
 
 export function createSkyService(directory, fetcher = fetch, sketchfab = createSketchfabTextureSource()) {
-  return createImportService(directory, {
+  const service = createImportService(directory, {
     kind: 'sky', catalog: 'hdris', type: 0, validId: id => typeof id === 'string' && ID.test(id),
     extension: 'hdr', limit: 12 * 1024 * 1024, prefix: '/file/ph-assets/HDRIs/hdr/2k/',
     files: files => ({ panorama: files.hdri?.['2k']?.hdr }),
   }, fetcher, sketchfab);
+  return { ...service, catalog: () => service.listPolyHaven(item => item.categories?.includes('pure skies') ||
+    item.category === 'Pure Skies') };
 }
 
 function createImportService(directory, config, fetcher, sketchfab) {
@@ -60,6 +62,13 @@ function createImportService(directory, config, fetcher, sketchfab) {
   function describe(id, item) {
     return { id, name: item.name, author: Object.keys(item.authors ?? {}).join(', '),
       page: `https://polyhaven.com/a/${id}`, license: 'CC0', provider: 'Poly Haven' };
+  }
+
+  async function listPolyHaven(filter) {
+    return Object.entries(await assets())
+      .filter(([id, item]) => validId(id) && item.type === type && typeof item.name === 'string' && filter(item))
+      .map(([id, item]) => describe(id, item))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async function search(query, provider = 'polyhaven') {
@@ -171,5 +180,5 @@ function createImportService(directory, config, fetcher, sketchfab) {
     return path.join(directory, id, key + '.' + extension);
   }
 
-  return { search, importMaterial, map };
+  return { search, importMaterial, map, listPolyHaven };
 }

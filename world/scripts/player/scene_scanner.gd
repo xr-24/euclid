@@ -101,7 +101,10 @@ func _refresh() -> void:
 		_rows.append(_input_row("Color", record.color, _edit_prop.bind(_selection, "color")))
 	var can_simulate: bool = _tools.can_toggle_lock(_selection)
 	var physics: bool = can_simulate and not record.get("locked", false)
-	_rows.append(_toggle_row("Physics", physics, _toggle_physics.bind(_selection), can_simulate))
+	var motion := _toggle_row("Physics", physics, _toggle_physics.bind(_selection), can_simulate)
+	if physics and not record.collision:
+		motion["value"] = "Paused"
+	_rows.append(motion)
 	_rows.append(_toggle_row(Commands.field("collision").title, record.collision, _toggle_collision.bind(_selection)))
 	_preview.show_prop(_selected_node)
 

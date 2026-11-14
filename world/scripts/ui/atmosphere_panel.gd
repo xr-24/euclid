@@ -6,7 +6,6 @@ extends VBoxContainer
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 
 const SkyClient = preload("res://scripts/agents/sky_client.gd")
-const Browser = preload("res://scripts/ui/texture_browser.gd")
 const SkyCache = preload("res://scripts/assets/runtime_skies.gd")
 
 ## field, label, minimum, maximum, step, format
@@ -38,7 +37,11 @@ var _time_mode := OptionButton.new()
 var _clock_poll := 0.0
 var _notice := Label.new()
 var _loading := false
-var _options: Array = []
+var _installed: Array = []
+var _sky_catalog := {}
+var _sky_request := 0
+var _pending_sky := ""
+var _save: Button
 
 func setup(atmosphere: Atmosphere, zone: String, close: Callable, client: SkyClient) -> void:
 	_client = client
@@ -69,26 +72,32 @@ func setup(atmosphere: Atmosphere, zone: String, close: Callable, client: SkyCli
 		if section == "Time & weather":
 			_add_time_mode(body)
 		if section == "Sky":
-			var sky_row := HBoxContainer.new()
 			_sky.size_flags_horizontal = SIZE_EXPAND_FILL
 			_sky.fit_to_longest_item = false
-			_sky.item_selected.connect(func(index: int) -> void: _change("sky", _sky.get_item_metadata(index)))
-			sky_row.add_child(_sky)
-			_button(sky_row, "Import…", _browse_sky)
-			body.add_child(sky_row)
+			_sky.get_popup().max_size.y = 520
+			_sky.item_selected.connect(_choose_sky)
+			body.add_child(_sky)
 		for spec in SLIDERS.get(section, []):
 			_slider(body, spec)
 		for spec in COLORS.get(section, []):
 			_color(body, spec[0], spec[1])
 	var actions := HBoxContainer.new()
 	add_child(actions)
-	_button(actions, "Save", func() -> void: _say(_atmosphere.finish(true)))
-	_button(actions, "Discard", func() -> void: _say(_atmosphere.finish(false)))
-	_button(actions, "Reset", func() -> void: _say(_atmosphere.preview(_zone, {"reset": true})))
+	_save = _button(actions, "Save", func() -> void: _say(_atmosphere.finish(true)))
+	_button(actions, "Discard", func() -> void:
+		_cancel_sky_request()
+		_say(_atmosphere.finish(false))
+		_load())
+	_button(actions, "Reset", func() -> void:
+		_cancel_sky_request()
+		_say(_atmosphere.preview(_zone, {"reset": true})))
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_notice)
+	for item in SkyCache.starter_catalog():
+		_sky_catalog[SkyCache.key_for(item.id)] = item
 	_atmosphere.changed.connect(_load)
 	_load()
+	_extend_sky_catalog()
 
 func _add_time_mode(parent: Control) -> void:
 	_time_mode.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -164,39 +173,93 @@ func _load() -> void:
 	_sliders.time_of_day.editable = values.time_mode != "manual"
 	_sliders.day_length.editable = values.time_mode == "cycle"
 	_sliders.sun_elevation.editable = values.time_mode == "manual"
-	if _options != summary.skies:
-		_options = summary.skies
-		_sky.clear()
-		for sky: String in _options:
-			var label := "Painted gradient" if sky == "gradient" else SkyCache.label(sky)
-			_sky.add_item(label)
-			_sky.set_item_metadata(_sky.item_count - 1, sky)
-			var credit := SkyCache.info(sky)
-			if not credit.is_empty():
-				_sky.set_item_tooltip(_sky.item_count - 1, "%s · %s\n%s" % [credit.author, credit.license, credit.page])
+	if _installed != summary.skies:
+		_installed = summary.skies
+		_fill_skies()
 	for field in _sliders:
 		var slider: HSlider = _sliders[field]
 		slider.set_value_no_signal(float(values.get(field, slider.min_value)))
 		(_readouts[field] as Label).text = _format(field, slider.value)
 	for field in _colors:
 		(_colors[field] as ColorPickerButton).color = Color.html(str(values.get(field, "ffffff")))
-	for index in _sky.item_count:
-		if _sky.get_item_metadata(index) == values.get("sky"):
-			_sky.select(index)
+	_select_sky(_pending_sky if not _pending_sky.is_empty() else values.sky)
 	_loading = false
 
-func _browse_sky() -> void:
-	var browser := Browser.new()
-	add_child(browser)
-	browser.setup("sky", "skies", _client.search, _client.import_sky)
-	browser.chosen.connect(func(key: String, _title: String) -> void: _change("sky", key))
-	browser.popup_centered(Vector2i(520, 360))
+func _extend_sky_catalog() -> void:
+	if _client == null:
+		return
+	var result := await _client.catalog()
+	if not is_visible_in_tree() or not result.ok:
+		return
+	for item: Dictionary in result.skies:
+		var key := SkyCache.key_for(item.id)
+		if not _sky_catalog.has(key):
+			_sky_catalog[key] = item
+	_fill_skies()
+	_select_sky(_pending_sky if not _pending_sky.is_empty() else _atmosphere.inspect(_zone).values.sky)
+
+func _fill_skies() -> void:
+	_sky.clear()
+	for key: String in _installed:
+		_add_sky(key, _sky_catalog.get(key, SkyCache.info(key)))
+	var online := _sky_catalog.keys().filter(func(key: String) -> bool: return key not in _installed)
+	online.sort_custom(func(a: String, b: String) -> bool:
+		return _sky_catalog[a].name.nocasecmp_to(_sky_catalog[b].name) < 0)
+	if not online.is_empty():
+		_sky.add_separator("Download on selection")
+		for key: String in online:
+			_add_sky(key, _sky_catalog[key])
+
+func _add_sky(key: String, item: Dictionary) -> void:
+	var label := "Painted gradient" if key == "gradient" else str(item.get("name", SkyCache.label(key)))
+	_sky.add_item(label)
+	var index := _sky.item_count - 1
+	_sky.set_item_metadata(index, key)
+	if not item.is_empty():
+		_sky.set_item_tooltip(index, "%s · %s\n%s" % [item.get("author", ""), item.get("license", ""), item.get("page", "")])
+
+func _select_sky(key: String) -> void:
+	for index in _sky.item_count:
+		if _sky.get_item_metadata(index) == key:
+			_sky.select(index)
+			return
+
+func _choose_sky(index: int) -> void:
+	var key: String = _sky.get_item_metadata(index)
+	if key == _pending_sky:
+		return
+	_cancel_sky_request()
+	if key not in Atmosphere.skies():
+		if _client == null or not _sky_catalog.has(key):
+			_load()
+			return
+		var item: Dictionary = _sky_catalog[key]
+		var request := _sky_request
+		_pending_sky = key
+		_save.disabled = true
+		_notice.text = "Loading %s…" % item.name
+		var result := await _client.import_sky(item.id)
+		if not is_visible_in_tree() or request != _sky_request:
+			return
+		_pending_sky = ""
+		_save.disabled = false
+		if not result.ok:
+			_load()
+			_notice.text = str(result.message)
+			return
+	_change("sky", key)
+
+func _cancel_sky_request() -> void:
+	_sky_request += 1
+	_pending_sky = ""
+	_save.disabled = false
 
 func _change(field: String, value: Variant) -> void:
 	if _loading:
 		return
 	var result: Dictionary = _atmosphere.preview(_zone, {field: value})
-	_notice.text = "" if result.ok else str(result.message)
+	if not result.ok or _pending_sky.is_empty():
+		_notice.text = "" if result.ok else str(result.message)
 
 func _say(result: Dictionary) -> void:
 	_notice.text = "" if result.ok else str(result.message)

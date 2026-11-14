@@ -158,6 +158,8 @@ static func set_collision(node: PhysicsBody3D, enabled: bool) -> void:
 		AuthoredProps.add_picker(target, node.get_meta("entity_id"))
 
 static func set_locked(body: RigidBody3D, locked: bool) -> void:
+	# With no solid collider, keep the authored pose instead of allowing gravity to sink it.
+	locked = locked or not body.get_meta("collision_enabled", true)
 	if body.freeze != locked:
 		body.freeze = locked
 		body.linear_velocity = Vector3.ZERO

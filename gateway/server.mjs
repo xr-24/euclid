@@ -249,6 +249,10 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         try { return reply(res, 200, await workbench(workbenchRoute[1], body, controller.signal)); }
         catch (error) { if (!res.destroyed) return reply(res, 400, { error: error.message }); return; }
       }
+      if (req.method === 'GET' && req.url === '/v1/skies/catalog') {
+        try { return reply(res, 200, { ok: true, skies: await skies.catalog() }); }
+        catch (error) { return reply(res, 502, { error: error.message }); }
+      }
       const materialMap = /^\/v1\/materials\/([a-z0-9_]{1,64})\/(albedo|normal|orm)\.jpg$/.exec(req.url);
       const skyMap = /^\/v1\/skies\/([a-z0-9_]{1,64})\/panorama\.hdr$/.exec(req.url);
       if (req.method === 'GET' && (materialMap || skyMap)) {

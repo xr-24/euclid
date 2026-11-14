@@ -788,7 +788,23 @@ func _check_grab_release() -> void:
 	var center := camera.get_viewport().get_visible_rect().get_center()
 	var aim := ScenePlacement.aim_at(player, camera, center, PropGrabber.REACH)
 	_check(turned_off.ok and body.collision_layer == 0 and body.collision_mask == 0
-		and not body.freeze and aim.id == result.id, "collisionless props remain selectable with physics on")
+		and body.freeze and aim.id == result.id, "collisionless props hold their pose and remain selectable")
+	var floor := StaticBody3D.new()
+	var ground := CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(10, 1, 10)
+	ground.shape = slab
+	ground.position = Vector3(0, 1.5, -4)
+	floor.add_child(ground)
+	zone.add_child(floor)
+	_check(tools.commit_grab(result.id, body, {"position": [0.0, 1.9, -4.0], "locked": false}).ok,
+		"place a collisionless prop partly inside the ground")
+	for frame in 12:
+		await physics_frame
+	_check(body.position.is_equal_approx(Vector3(0, 1.9, -4)),
+		"a collisionless prop placed in the ground stays at its saved position")
+	floor.free()
+	_check(tools.execute("undo").ok, "undo the embedded placement")
 	_check(tools.execute("undo").ok and body.collision_layer != 0 and not body.freeze,
 		"restore the spawned prop's collision and physics on undo")
 	body.position.x = -5.0
@@ -895,8 +911,9 @@ func _check_scanner_physics() -> void:
 	for frame in 4:
 		await physics_frame
 	var record: Dictionary = tools.execute("inspect", {"id": id}).entity
-	_check(body != null and not body.freeze and body.position.y < at.y and not record.collision,
-		"the Physics toggle starts gravity without turning collision back on")
+	_check(body != null and body.freeze and body.global_position.is_equal_approx(at) and not record.collision
+		and not record.locked and wrist.current().rows[physics].value == "Paused",
+		"the Physics toggle stores the setting while collisionless motion is paused")
 	wrist.handle(confirm)
 	wrist.refresh()
 	var paused := body.position
@@ -910,6 +927,9 @@ func _check_scanner_physics() -> void:
 	_check(body.freeze and wrist.current().rows[collision].value == "On", "turning collision on keeps the frozen prop in place")
 	_check(tools.execute("undo").ok and body.freeze and not tools.execute("inspect", {"id": id}).entity.collision,
 		"undo can restore collision separately from physics")
+	_check(tools.set_prop_physics(id, true).ok and body.freeze, "a collisionless prop can be armed for physics")
+	_check(tools.execute("edit", {"id": id, "changes": {"collision": true}}).ok and not body.freeze,
+		"restoring collision resumes the saved physics state")
 	zone.free()
 
 func _grab_button(grabber: PropGrabber, button: MouseButton, pressed := true) -> void:

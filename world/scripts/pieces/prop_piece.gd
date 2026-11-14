@@ -32,7 +32,8 @@ static func entity_record(record: Dictionary) -> Dictionary:
 	var kind: String = record.prop_kind
 	var data := {"id": record.id, "type": kind, "position": record.get("position", [0, 0, 0]),
 		"yaw": record.get("rotation", [0, 0, 0])[1], "scale": record.get("prop_size", 1.0),
-		"color": record.get("color", Types.TYPES[kind].color), "locked": record.get("locked", false)}
+		"color": record.get("color", Types.TYPES[kind].color), "locked": record.get("locked", false),
+		"collision": record.get("collision", true)}
 	for key in ["asset_id", "stretch", "name", "animation"]:
 		if record.get(key) != null:
 			data[key] = record[key]
@@ -63,10 +64,11 @@ static func update_fields(node: Node3D, before: Dictionary, after: Dictionary) -
 	var door := node.get_node_or_null("DoorActuator")
 	if door == null or before.get("prop_size") != after.get("prop_size"):
 		return false
+	Types.set_collision(node, after.get("collision", true))
 	door.links.drive("piece", after.id, float(after.get("door_open", 0.0)), 2.0)
 	return true
 
 static func _update_rigid(node: RigidBody3D, previous: Dictionary, next: Dictionary) -> void:
 	Types.update_placement(node, previous, next, true)
-	if previous.locked != next.locked or Types.movable(previous) != Types.movable(next):
+	if previous.locked != next.locked or previous.collision != next.collision or Types.movable(previous) != Types.movable(next):
 		Types.set_locked(node, next.locked or not Types.movable(next))

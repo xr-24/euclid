@@ -120,7 +120,10 @@ func execute(tool: String, args := {}) -> Dictionary:
 		return _error("Unknown world tool.")
 	if definition.mutates_world and not _root.get_parent().get_meta("scene_edit", true):
 		return _error("This environment does not allow scene edits.")
-	return call(definition.handler, args)
+	var result: Dictionary = call(definition.handler, args)
+	if not result.get("entity", {}).is_empty() and not result.entity.has("collision"):
+		result["entity"] = result.entity.merged({"collision": true})
+	return result
 
 func _list_records(_args: Dictionary) -> Dictionary:
 	return {"ok": true, "entities": _records().duplicate(true), "can_undo": not _history.is_empty() or (_pieces != null and _pieces.has_undo())}
@@ -130,7 +133,7 @@ func _list_entities(_args: Dictionary) -> Dictionary:
 	for item in _records():
 		var entry := {"id": item.id, "name": EntityTypes.label(item).left(64), "type": item.type,
 			"position": item.position.duplicate(), "yaw": item.yaw, "scale": item.scale, "color": item.color,
-			"behavior": _effective(item).get("behavior", {}).get("id", "")}
+			"collision": item.get("collision", true), "behavior": _effective(item).get("behavior", {}).get("id", "")}
 		if item.get("authored", false):
 			entry.merge({"authored": true, "hidden": item.hidden, "overridden": item.overridden})
 		if item.has("live_position"):
@@ -187,6 +190,10 @@ func _spawn(args: Dictionary) -> Dictionary:
 		proposed["name"] = args.name.strip_edges() if args.name is String else args.name
 	if args.has("stretch"):
 		proposed["stretch"] = args.stretch
+	if args.has("collision"):
+		if not Commands.valid_field("collision", args.collision):
+			return _error("Collision must be true or false.")
+		proposed["collision"] = args.collision
 	if args.has("animation"):
 		proposed["animation"] = args.animation
 	if args.has("behavior"):
@@ -217,9 +224,11 @@ func _edit_entity(args: Dictionary) -> Dictionary:
 	var proposed := record.duplicate()
 	for key in changes:
 		if authored and key not in Commands.prop_fields(true):
-			return _error("Authored props support position, rotation, scale, name and color edits.")
+			return _error("Authored props support position, rotation, scale, name, color and collision edits.")
 		if key != "animation" and key not in Commands.prop_fields(false):
 			return _error("Unknown editable property.")
+		if key == "collision" and not Commands.valid_field("collision", changes.collision):
+			return _error("Collision must be true or false.")
 		if key == "name" and changes.name is String:
 			var name: String = changes.name.strip_edges()
 			if name.is_empty():
@@ -495,7 +504,7 @@ func _edit_prop_piece(piece: Dictionary, proposed: Dictionary, from_grab: bool) 
 static func _to_piece(entity: Dictionary, rotation: Array) -> Dictionary:
 	var record := {"id": entity.id, "type": "prop", "prop_kind": entity.type, "position": entity.position,
 		"rotation": rotation, "prop_size": entity.scale, "color": entity.color, "locked": entity.get("locked", false)}
-	for key in ["asset_id", "name", "stretch", "animation"]:
+	for key in ["asset_id", "name", "stretch", "animation", "collision"]:
 		if entity.has(key):
 			record[key] = entity[key]
 	if entity.has("behavior"):
@@ -567,6 +576,7 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary, keep_pos
 			EntityTypes.update_placement(body, previous, record, keep_pose)
 			return
 		if not record.is_empty() and _same_placement(previous, record):
+			EntityTypes.set_collision(_nodes[id], record.get("collision", true))
 			var player := animation_player(id)
 			if player:
 				var clip: Dictionary = record.get("animation", {})
@@ -574,8 +584,8 @@ func _sync_record(id: String, previous: Dictionary, record: Dictionary, keep_pos
 					player.set_clip(clip)
 				if previous.get("behavior") != record.get("behavior"):
 					_sync_behavior(_nodes[id], _effective(record))
-				if body and (previous.get("behavior") != record.get("behavior") or previous.get("animation") != record.get("animation")):
-					body.freeze = record.get("locked", false) or not EntityTypes.movable(record)
+				if body:
+					EntityTypes.set_locked(body, record.get("locked", false) or not EntityTypes.movable(record))
 				return
 		_nodes[id].free()
 		_nodes.erase(id)

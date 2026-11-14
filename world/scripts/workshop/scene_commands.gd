@@ -76,6 +76,7 @@ static func _notice(definition: Dictionary, result: Dictionary, arguments: Dicti
 				appearance += ", hidden"
 			var message := "%s at %s, yaw %s°, scale %s, %s." % [
 				EntityTypes.label(item), str(item.position), str(item.yaw), str(item.scale), appearance]
+			message += " Collision %s." % ("on" if item.get("collision", true) else "off")
 			if not item.get("live_position", []).is_empty():
 				message += " Current position %s." % str(item.live_position)
 			return message

@@ -98,9 +98,12 @@ func _refresh() -> void:
 	_rows.append(_input_row("Scale", record.scale, _edit_prop.bind(_selection, "scale")))
 	if "color" in Commands.prop_fields(record.get("authored", false)):
 		_rows.append(_input_row("Color", record.color, _edit_prop.bind(_selection, "color")))
+	var collision: bool = record.collision
+	_rows.append({"label": Commands.field("collision").title, "value": "On" if collision else "Off",
+		"run": _toggle_collision.bind(_selection, collision), "enabled": _editable, "why": "Scene edits disabled"})
 	if _tools.can_toggle_lock(_selection):
-		var locked := not _selected_node is RigidBody3D or (_selected_node as RigidBody3D).freeze
-		_rows.append({"label": "Unlock" if locked else "Lock", "run": _toggle_lock.bind(_selection),
+		var locked: bool = record.get("locked", false)
+		_rows.append({"label": "Unlock" if locked else "Lock", "run": _toggle_lock.bind(_selection, locked),
 			"enabled": _editable, "why": "Scene edits disabled"})
 	_preview.show_prop(_selected_node)
 
@@ -134,10 +137,13 @@ func _edit_prop(text: String, id: String, key: String) -> void:
 	var result: Dictionary = _tools.execute("edit", {"id": id, "changes": changes})
 	_report(id, result)
 
-func _toggle_lock(id: String) -> void:
+func _toggle_collision(id: String, enabled: bool) -> void:
+	var result: Dictionary = _tools.execute("edit", {"id": id, "changes": {"collision": not enabled}})
+	_report(id, result)
+
+func _toggle_lock(id: String, locked: bool) -> void:
 	var node: Node3D = _tools.scene_node(id)
 	if node and _tools.can_toggle_lock(id):
-		var locked := not node is RigidBody3D or (node as RigidBody3D).freeze
 		var result: Dictionary = _tools.commit_grab(id, node, {"locked": not locked, "position": Placement.coordinates(node.position)})
 		_report(id, result)
 

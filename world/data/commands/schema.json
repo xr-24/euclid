@@ -379,6 +379,11 @@
       "maxLength": 48,
       "pattern": "^(?=[^\\x00-\\x1f\\x7f]*\\S)[^\\x00-\\x1f\\x7f]+$"
     },
+    "collision": {
+      "type": "boolean",
+      "title": "Collision",
+      "description": "Whether the prop blocks movement and participates in physical collisions. An off prop stays selectable."
+    },
     "prop_changes": {
       "type": "object",
       "properties": {
@@ -396,6 +401,9 @@
         },
         "color": {
           "$ref": "#/$defs/color"
+        },
+        "collision": {
+          "$ref": "#/$defs/collision"
         },
         "name": {
           "$ref": "#/$defs/prop_name"
@@ -421,6 +429,9 @@
         },
         "color": {
           "$ref": "#/$defs/color"
+        },
+        "collision": {
+          "$ref": "#/$defs/collision"
         },
         "name": {
           "$ref": "#/$defs/prop_name"
@@ -551,6 +562,7 @@
     "scale",
     "stretch",
     "name",
+    "collision",
     "color"
   ],
   "entity_types": {
@@ -628,6 +640,7 @@
     "yaw",
     "scale",
     "stretch",
+    "collision",
     "color",
     "asset_id",
     "animation",

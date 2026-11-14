@@ -35,12 +35,11 @@ static func register(root: Node3D, id: String, node: Node3D, asset: String, yaw:
 			if options.get("placement_surface", false):
 				collider.set_meta("placement_surface", true)
 			shapes[shape] = shape.disabled
-	if shapes.is_empty():
-		var picker := _add_picker(node)
-		if picker:
-			picker.get_parent().set_meta("entity_id", id)
-			shapes[picker] = false
+	record["collision"] = shapes.keys().any(func(shape: CollisionShape3D) -> bool:
+		return shape.get_parent() is PhysicsBody3D and not shape.disabled)
 	var entry := {"record": record, "node": node, "shapes": shapes, "basis": node.basis}
+	if not record.collision:
+		entry["picker"] = add_picker(node, id)
 	if not options.get("placement_surface", false) and not node.has_node("TerminalSurface"):
 		entry["physics_bounds"] = _bounds(node, Transform3D.IDENTITY)
 	if node is RigidBody3D:
@@ -56,11 +55,13 @@ static func register(root: Node3D, id: String, node: Node3D, asset: String, yaw:
 	entries[id] = entry
 	root.set_meta("authored_dressing", entries)
 
-static func _add_picker(node: Node3D) -> CollisionShape3D:
+static func add_picker(node: Node3D, id: String) -> CollisionShape3D:
 	var bounds := _bounds(node, Transform3D.IDENTITY)
 	if not bounds.has_surface():
 		return null
 	var area := Area3D.new()
+	area.name = "EntityPicker"
+	area.set_meta("entity_id", id)
 	area.collision_layer = PICK_LAYER
 	area.collision_mask = 0
 	area.monitoring = false

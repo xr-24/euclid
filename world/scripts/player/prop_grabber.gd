@@ -155,14 +155,14 @@ func _move(player: CharacterBody3D, bounds: AABB, aim: Dictionary) -> Vector3:
 	var desired: Vector3 = aim.from + aim.direction * maxf(depth, 0.85) + offset
 	var parent := node.get_parent() as Node3D
 	desired = parent.to_global(parent.to_local(desired).clamp(bounds.position, bounds.end))
-	if node is PhysicsBody3D:
+	if node is PhysicsBody3D and node.get_meta("collision_enabled", true):
 		var query := PhysicsTestMotionParameters3D.new()
 		query.from = node.global_transform
 		query.motion = desired - node.global_position
 		query.exclude_bodies = [player.get_rid()]
 		var motion := PhysicsTestMotionResult3D.new()
 		if PhysicsServer3D.body_test_motion(node.get_rid(), query, motion):
-			desired = node.global_position + motion.get_travel()
+			desired = parent.to_global(parent.to_local(node.global_position + motion.get_travel()).clamp(bounds.position, bounds.end))
 	if node is RigidBody3D:
 		node.global_basis = yaw * _hold.world_basis
 		for part: Node3D in _hold.parts:
@@ -197,7 +197,10 @@ func _finish(tools, right_click: bool) -> void:
 
 func _unlock(tools, aim: Dictionary) -> void:
 	var body: Node3D = tools.scene_node(aim.id)
-	if body and tools.can_toggle_lock(aim.id) and (not body is RigidBody3D or body.freeze):
+	if not body or not tools.can_toggle_lock(aim.id):
+		return
+	var inspected: Dictionary = tools.execute("inspect", {"id": aim.id})
+	if inspected.ok and inspected.entity.get("locked", false):
 		var changes := {"locked": false, "yaw": tools.live_yaw(aim.id)}
 		if Placement.contains(tools.bounds, body.position):
 			changes["position"] = Placement.coordinates(body.position)

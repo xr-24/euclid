@@ -109,7 +109,7 @@
     },
     {
       "name": "edit_entity",
-      "description": "Move, rotate, resize, rename or recolor a prop. Authored props keep their original finish.",
+      "description": "Move, rotate, resize, rename, recolor or toggle collision on a prop. Authored props keep their original finish.",
       "service": "scene",
       "handler": "_edit_entity",
       "local": "edit",

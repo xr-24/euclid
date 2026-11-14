@@ -6,6 +6,7 @@ const Library = preload("res://scripts/asset_library.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const BehaviorRegistry = preload("res://scripts/plugins/behavior_registry.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
+const AuthoredProps = preload("res://scripts/zones/authored_props.gd")
 static var TYPES := Commands.entity_types()
 const LIBRARY_CATEGORIES := ["bust", "fragment", "furniture", "plant", "prop", "rock", "sarcophagus", "statue", "tree"]
 
@@ -19,6 +20,7 @@ static func valid_properties(record: Dictionary) -> bool:
 		and (not record.has("animation") or (MotionClip.valid(record.animation) and MotionClip.supports(record.animation, false))) \
 		and (not record.has("behavior") or BehaviorRegistry.valid_record(record.behavior)) \
 		and record.get("locked", false) is bool \
+		and record.get("collision", true) is bool \
 		and Commands.valid_field("yaw", record.get("yaw")) \
 		and Commands.valid_field("scale", record.get("scale")) \
 		and (not record.has("stretch") or (Commands.valid_field("stretch", record.stretch) \
@@ -59,7 +61,6 @@ static func create(record: Dictionary) -> PhysicsBody3D:
 	var body: PhysicsBody3D
 	if TYPES[record.type].factory != "door":
 		var rigid := RigidBody3D.new()
-		rigid.freeze = record.get("locked", false) or not movable(record)
 		rigid.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 		rigid.continuous_cd = true
 		rigid.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
@@ -102,6 +103,9 @@ static func create(record: Dictionary) -> PhysicsBody3D:
 	var stretch := stretch_of(record)
 	if stretch != Vector3.ONE:
 		_resize_parts(body, stretch)
+	set_collision(body, record.get("collision", true))
+	if body is RigidBody3D:
+		set_locked(body, record.get("locked", false) or not movable(record))
 	return body
 
 ## Stretch along the prop's own axes (X, Y and Z after its yaw), on top of its scale.
@@ -122,10 +126,39 @@ static func update_placement(body: RigidBody3D, previous: Dictionary, record: Di
 	if before != after:
 		_resize_parts(body, after / before)
 		body.mass = clampf(float(record.scale) * 4.0, 1.0, 16.0)
+	set_collision(body, record.get("collision", true))
 	if not keep_pose:
 		set_locked(body, record.get("locked", false))
 
+## Keep a selection-only area on the moving part of the prop while its physics bodies are disabled.
+static func set_collision(node: PhysicsBody3D, enabled: bool) -> void:
+	if node.get_meta("collision_enabled", true) == enabled:
+		return
+	node.set_meta("collision_enabled", enabled)
+	var bodies := node.find_children("*", "PhysicsBody3D", true, false)
+	bodies.push_front(node)
+	for body: PhysicsBody3D in bodies:
+		if enabled:
+			var filters: Vector2i = body.get_meta("collision_filters")
+			body.collision_layer = filters.x
+			body.collision_mask = filters.y
+			body.remove_meta("collision_filters")
+		else:
+			body.set_meta("collision_filters", Vector2i(body.collision_layer, body.collision_mask))
+			body.collision_layer = 0
+			body.collision_mask = 0
+	var target := node.get_node_or_null("DoorLeaf") as Node3D
+	if target == null:
+		target = node
+	var picker := target.get_node_or_null("EntityPicker") as Area3D
+	if enabled:
+		if picker:
+			picker.free()
+	elif not picker:
+		AuthoredProps.add_picker(target, node.get_meta("entity_id"))
+
 static func set_locked(body: RigidBody3D, locked: bool) -> void:
+	locked = locked or not body.get_meta("collision_enabled", true)
 	if body.freeze != locked:
 		body.freeze = locked
 		body.linear_velocity = Vector3.ZERO

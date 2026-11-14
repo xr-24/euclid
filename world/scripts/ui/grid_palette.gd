@@ -17,6 +17,7 @@ var _fields := {}
 var _numeric_fields := {}
 var _form_baseline := {}
 var _color: ColorPickerButton
+var _collision: CheckButton
 var _color_label: Label
 var _name: LineEdit
 var _library: OptionButton
@@ -107,6 +108,11 @@ func setup(tools: RefCounted, spawn_at: Vector3, selected: String, catalog: Call
 	_color.color_changed.connect(_show_color_code)
 	color_field.add_child(_color)
 	_show_color_code(_color.color)
+	_collision = CheckButton.new()
+	_collision.text = Commands.field("collision").title
+	_collision.button_pressed = true
+	_collision.tooltip_text = "Controls whether the prop blocks movement. Select Apply to save."
+	properties.add_child(_collision)
 	var actions := HFlowContainer.new()
 	add_child(actions)
 	var action_buttons := {}
@@ -175,7 +181,8 @@ func capture_view() -> Dictionary:
 		fields[key] = {"value": input.value, "text": input.get_line_edit().text}
 	var point := Vector3.INF if _spawn_at.is_empty() else Vector3(_spawn_at[0], _spawn_at[1], _spawn_at[2])
 	return {"selected": _selected, "spawn_at": point, "name": _name.text,
-		"fields": fields, "color": _color.color, "behavior": _behaviors.capture_view(),
+		"fields": fields, "color": _color.color, "collision": _collision.button_pressed,
+		"behavior": _behaviors.capture_view(),
 		"library": _library.get_selected_metadata() if _library.selected > 0 else "",
 		"prefab": _prefabs.get_selected_metadata() if _prefabs.selected > 0 else "",
 		"prefab_name": _prefab_name.text, "prompt": _agent_input.text}
@@ -189,6 +196,7 @@ func restore_view(view: Dictionary) -> bool:
 				input.value = fields[key].value
 				input.get_line_edit().text = fields[key].text
 		_color.color = view.get("color", _color.color)
+		_collision.set_pressed_no_signal(view.get("collision", _collision.button_pressed))
 		_show_color_code(_color.color)
 		_name.text = view.get("name", _name.text)
 		_behaviors.restore_view(view.get("behavior", {}))
@@ -293,6 +301,8 @@ func _form_values() -> Dictionary:
 		changes[key] = _fields[_numeric_fields[key]].value
 	if not _color.disabled:
 		changes["color"] = _color.color.to_html(false)
+	if not _collision.disabled:
+		changes["collision"] = _collision.button_pressed
 	return changes
 
 func _apply_changes() -> void:
@@ -376,6 +386,8 @@ func _select(index: int) -> void:
 	var stretch: Variant = record.get("stretch", [1.0, 1.0, 1.0])
 	_reset_shape.visible = editable and stretch is Array and stretch != [1.0, 1.0, 1.0] and stretch != [1, 1, 1]
 	_save_prefab.disabled = not editable or authored
+	_collision.disabled = not editable
+	_collision.set_pressed_no_signal(record.get("collision", true))
 	var supports_color := "color" in Commands.prop_fields(authored)
 	_color.disabled = not editable or not supports_color
 	(_color.get_parent() as Control).visible = supports_color

@@ -1,6 +1,7 @@
 extends RefCounted
 ## Runtime layer for the grouped model, plinth, and collision produced by the builder.
 
+const AuthoredProps = preload("res://scripts/zones/authored_props.gd")
 const Placement = preload("res://scripts/workshop/scene_placement.gd")
 const EntityTypes = preload("res://scripts/workshop/entity_types.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
@@ -50,7 +51,11 @@ func records(overrides: Dictionary) -> Array:
 func record(id: String, override: Dictionary) -> Dictionary:
 	if not has(id):
 		return {}
-	var value: Dictionary = _entries[id].record.duplicate(true)
+	var entry: Dictionary = _entries[id]
+	var value: Dictionary = entry.record.duplicate(true)
+	# Older saves used unlocking alone to give visual-only dressing a collider.
+	if override.get("locked", true) == false:
+		value["collision"] = true
 	value.merge(override.duplicate(true), true)
 	value["hidden"] = override.get("hidden", false)
 	value["overridden"] = not override.is_empty()
@@ -64,7 +69,8 @@ func record(id: String, override: Dictionary) -> Dictionary:
 func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dictionary:
 	if proposed.is_empty():
 		return current.merged({"hidden": true}, true)
-	var base: Dictionary = _entries[id].record
+	var entry: Dictionary = _entries[id]
+	var base: Dictionary = entry.record
 	var result := {}
 	for key in Commands.prop_fields(true):
 		if proposed.has(key) and proposed[key] != base.get(key):
@@ -73,6 +79,9 @@ func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dicti
 		var base_lock: bool = _entries[id].get("rigid", {}).get("freeze", true)
 		if proposed.get("locked", base_lock) != base_lock:
 			result["locked"] = proposed.locked
+	if result.get("locked", true) == false and not base.collision:
+		# First release supplies a collider for authored scenery that only had a picker.
+		result["collision"] = not entry.has("rigid") or proposed.collision
 	return result
 
 static func changes_geometry(before: Dictionary, after: Dictionary) -> bool:
@@ -86,7 +95,7 @@ func apply(id: String, override: Dictionary, previous := {}, keep_pose := false)
 	var value := record(id, override)
 	var node: Node3D = entry.node
 	if not entry.has("rigid") and override.get("locked", true) == false and can_unlock(id):
-		node = _make_rigid(id, entry)
+		node = _make_rigid(id, entry, value)
 		_apply_rigid(node, entry, value, record(id, previous), true)
 	elif entry.has("rigid"):
 		_apply_rigid(node as RigidBody3D, entry, value, record(id, previous), false, keep_pose)
@@ -99,10 +108,31 @@ func apply(id: String, override: Dictionary, previous := {}, keep_pose := false)
 		var stretch := facing * Basis.from_scale(EntityTypes.stretch_of(value)) * facing.inverse()
 		node.basis = stretch * Basis(Vector3.UP, yaw) * authored_basis.scaled(Vector3.ONE * float(value.scale))
 	node.visible = not value.hidden and node.process_mode != Node.PROCESS_MODE_DISABLED
-	for shape in entry.shapes:
-		shape.disabled = value.hidden or entry.shapes[shape]
+	_apply_collision(node, entry, value)
 	if override.get("color") != previous.get("color"):
 		_apply_color(node, entry, Color.html(value.color))
+
+static func _apply_collision(node: Node3D, entry: Dictionary, value: Dictionary) -> void:
+	if not entry.has("picker") and not value.collision:
+		entry["picker"] = AuthoredProps.add_picker(entry.get("picker_target", node), value.id)
+	var picker := entry.get("picker") as CollisionShape3D
+	if value.collision and not entry.record.collision and not entry.has("rigid") and picker and not entry.has("added_collider"):
+		var body := StaticBody3D.new()
+		body.set_meta("entity_id", value.id)
+		var shape := CollisionShape3D.new()
+		shape.shape = picker.shape
+		shape.transform = picker.transform
+		body.add_child(shape)
+		node.add_child(body)
+		entry["added_collider"] = shape
+		entry.shapes[shape] = false
+	if picker:
+		picker.disabled = value.hidden or value.collision
+	for shape: CollisionShape3D in entry.shapes:
+		shape.disabled = value.hidden or entry.shapes[shape] or (not value.collision and shape.get_parent() is PhysicsBody3D)
+	if node is RigidBody3D and node.get_meta("collision_enabled", true) != value.collision:
+		node.set_meta("collision_enabled", value.collision)
+		EntityTypes.set_locked(node, value.hidden or value.get("locked", entry.rigid.freeze))
 
 static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
 	if not entry.has("color_surfaces"):
@@ -133,7 +163,7 @@ static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
 		else:
 			mesh.set_surface_override_material(binding[1], material)
 
-static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
+static func _make_rigid(id: String, entry: Dictionary, value: Dictionary) -> RigidBody3D:
 	var model: Node3D = entry.node
 	var parent := model.get_parent()
 	# The body takes the prop's authored yaw and the model keeps the rest of its basis, so the
@@ -153,8 +183,10 @@ static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	body.mass = clampf(box.get_volume() * 7.0, 3.0, 90.0)
 	body.continuous_cd = true
 	body.set_meta("entity_id", id)
+	# The physics server reads the initial pose when the body enters the world.
+	body.position = Vector3(value.position[0], value.position[1], value.position[2])
+	body.rotation.y = deg_to_rad(value.yaw)
 	parent.remove_child(model)
-	parent.add_child(body)
 	body.add_child(model)
 	model.transform = Transform3D(model_basis, Vector3.ZERO)
 	for old_shape in entry.shapes:
@@ -165,6 +197,8 @@ static func _make_rigid(id: String, entry: Dictionary) -> RigidBody3D:
 	shape.shape = collider
 	shape.position = box.get_center()
 	body.add_child(shape)
+	parent.add_child(body)
+	entry["picker_target"] = model
 	entry.node = body
 	entry.basis = facing
 	entry.shapes = {shape: false}
@@ -225,7 +259,7 @@ static func valid_override(override: Variant, bounds: AABB) -> bool:
 				if not Commands.valid_field("color", override.color): return false
 			"hidden":
 				if not override.hidden is bool or not override.hidden: return false
-			"locked":
-				if not override.locked is bool: return false
+			"locked", "collision":
+				if not override[key] is bool: return false
 			_: return false
 	return true

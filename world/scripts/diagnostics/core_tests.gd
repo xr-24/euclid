@@ -554,12 +554,14 @@ func _check_scene_edits(path: String) -> void:
 	_check(added.ok and added.entity.name == "Library marker", "place named props beyond the Grid bounds")
 	var id: String = added.get("id", "")
 	var moved := SceneCommands.execute(villa, {"tool": "edit_entity", "target": id,
-		"changes": {"position": [1.0, 0.15, -77.0], "yaw": 45.0}}, [])
-	_check(moved.ok and moved.entity.id == id and moved.entity.yaw == 45.0, "agent edits preserve scene prop identity")
+		"changes": {"position": [1.0, 0.15, -77.0], "yaw": 45.0, "collision": false}}, [])
+	_check(moved.ok and moved.entity.id == id and moved.entity.yaw == 45.0 and not moved.entity.collision,
+		"agent edits preserve scene prop identity and allow disabling collision")
 	_check(not SceneCommands.execute(villa, {"tool": "edit_entity", "target": id,
 		"changes": {"position": [121.0, 0.15, -77.0]}}, []).ok, "reject an edit outside the villa bounds")
 	var duplicate := SceneCommands.execute(villa, {"tool": "duplicate_entity", "target": id}, [])
-	_check(duplicate.ok and duplicate.id != id and duplicate.entity.name == "Library marker", "duplicate keeps props independent")
+	_check(duplicate.ok and duplicate.id != id and duplicate.entity.name == "Library marker" and not duplicate.entity.collision,
+		"duplicate keeps props independent and carries over the collision setting")
 	var beach_prop := SceneCommands.execute(beach, {"tool": "spawn_prop", "target": "traffic_cone",
 		"changes": {"position": [2.0, 0.0, -8.0], "name": "Shore marker"}}, [])
 	_check(beach_prop.ok and not beach.execute("inspect", {"id": id}).ok, "prop identity is scoped to one scene")
@@ -603,7 +605,8 @@ func _check_authored_dressing(path: String) -> void:
 	_check(Store.write_json(path, {"schema_version": 1, "entities": [legacy]}) == OK, "seed a legacy placed prop save")
 	var tools := WorldTools.new(path)
 	tools.attach(zone)
-	_check(tools.execute("inspect", {"id": legacy.id}).get("entity") == legacy, "load legacy props without conversion")
+	var inspected: Dictionary = tools.execute("inspect", {"id": legacy.id}).get("entity", {})
+	_check(inspected == legacy.merged({"collision": true}), "load legacy props with collision on")
 	var changes := {"position": [3, 0, 0], "yaw": 90, "scale": 1.5, "name": "Moved statue"}
 	_check(tools.execute("edit", {"id": id, "changes": changes}).ok and statue.position.x == 3.0
 		and is_equal_approx(statue.rotation_degrees.y, 90.0) and statue.scale == Vector3.ONE * 1.5,
@@ -634,6 +637,15 @@ func _check_authored_dressing(path: String) -> void:
 	tools.attach(zone)
 	_check(not tools.execute("list").get("can_undo", true) and tools.execute("inspect", {"id": legacy.id}).ok
 		and statue.position.x == 3.0, "recover props and overrides even when history is invalid")
+	_check(tools.execute("edit", {"id": id, "changes": {"collision": false}}).ok and shape.disabled,
+		"disable an authored prop's original collision")
+	tools = WorldTools.new(path)
+	tools.attach(zone)
+	var picker := statue.get_node_or_null("EntityPicker") as Area3D
+	_check(not tools.execute("inspect", {"id": id}).entity.collision and shape.disabled
+		and picker != null and not picker.get_child(0).disabled, "reload an authored collision edit and retain picking")
+	_check(tools.execute("undo").ok and not shape.disabled and picker.get_child(0).disabled,
+		"undo an authored collision edit without recreating the prop")
 	zone.free()
 	DirAccess.remove_absolute(path)
 
@@ -669,12 +681,17 @@ func _check_registered_props() -> void:
 		"rotate and scale a sloped prop relative to its authored basis")
 	_check(tools.execute("restore_dressing", {"id": rock_id}).ok and rock.basis.is_equal_approx(rock_basis),
 		"restore the exact authored basis and scale")
+	_check(not tools.execute("inspect", {"id": rock_id}).entity.collision, "report a visual-only authored prop as non-solid")
+	var solid := tools.execute("edit", {"id": rock_id, "changes": {"collision": true}})
+	_check(solid.ok and picker.get_child(0).disabled and rock.find_children("*", "StaticBody3D", true, false).size() == 1,
+		"give a visual-only authored prop a collider when enabled")
+	_check(tools.execute("undo").ok and not picker.get_child(0).disabled, "restore a visual-only prop's selection area on undo")
 	var unlocked := tools.commit_grab(rock_id, rock, {"locked": false})
 	var released := tools.scene_node(rock_id) as RigidBody3D
 	_check(unlocked.ok and released != null and not released.freeze and picker.get_child(0).disabled,
 		"unlock an authored static prop with a rigid collider and disable its original picker")
-	_check(tools.execute("undo").ok and released != null and released.freeze,
-		"undo the unlock and restore the authored prop's locked state")
+	_check(tools.execute("undo").ok and released != null and released.freeze and not picker.get_child(0).disabled,
+		"undo the unlock and restore the authored prop's original collision and lock")
 	floater.position.x += 3.0
 	var renamed := tools.execute("edit", {"id": floater_id, "changes": {"name": "Drifting buoy"}})
 	_check(renamed.ok and renamed.entity.position[0] == 2.0 and renamed.entity.live_position[0] == 5.0,
@@ -748,6 +765,27 @@ func _check_grab_release() -> void:
 	for frame in 6:
 		await physics_frame
 	_check(body.position.y < release_height, "the released prop falls under gravity")
+	body.free()
+	var layer := Node3D.new()
+	zone.add_child(layer)
+	var editor := PieceEditor.new()
+	editor.attach(layer, PieceDocument.new("", []), true, tools.bounds)
+	tools.attach(zone, editor)
+	editor.display_changed.connect(tools.refresh_piece_props.bind(zone))
+	result = tools.execute("spawn", {"type": "traffic_cone", "position": [0.0, 2.0, -4.0]})
+	body = tools.scene_node(result.id) as RigidBody3D
+	var turned_off := tools.execute("edit", {"id": result.id, "changes": {"collision": false}})
+	var held_height := body.position.y
+	await physics_frame
+	await physics_frame
+	var center := camera.get_viewport().get_visible_rect().get_center()
+	var aim := ScenePlacement.aim_at(player, camera, center, PropGrabber.REACH)
+	_check(turned_off.ok and body.collision_layer == 0 and body.collision_mask == 0
+		and body.position.y == held_height and aim.id == result.id,
+		"keep collisionless props in place and selectable")
+	_check(tools.execute("undo").ok and body.collision_layer != 0 and not body.freeze,
+		"restore the spawned prop's collision and physics on undo")
+	body.position.x = -5.0
 	var authored := MeshInstance3D.new()
 	authored.mesh = BoxMesh.new()
 	authored.position = camera.global_position
@@ -761,6 +799,29 @@ func _check_grab_release() -> void:
 	grabber.tick(0.0, player, camera, authored_tools, hands, true)
 	var freed := authored_tools.scene_node(authored_id) as RigidBody3D
 	_check(freed != null and not freed.freeze, "right click can unlock an authored prop from inside its pick volume")
+	var fixture := MeshInstance3D.new()
+	fixture.mesh = BoxMesh.new()
+	fixture.position = Vector3(4, camera.position.y, -4)
+	zone.add_child(fixture)
+	var fixture_id := AuthoredProps.stable_id("fixture", "release prop")
+	AuthoredProps.register(zone, fixture_id, fixture, "box", 0.0)
+	authored_tools.attach(zone)
+	await physics_frame
+	await physics_frame
+	camera.rotation.y = -PI / 4.0
+	_grab_button(grabber, MOUSE_BUTTON_LEFT)
+	grabber.tick(0.0, player, camera, authored_tools, hands, true)
+	_check(grabber._hold.get("id") == fixture_id, "grab an authored prop away from the origin")
+	camera.rotation.y -= 0.15
+	grabber.tick(0.0, player, camera, authored_tools, hands, true)
+	var drop := fixture.global_position
+	_grab_button(grabber, MOUSE_BUTTON_LEFT, false)
+	grabber.tick(0.0, player, camera, authored_tools, hands, true)
+	var released := authored_tools.scene_node(fixture_id) as RigidBody3D
+	for frame in 4:
+		await physics_frame
+	_check(released != null and not released.freeze and released.global_position.distance_to(drop) < 0.15
+		and released.global_position.y < drop.y, "the new rigid body starts falling from the authored prop's release pose")
 	zone.free()
 
 func _grab_button(grabber: PropGrabber, button: MouseButton, pressed := true) -> void:
@@ -1584,7 +1645,7 @@ func _check_palette_reload() -> void:
 	host.unmount(true)
 	overlay.remove_child(old)
 	old.queue_free()
-	var source := FileAccess.get_file_as_string(GridPaletteHost.SOURCE_PATH)
+	var source := FileAccess.get_file_as_string(GridPaletteHost.SOURCE_PATH).replace("\r\n", "\n")
 	var changed := source.replace("Spawn orange cone", "Preview cone")
 	var candidate := {"draft": "fixture", "version": "first", "source": changed, "digest": changed.sha256_text()}
 	_check(host.preview(candidate, "construct", tools, catalog, action).ok, "load a checked palette without replacing the world")

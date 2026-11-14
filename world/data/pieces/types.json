@@ -191,7 +191,7 @@
       "script": "res://scripts/pieces/prop_piece.gd",
       "validate_record": true,
       "required": ["prop_kind"],
-      "defaults": {"prop_kind": "traffic_cone", "color": "f27825", "prop_size": 1.0, "locked": false},
+      "defaults": {"prop_kind": "traffic_cone", "color": "f27825", "prop_size": 1.0, "locked": false, "collision": true},
       "storage": {
         "behavior": {"$ref":"#/$defs/behavior"}
       },
@@ -201,6 +201,7 @@
         "color": {"$ref": "#/$defs/color"},
         "prop_size": {"$ref": "#/$defs/scale"},
         "locked": {"type": "boolean"},
+        "collision": {"type": "boolean"},
         "door_open": {"type": "number", "minimum": 0, "maximum": 1},
         "stretch": {"$ref": "#/$defs/stretch"},
         "animation": {"anyOf": [{"type":"null"}, {"$ref":"#/$defs/clip"}]}

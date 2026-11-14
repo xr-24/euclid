@@ -33,7 +33,8 @@ func attach(root: Node3D, zone: String, tools) -> void:
 
 func refresh_water(root: Node3D, zone: String) -> void:
 	_water.attach(root, zone)
-	clear()
+	if not _water_id.is_empty():
+		clear()
 
 func clear() -> void:
 	if not _selection.is_empty() or not _water_id.is_empty():
@@ -98,14 +99,15 @@ func _refresh() -> void:
 	_rows.append(_input_row("Scale", record.scale, _edit_prop.bind(_selection, "scale")))
 	if "color" in Commands.prop_fields(record.get("authored", false)):
 		_rows.append(_input_row("Color", record.color, _edit_prop.bind(_selection, "color")))
-	var collision: bool = record.collision
-	_rows.append({"label": Commands.field("collision").title, "value": "On" if collision else "Off",
-		"run": _toggle_collision.bind(_selection, collision), "enabled": _editable, "why": "Scene edits disabled"})
-	if _tools.can_toggle_lock(_selection):
-		var locked: bool = record.get("locked", false)
-		_rows.append({"label": "Unlock" if locked else "Lock", "run": _toggle_lock.bind(_selection, locked),
-			"enabled": _editable, "why": "Scene edits disabled"})
+	var can_simulate: bool = _tools.can_toggle_lock(_selection)
+	var physics: bool = can_simulate and not record.get("locked", false)
+	_rows.append(_toggle_row("Physics", physics, _toggle_physics.bind(_selection), can_simulate))
+	_rows.append(_toggle_row(Commands.field("collision").title, record.collision, _toggle_collision.bind(_selection)))
 	_preview.show_prop(_selected_node)
+
+func _toggle_row(label: String, active: bool, action: Callable, supported := true) -> Dictionary:
+	return {"label": label, "value": "On" if active else "Off", "run": action, "enabled": _editable and supported,
+		"why": "This prop has no free-body physics" if not supported else "Scene edits disabled"}
 
 func _input_row(label: String, value: Variant, action: Callable) -> Dictionary:
 	var text := str(value)
@@ -137,15 +139,15 @@ func _edit_prop(text: String, id: String, key: String) -> void:
 	var result: Dictionary = _tools.execute("edit", {"id": id, "changes": changes})
 	_report(id, result)
 
-func _toggle_collision(id: String, enabled: bool) -> void:
-	var result: Dictionary = _tools.execute("edit", {"id": id, "changes": {"collision": not enabled}})
-	_report(id, result)
+func _toggle_collision(id: String) -> void:
+	var inspected: Dictionary = _tools.execute("inspect", {"id": id})
+	if inspected.ok:
+		_report(id, _tools.execute("edit", {"id": id, "changes": {"collision": not inspected.entity.collision}}))
 
-func _toggle_lock(id: String, locked: bool) -> void:
-	var node: Node3D = _tools.scene_node(id)
-	if node and _tools.can_toggle_lock(id):
-		var result: Dictionary = _tools.commit_grab(id, node, {"locked": not locked, "position": Placement.coordinates(node.position)})
-		_report(id, result)
+func _toggle_physics(id: String) -> void:
+	var inspected: Dictionary = _tools.execute("inspect", {"id": id})
+	if inspected.ok:
+		_report(id, _tools.set_prop_physics(id, inspected.entity.get("locked", false)))
 
 func _report(id: String, result: Dictionary) -> void:
 	_wrist.say("Prop updated" if result.ok else result.error, not result.ok)

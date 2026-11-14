@@ -26,6 +26,7 @@ const DevelopmentSession = preload("res://scripts/persistence/development_sessio
 const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const GridPaletteHost = preload("res://scripts/ui/grid_palette_host.gd")
 const PropGrabber = preload("res://scripts/player/prop_grabber.gd")
+const SceneScanner = preload("res://scripts/player/scene_scanner.gd")
 var _failures := 0
 var _checks := 0
 
@@ -43,6 +44,12 @@ class WristFixture extends RefCounted:
 				"run": func(line: String) -> void: ran.append(line)},
 				{"label": "QUIT", "confirm": "Again to quit.", "close": true, "run": func() -> void: ran.append("quit")}]},
 		]
+
+class ScannerWristFixture extends RefCounted:
+	var scanner: SceneScanner
+
+	func pages() -> Array:
+		return [scanner.page()]
 
 class PalmFixture extends RefCounted:
 	func palm_position() -> Vector3:
@@ -229,6 +236,7 @@ func _run() -> void:
 	_check_authored_dressing(path + ".dressing")
 	_check_registered_props()
 	await _check_grab_release()
+	await _check_scanner_physics()
 	_check_zone_packages(path + ".packages", manifest)
 	_check_pieces(manifest)
 	_check_piece_edits(manifest)
@@ -775,14 +783,12 @@ func _check_grab_release() -> void:
 	result = tools.execute("spawn", {"type": "traffic_cone", "position": [0.0, 2.0, -4.0]})
 	body = tools.scene_node(result.id) as RigidBody3D
 	var turned_off := tools.execute("edit", {"id": result.id, "changes": {"collision": false}})
-	var held_height := body.position.y
 	await physics_frame
 	await physics_frame
 	var center := camera.get_viewport().get_visible_rect().get_center()
 	var aim := ScenePlacement.aim_at(player, camera, center, PropGrabber.REACH)
 	_check(turned_off.ok and body.collision_layer == 0 and body.collision_mask == 0
-		and body.position.y == held_height and aim.id == result.id,
-		"keep collisionless props in place and selectable")
+		and not body.freeze and aim.id == result.id, "collisionless props remain selectable with physics on")
 	_check(tools.execute("undo").ok and body.collision_layer != 0 and not body.freeze,
 		"restore the spawned prop's collision and physics on undo")
 	body.position.x = -5.0
@@ -822,6 +828,88 @@ func _check_grab_release() -> void:
 		await physics_frame
 	_check(released != null and not released.freeze and released.global_position.distance_to(drop) < 0.15
 		and released.global_position.y < drop.y, "the new rigid body starts falling from the authored prop's release pose")
+	zone.free()
+
+func _check_scanner_physics() -> void:
+	var zone := Node3D.new()
+	root.add_child(zone)
+	var player := CharacterBody3D.new()
+	zone.add_child(player)
+	var camera := Camera3D.new()
+	player.add_child(camera)
+	camera.position.y = 2.5
+	var model := StaticBody3D.new()
+	model.position = Vector3(0.0, 2.5, -5.0)
+	zone.add_child(model)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	model.add_child(mesh)
+	var collider := CollisionShape3D.new()
+	collider.shape = BoxShape3D.new()
+	model.add_child(collider)
+	var id := AuthoredProps.stable_id("fixture", "scanner")
+	AuthoredProps.register(zone, id, model, "box", 0.0)
+
+	var tools := WorldTools.new()
+	tools.attach(zone)
+	var scanner := SceneScanner.new()
+	zone.add_child(scanner)
+	var wrist := WristComputer.new()
+	zone.add_child(wrist)
+	var fixture := ScannerWristFixture.new()
+	fixture.scanner = scanner
+	wrist.configure(fixture)
+	scanner.setup("", wrist)
+	scanner.attach(zone, "fixture", tools)
+	wrist.raise_wrist("scan")
+	await physics_frame
+	await physics_frame
+	var center := camera.get_viewport().get_visible_rect().get_center()
+	scanner.tick(0.15, player, camera, center)
+	wrist.refresh()
+	var rows: Array = wrist.current().rows
+	var labels := rows.map(func(row: Dictionary) -> String: return row.label)
+	var physics := labels.find("Physics")
+	var collision := labels.find("Collision")
+	_check(physics >= 0 and collision >= 0, "the Scan screen offers separate Physics and Collision controls")
+	if physics < 0 or collision < 0:
+		zone.free()
+		return
+	_check(rows[physics].value == "Off" and rows[collision].value == "On", "scan displays an authored solid prop as fixed")
+	var confirm := InputEventMouseButton.new()
+	confirm.button_index = MOUSE_BUTTON_LEFT
+	confirm.pressed = true
+	wrist.move(collision)
+	wrist.handle(confirm)
+	wrist.refresh()
+	await physics_frame
+	await physics_frame
+	scanner.tick(0.15, player, camera, center)
+	wrist.refresh()
+	_check(collider.disabled and wrist.current().rows[collision].value == "Off", "M1 disables collision and the scanner keeps its target")
+	wrist.move(physics - collision)
+	wrist.handle(confirm)
+	wrist.refresh()
+	var body := tools.scene_node(id) as RigidBody3D
+	var at := Vector3(0.0, 2.5, -5.0)
+	for frame in 4:
+		await physics_frame
+	var record: Dictionary = tools.execute("inspect", {"id": id}).entity
+	_check(body != null and not body.freeze and body.position.y < at.y and not record.collision,
+		"the Physics toggle starts gravity without turning collision back on")
+	wrist.handle(confirm)
+	wrist.refresh()
+	var paused := body.position
+	for frame in 4:
+		await physics_frame
+	_check(body.freeze and body.position.is_equal_approx(paused) and wrist.current().rows[physics].value == "Off",
+		"turning Physics off holds the live pose")
+	wrist.move(collision - physics)
+	wrist.handle(confirm)
+	wrist.refresh()
+	_check(body.freeze and wrist.current().rows[collision].value == "On", "turning collision on keeps the frozen prop in place")
+	_check(tools.execute("undo").ok and body.freeze and not tools.execute("inspect", {"id": id}).entity.collision,
+		"undo can restore collision separately from physics")
 	zone.free()
 
 func _grab_button(grabber: PropGrabber, button: MouseButton, pressed := true) -> void:

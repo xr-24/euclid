@@ -683,13 +683,30 @@ func can_toggle_lock(id: String) -> bool:
 	var record := _record(id)
 	return not record.is_empty() and EntityTypes.movable(record)
 
+## The wrist changes motion at the live pose, independently of the collider.
+func set_prop_physics(id: String, enabled: bool) -> Dictionary:
+	var node := scene_node(id)
+	if not is_instance_valid(node) or not can_toggle_lock(id):
+		return _error("Physics is unavailable for this prop.")
+	return _commit_live_pose(id, node, {"locked": not enabled, "yaw": live_yaw(id),
+		"position": Placement.coordinates(node.position)})
+
 ## Saves a placement already previewed on the node and hands its live pose back to physics.
 func commit_grab(id: String, node: Node3D, changes: Dictionary) -> Dictionary:
+	# Dropping an authored decoration for the first time has always made it land as a solid prop.
+	if changes.get("locked", true) == false and _dressing.has(id) and not node is RigidBody3D \
+			and not _overrides.get(id, {}).has("collision"):
+		changes = changes.merged({"collision": true})
+	return _commit_live_pose(id, node, changes)
+
+func _commit_live_pose(id: String, node: Node3D, changes: Dictionary) -> Dictionary:
 	if not is_instance_valid(_root) or not _root.get_parent().get_meta("scene_edit", true) or not _load_error.is_empty():
 		return _error("Scene edits are unavailable.")
 	if scene_node(id) != node:
 		return _error("The prop changed during the grab.")
 	var record := _record(id)
+	if record.is_empty() or record.get("hidden", false):
+		return _error("Select a visible prop first.")
 	var next := record.merged(changes, true)
 	var result := _edit(id, record, next, true)
 	if result.ok:

@@ -383,7 +383,7 @@
     "collision": {
       "type": "boolean",
       "title": "Collision",
-      "description": "Whether the prop blocks movement and participates in physical collisions. An off prop stays selectable."
+      "description": "Whether the prop blocks movement and participates in physical collisions. Independent of motion. The prop stays selectable when off."
     },
     "prop_changes": {
       "type": "object",

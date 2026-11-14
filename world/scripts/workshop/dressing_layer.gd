@@ -80,8 +80,8 @@ func changes_for(id: String, proposed: Dictionary, current: Dictionary) -> Dicti
 		if proposed.get("locked", base_lock) != base_lock:
 			result["locked"] = proposed.locked
 	if result.get("locked", true) == false and not base.collision:
-		# First release supplies a collider for authored scenery that only had a picker.
-		result["collision"] = not entry.has("rigid") or proposed.collision
+		# Preserve an explicit Off when older saves would have inferred On from an unlock.
+		result["collision"] = proposed.collision
 	return result
 
 static func changes_geometry(before: Dictionary, after: Dictionary) -> bool:
@@ -130,9 +130,7 @@ static func _apply_collision(node: Node3D, entry: Dictionary, value: Dictionary)
 		picker.disabled = value.hidden or value.collision
 	for shape: CollisionShape3D in entry.shapes:
 		shape.disabled = value.hidden or entry.shapes[shape] or (not value.collision and shape.get_parent() is PhysicsBody3D)
-	if node is RigidBody3D and node.get_meta("collision_enabled", true) != value.collision:
-		node.set_meta("collision_enabled", value.collision)
-		EntityTypes.set_locked(node, value.hidden or value.get("locked", entry.rigid.freeze))
+	node.set_meta("collision_enabled", value.collision)
 
 static func _apply_color(node: Node3D, entry: Dictionary, tint: Color) -> void:
 	if not entry.has("color_surfaces"):

@@ -51,7 +51,10 @@ In Grid or Scene tools, click the color swatch and choose **Apply** to save the 
 **Build → Scan Object** opens a live inspector. Frame a prop or water surface
 in the left pane while walking. The wrist renders the selected prop and shows
 its editable properties. Scroll to a property, left-click, type a value, and
-left-click or press Enter to apply. Water uses a material preview and saves
+left-click or press Enter to apply. Select **Physics** to switch between a movable
+prop and a fixed one. Select **Collision** separately to control whether the prop
+blocks movement. A prop with physics on and collision off can fall through the ground.
+Water uses a material preview and saves
 per-surface color, reflectivity, roughness, ripple and foam settings where supported.
 Right-click returns to Build.
 

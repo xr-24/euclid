@@ -1,0 +1,30 @@
+{
+  "sky": {
+    "polyhaven": [
+      {"id": "qwantani_noon_puresky", "name": "Clear desert noon", "author": "Greg Zaal, Jarod Guest"},
+      {"id": "overcast_soil_puresky", "name": "Soft overcast", "author": "Jarod Guest, Sergej Majboroda"},
+      {"id": "kloofendal_misty_morning_puresky", "name": "Coastal mist", "author": "Greg Zaal"},
+      {"id": "wasteland_clouds_puresky", "name": "Cloudy sunset", "author": "Jarod Guest, Sergej Majboroda"},
+      {"id": "qwantani_dusk_2_puresky", "name": "Twilight", "author": "Greg Zaal, Jarod Guest"},
+      {"id": "qwantani_night_puresky", "name": "Milky Way night", "author": "Greg Zaal, Jarod Guest"}
+    ],
+    "sketchfab": [
+      {"id": "sf_fa5c19c4f7cc4525a24b99425bd520c8", "name": "Space Nebula", "author": "Paul", "page": "https://sketchfab.com/3d-models/free-skybox-space-nebula-fa5c19c4f7cc4525a24b99425bd520c8"}
+    ]
+  },
+  "material": {
+    "polyhaven": [
+      {"id": "mixed_stone_tiles", "name": "Speckled stone tile", "author": "Dimitrios Savva"},
+      {"id": "hexagonal_concrete_paving", "name": "Hexagonal concrete pavers", "author": "Stephan Seeliger"},
+      {"id": "patterned_cobblestone", "name": "Weathered cobblestone", "author": "Rob Tuytel"},
+      {"id": "mud_cracked_dry_riverbed_002", "name": "Cracked dry riverbed", "author": "Dario Barresi, Dimitrios Savva"},
+      {"id": "forest_ground_05", "name": "Dark forest soil", "author": "Charlotte Baglioni"},
+      {"id": "gravel_stones", "name": "Coarse grey gravel", "author": "Amal Kumar"}
+    ],
+    "sketchfab": [
+      {"id": "sf_a2107c49d41544b09659530021aa9cf0", "name": "Seamless Floor Tile IV", "author": "-Arthur-", "page": "https://sketchfab.com/3d-models/seamless-floor-tiled-texture-iv-a2107c49d41544b09659530021aa9cf0"},
+      {"id": "sf_0db52286406e4ff1976d2f32996c5ccb", "name": "Seamless Paving Stone", "author": "cglib.team", "page": "https://sketchfab.com/3d-models/seamless-paving-stone-pbr-texture-0db52286406e4ff1976d2f32996c5ccb"},
+      {"id": "sf_754d20611d4f4c4a9b5374bef37aebb6", "name": "Seamless Ground 02", "author": "-Arthur-", "page": "https://sketchfab.com/3d-models/seamless-pbr-texture-ground-02-754d20611d4f4c4a9b5374bef37aebb6"}
+    ]
+  }
+}

@@ -37,7 +37,7 @@ func _terrain_command(plan: Dictionary) -> Dictionary:
 
 func _material_command(plan: Dictionary) -> Dictionary:
 	if plan.tool == "search_materials":
-		var result: Dictionary = await _world.material_client.search(plan.query)
+		var result: Dictionary = await _world.material_client.search(plan.query, plan.get("provider", "polyhaven"))
 		if result.ok:
 			result["message"] = ", ".join(result.materials.map(func(item: Dictionary) -> String:
 				return "%s (%s)" % [item.name, item.id]))
@@ -46,12 +46,12 @@ func _material_command(plan: Dictionary) -> Dictionary:
 		return result
 	var imported: Dictionary = await _world.material_client.import_material(plan.target)
 	if imported.ok:
-		imported["message"] = "%s is ready to paint." % imported.material.name
+		imported["message"] = "%s is ready to paint or use as texture %s." % [imported.material.name, imported.material.id]
 	return imported
 
 func _sky_command(plan: Dictionary) -> Dictionary:
 	if plan.tool == "search_skies":
-		var result: Dictionary = await _world.sky_client.search(plan.query)
+		var result: Dictionary = await _world.sky_client.search(plan.query, plan.get("provider", "polyhaven"))
 		if result.ok:
 			result["message"] = ", ".join(result.skies.map(func(item: Dictionary) -> String:
 				return "%s (%s)" % [item.name, item.id])) if not result.skies.is_empty() else "No skies matched that search."

@@ -451,7 +451,7 @@ func _open_pieces() -> void:
 	piece_panel = PiecePanel.new()
 	piece_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	overlay_content.add_child(piece_panel)
-	piece_panel.setup(pieces, placement, aimed.piece, _close_panel, rad_to_deg(player.rotation.y))
+	piece_panel.setup(pieces, placement, aimed.piece, _close_panel, rad_to_deg(player.rotation.y), material_client)
 	_button(gizmo.mode_label(), gizmo.toggle_mode)
 	gizmo.mode_button = overlay_content.get_child(overlay_content.get_child_count() - 1) as Button
 

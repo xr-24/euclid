@@ -11,7 +11,7 @@
     "terrain_radius": { "type": "number", "minimum": 4, "maximum": 60 },
     "terrain_strength": { "type": "number", "minimum": 0.01, "maximum": 4 },
     "terrain_paint": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
-    "material_query": { "type": "string", "maxLength": 120 },
+    "material_query": { "type": "string", "maxLength": 240 },
     "building_opening": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["none", "door", "window", "archway"]}, "motion": {"type": "string", "enum": ["hinge", "slide", "fixed"]}, "offset": {"type": "number", "minimum": -30, "maximum": 30}, "width": {"type": "number", "minimum": 0.5, "maximum": 8}, "height": {"type": "number", "minimum": 0.4, "maximum": 6}, "sill": {"type": "number", "minimum": 0, "maximum": 4}, "open": {"type": "boolean"}, "slide_side": {"type": "string", "enum": ["left", "right"]}}, "required": []},
     "wall_opening_list": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/building_opening"}},
     "plan_point": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number", "minimum": -32, "maximum": 32}},
@@ -56,7 +56,8 @@
         },
         "texture": {
           "type": "string",
-          "description": "An installed PBR texture set",
+          "description": "An installed or imported PBR texture ID",
+          "catalog": "surface_texture",
           "pattern": "^[a-z0-9_]{1,64}$"
         },
         "texture_size": {

@@ -3,7 +3,7 @@
   "commands": [
     {
       "name": "search_skies",
-      "description": "Search Poly Haven for HDRI panoramas.",
+      "description": "Search Poly Haven for HDRIs or Sketchfab for downloadable panoramic skyboxes by name or link. Defaults to Poly Haven.",
       "service": "world",
       "handler": "_sky_command",
       "effect": "read",
@@ -12,7 +12,8 @@
         "mcp"
       ],
       "fields": {
-        "query": "material_query"
+        "query": "material_query",
+        "provider": "provider"
       },
       "required": [
         "query"
@@ -23,7 +24,7 @@
     },
     {
       "name": "import_sky",
-      "description": "Download a 2K HDRI by Poly Haven ID. Use the returned key with preview_atmosphere.",
+      "description": "Download a Poly Haven HDRI or Sketchfab panorama by ID. Use the returned key with preview_atmosphere.",
       "service": "world",
       "handler": "_sky_command",
       "effect": "write",

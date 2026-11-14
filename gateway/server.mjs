@@ -269,7 +269,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         const body = await readJson(req, res, 1024);
         if (body === undefined) return;
         try {
-          if (importRoute[2] === 'search') return reply(res, 200, { ok: true, [importRoute[1]]: await service.search(body?.query) });
+          if (importRoute[2] === 'search') return reply(res, 200, { ok: true, [importRoute[1]]: await service.search(body?.query, body?.provider) });
           return reply(res, 200, { ok: true, [sky ? 'sky' : 'material']: await service.importMaterial(body?.id) });
         } catch (error) { return reply(res, 400, { error: error.message }); }
       }

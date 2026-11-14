@@ -40,13 +40,35 @@ async function bytes(url, auth = '') {
 }
 const json = async (url, auth = '') => JSON.parse((await bytes(url, auth)).toString('utf8'));
 
-async function sketchfab(uid) {
-  const item = await json(`https://api.sketchfab.com/v3/models/${uid}`);
+async function sketchfab(uid, request = json) {
+  const item = await request(`https://api.sketchfab.com/v3/models/${uid}`);
   if (!item.isDownloadable || !allowed.has(item.license?.slug)) throw new Error('This model has no supported download license.');
   return { asset_id: `sf-${uid}`, provider: 'sketchfab', source_id: uid, title: item.name.slice(0, 160),
     author: item.user?.displayName ?? item.user?.username ?? 'Unknown', page: item.viewerUrl,
     license: item.license.slug, license_label: item.license.label, license_url: item.license.url,
     triangles: item.faceCount ?? 0, animations: item.animationCount ?? 0 };
+}
+
+export function createSketchfabSource(request = json, getToken = token, download = bytes) {
+  async function search(query) {
+    const direct = /^(?:sf[_-])?([a-f0-9]{32})$/i.exec(query)
+      ?? /^https:\/\/(?:www\.)?sketchfab\.com\/3d-models\/(?:[^/?#]+-)?([a-f0-9]{32})(?:[/?#].*)?$/i.exec(query);
+    if (direct) return [await sketchfab(direct[1].toLowerCase(), request)];
+    const data = await request(
+      `https://api.sketchfab.com/v3/search?type=models&downloadable=true&count=12&q=${encodeURIComponent(query)}`,
+      await getToken());
+    const candidates = (data.results ?? []).filter(item => /^[a-f0-9]{32}$/.test(item.uid));
+    const details = await Promise.allSettled(candidates.map(item => sketchfab(item.uid, request)));
+    return details.filter(item => item.status === 'fulfilled').map(item => item.value);
+  }
+
+  async function glb(uid) {
+    const links = await request(`https://api.sketchfab.com/v3/models/${uid}/download`, await getToken());
+    if (!links.glb?.url) throw new Error('Sketchfab does not offer this asset as GLB.');
+    return download(links.glb.url);
+  }
+
+  return { search, info: uid => sketchfab(uid, request), glb };
 }
 
 async function blender() {
@@ -62,6 +84,7 @@ async function blender() {
 }
 
 export function createAssetService(directory = path.join(root, '.local/runtime-assets')) {
+  const sketchfabSource = createSketchfabSource();
   const jobs = new Map();
   let preparing = Promise.resolve();
   let catalog;
@@ -71,7 +94,7 @@ export function createAssetService(directory = path.join(root, '.local/runtime-a
   }
   async function metadata(id) {
     if (!validAssetId(id)) throw new Error('Invalid asset ID.');
-    if (id.startsWith('sf-')) return sketchfab(id.slice(3));
+    if (id.startsWith('sf-')) return sketchfabSource.info(id.slice(3));
     const item = (await polyhavenCatalog())[id.slice(3)];
     if (!item || item.type !== 2) throw new Error('Unknown Poly Haven model.');
     return { asset_id: id, provider: 'polyhaven', source_id: id.slice(3), title: item.name,
@@ -121,10 +144,8 @@ export function createAssetService(directory = path.join(root, '.local/runtime-a
     job.state = { ok: true, status: 'downloading', asset_id: id };
     let source;
     if (info.provider === 'sketchfab') {
-      const links = await json(`https://api.sketchfab.com/v3/models/${info.source_id}/download`, await token());
-      if (!links.glb?.url) throw new Error('Sketchfab does not offer this model as GLB.');
       source = path.join(stage, 'source.glb');
-      await writeFile(source, await bytes(links.glb.url));
+      await writeFile(source, await sketchfabSource.glb(info.source_id));
     } else {
       const files = await json(`https://api.polyhaven.com/files/${info.source_id}`);
       const formats = files.gltf?.['1k'] ?? files.gltf?.['2k'];

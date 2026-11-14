@@ -82,11 +82,13 @@ func _refresh_materials() -> void:
 	for item: Dictionary in Terrain.palette() + Cache.installed():
 		_materials.add_item(item.name)
 		_materials.set_item_metadata(_materials.item_count - 1, item.id)
+		if item.has("page"):
+			_materials.set_item_tooltip(_materials.item_count - 1, "%s · %s\n%s" % [item.author, item.license, item.page])
 		if item.id == selected:
 			_materials.select(_materials.item_count - 1)
 
 func _browse() -> void:
-	var browser := preload("res://scripts/ui/poly_haven_browser.gd").new()
+	var browser := preload("res://scripts/ui/texture_browser.gd").new()
 	add_child(browser)
 	browser.setup("material", "materials", _client.search, _client.import_material)
 	browser.chosen.connect(func(id: String, title: String) -> void:
@@ -96,7 +98,7 @@ func _browse() -> void:
 				_materials.select(index)
 				break
 		show_status("%s is ready to paint." % title))
-	browser.popup_centered(Vector2i(450, 330))
+	browser.popup_centered(Vector2i(520, 360))
 
 func _slider(title: String, slider: HSlider, low: float, high: float, initial: float, suffix: String) -> void:
 	var row := HBoxContainer.new()

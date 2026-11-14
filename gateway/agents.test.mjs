@@ -32,9 +32,15 @@ if (args.includes('--json-schema')) {
     ...(mode === 'declined' ? {} : { structured_output: { action: 'spawn_cone' } }) });
 } else {
   print({ type: 'system', subtype: 'init', tools: ['Read', 'Edit'] });
+  if (mode === 'expired') {
+    const message = 'Failed to authenticate: OAuth session expired and could not be refreshed';
+    print({ type: 'assistant', message: { content: [{ type: 'text', text: message }] } });
+    print({ type: 'result', subtype: 'success', is_error: true, result: message });
+    process.exit(1);
+  }
   if (mode === 'hang') await new Promise(() => setInterval(() => {}, 1000));
   print({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Editing.' }, { type: 'tool_use', name: 'Write' }] } });
-  writeFileSync('edited.gd', 'extends Node\\n');
+  if (args.includes('--restricted')) writeFileSync('edited.gd', 'extends Node\\n');
   print({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', name: 'Edit' }] } });
   if (mode === 'failed') { print({ type: 'result', subtype: 'error_max_turns', is_error: true }); process.exit(1); }
   print({ type: 'result', subtype: 'success', is_error: false, result: 'Added [edited.gd](edited.gd)   to the\\nworkspace.' });
@@ -48,7 +54,7 @@ if (args.includes('--output-schema')) {
   print({ action: 'spawn_cone' });
 } else {
   print({ type: 'item.completed', item: { type: 'command_execution' } });
-  writeFileSync('edited.gd', 'extends Node\\n');
+  if (args.includes('workspace-write')) writeFileSync('edited.gd', 'extends Node\\n');
   print({ type: 'item.completed', item: { type: 'agent_message', text: 'Added edited.gd.' } });
   if (mode !== 'failed') print({ type: 'turn.completed' });
 }
@@ -185,6 +191,20 @@ test('the world planner validates whichever agent answers', async () => {
   assert.match(seen[0][0], /User request: "Make a cone"/);
   assert.match(seen[0][1], /grid-plan\.schema\.json$/);
   await assert.rejects(planWorld('Make a cone', live(), null, structured({ ...plan, scale: 9 })), /The agent returned an invalid world plan/);
+});
+
+test('local tasks surface assistant text and give an actionable Claude sign-in error', async t => {
+  const claude = await fixture(t, fakeClaude);
+  const codex = await fixture(t, fakeCodex);
+  const messages = [];
+  const task = { url: 'http://127.0.0.1:1/mcp/task', token: 'fixture', signal: live(), onMessage: text => messages.push(text) };
+  await createClaudeAgent(claude.options).task('Test', task);
+  assert.deepEqual(messages, ['Editing.']);
+  await createCodexAgent(codex.options).task('Test', task);
+  assert.deepEqual(messages, ['Editing.', 'Added edited.gd.']);
+  const expired = createClaudeAgent({ ...claude.options, env: { ...claude.options.env, FAKE_MODE: 'expired' } });
+  await assert.rejects(expired.task('Test', task), /claude auth login and resend/);
+  assert.equal(messages.length, 2);
 });
 
 test('Claude discovery honors an explicit executable', async () => {

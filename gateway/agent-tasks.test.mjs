@@ -23,11 +23,18 @@ test('tasks have a single claimant, private replies, and a durable journal', asy
   const other = winner.owner === 'muse' ? 'codex' : 'muse';
   await assert.rejects(board.agent(other, 'task_progress', { id: task.id, text: 'Spoof' }), /you own/);
   await board.agent(winner.owner, 'task_progress', { id: task.id, text: 'Counting' });
+  await board.activity(other, task.id, 'tool', 'Discard this');
+  await board.activity(winner.owner, task.id, 'tool', 'Running · list entities');
+  assert.equal((await board.player('inbox', {})).tasks[0].activity[0].text, 'Running · list entities');
+  assert.equal((await board.agent(winner.owner, 'inbox', {})).tasks[0].activity, undefined);
   await board.agent(winner.owner, 'send_message', { to: 'you', text: 'Three props.' });
   assert.deepEqual((await board.agent(other, 'inbox', {})).messages, []);
   await board.agent(winner.owner, 'finish_task', { id: task.id, text: 'Found three.', status: 'completed' });
+  await board.activity(winner.owner, task.id, 'tool', 'Discard late activity');
   const restored = await createTaskBoard(file);
-  assert.equal((await restored.player('inbox', {})).tasks[0].status, 'completed');
+  const [finished] = (await restored.player('inbox', {})).tasks;
+  assert.equal(finished.status, 'completed');
+  assert.deepEqual(finished.activity.map(item => item.text), ['Running · list entities']);
   assert.equal((await restored.player('inbox', {})).messages[0].text, 'Three props.');
   assert.deepEqual((await restored.player('task_log', {})).entries.map(item => item.event),
     ['finish_task', 'message', 'task_progress', 'claim_task', 'assign']);

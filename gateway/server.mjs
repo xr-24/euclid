@@ -20,6 +20,7 @@ import { createRelayLink } from './relay-link.mjs';
 import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
 import { createActivityFeed, createToolObserver } from './agent-activity.mjs';
+import { createSpeechService, SpeechError } from './speech.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const youtubePage = new URL('./youtube-player.html', import.meta.url);
@@ -37,7 +38,7 @@ export function validateEvent(event) {
 
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
-  workbenchRoot = root, workbenchOptions, terminalOptions, relayOptions, developmentToken, workbenchToken: workbenchSecret,
+  workbenchRoot = root, workbenchOptions, terminalOptions, relayOptions, speechOptions, developmentToken, workbenchToken: workbenchSecret,
   reloadGateway = null, gatewayNotice = () => '' } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
@@ -65,6 +66,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const agentCredentials = await createAgentCredentials(path.join(dataDir, 'agents.json'));
   // The person's shells. They outlive restarts of the world, not of the gateway.
   const terminals = createTerminalSessions({ root: workbenchRoot, ...terminalOptions });
+  const speech = createSpeechService(workbenchRoot, speechOptions);
   let terminalRateStart = Date.now();
   let terminalRateCount = 0;
   let developmentRateStart = Date.now();
@@ -121,7 +123,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         res.end(page);
         return;
       }
-      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 32 });
+      if (req.method === 'GET' && req.url === '/health') return reply(res, 200, { service: 'construct-gateway', version: 34 });
       if (req.url === '/mcp/task') {
         const job = workers.identify(req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1]);
         if (!job) return reply(res, 401, { error: 'The local task credential expired.' });
@@ -132,6 +134,8 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
         res.once('close', () => controller.abort());
         const signal = AbortSignal.any([controller.signal, job.controller.signal]);
         const policy = { tools: name => name !== 'claim_task' };
+        const tool = body?.method === 'tools/call' ? body.params?.name : null;
+        if (tool) workers.toolActivity(job, tool);
         let result = await development.rpc(job.actor, body, signal, policy);
         if (job.task.session && body?.method === 'tools/list' && result?.result) {
           const world = await bridge.rpc(job.task.session, body, signal);
@@ -143,6 +147,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
             observer.after(job.actor, String(body.params?.name ?? ''), body.params?.arguments ?? {},
               { ok: !result?.error && !result?.result?.isError });
           } catch {}
+        }
+        if (tool && result && !signal.aborted) {
+          workers.toolActivity(job, tool, result.error || result.result?.isError ? 'Failed' : 'Finished');
         }
         if (res.destroyed) return;
         return result === null ? res.writeHead(202).end() : reply(res, 200, result);
@@ -227,13 +234,35 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
       const workbenchRoute = /^\/v1\/workbench\/([a-z]+)$/.exec(req.url);
       const agentsRoute = /^\/v1\/agents\/(issue|revoke|list|relay|activity)$/.exec(req.url);
       const tasksRoute = /^\/v1\/tasks\/(assign|cancel|inbox|send_message|task_log|share_view)$/.exec(req.url);
-      if (workbenchRoute || agentsRoute || tasksRoute) {
+      const speechRoute = /^\/v1\/speech\/(voices|authorize|synthesize)$/.exec(req.url);
+      if (workbenchRoute || agentsRoute || tasksRoute || speechRoute) {
         const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
         if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Workbench access requires the local Euclid launcher.' });
         if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
-        const body = await readJson(req, res, tasksRoute && tasksRoute[1] !== 'share_view' ? 32 * 1024 : agentsRoute ? 1024 : 512 * 1024);
+        const body = await readJson(req, res, speechRoute || (tasksRoute && tasksRoute[1] !== 'share_view') ? 32 * 1024 : agentsRoute ? 1024 : 512 * 1024);
         if (body === undefined) return;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, { error: 'Expected an object' });
+        if (speechRoute) {
+          const controller = new AbortController();
+          res.once('close', () => controller.abort());
+          const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
+          try {
+            if (speechRoute[1] === 'authorize') return reply(res, 200, await speech.authorize());
+            if (speechRoute[1] === 'voices') return reply(res, 200, await speech.voices(body, signal));
+            const audio = await speech.synthesize(body, signal);
+            if (!res.destroyed) {
+              res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': audio.length,
+                'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+              res.end(audio);
+            }
+          } catch (error) {
+            if (!res.destroyed) {
+              const failure = error instanceof SpeechError ? error : new SpeechError(502, 'Euclid could not reach ElevenLabs.');
+              return reply(res, failure.status, { error: failure.message, connect: failure.connect });
+            }
+          }
+          return;
+        }
         if (tasksRoute) {
           try { return reply(res, 200, tasksRoute[1] === 'share_view' ? views.share(body) : await tasks.player(tasksRoute[1], body)); }
           catch (error) { return reply(res, 400, { error: error.message }); }
@@ -424,7 +453,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   // Started only by the gateway process itself, never by tests or the reload preflight.
   const relay = createRelayLink({ endpoint: remote, file: path.join(dataDir, 'relay.json'), ...relayOptions });
   server.on('listening', () => workers.start());
-  server.on('close', () => { workers.stop(); terminals.closeAll(); relay.stop(); });
+  server.on('close', () => { workers.stop(); terminals.closeAll(); speech.close(); relay.stop(); });
   return { server, remoteServer, remoteAudited: remote.audited, terminals, relay, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 

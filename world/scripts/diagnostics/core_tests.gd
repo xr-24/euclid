@@ -269,6 +269,7 @@ func _run() -> void:
 	_check_agents_panel()
 	_check_agent_activity()
 	_check_wrist_computer()
+	_check_desktop_focus()
 	_check_spring_follow()
 	_check_atmosphere()
 	_check(is_equal_approx(TransformGizmo._segment_distance(Vector2(5, 3), Vector2.ZERO, Vector2(10, 0)), 3.0)
@@ -1438,6 +1439,13 @@ func _check_text_tools() -> void:
 	console.setup(PackedStringArray(["> hello", "world"]), false, false)
 	console.update_display(PackedStringArray(["> hello", "world", "more output"]), false)
 	_check(console._history.visible_characters >= 0, "new console output types in")
+	var voices := [{"id": "voice_a", "name": "Voice A"}, {"id": "voice_b", "name": "Voice B"}]
+	console.update_voice(true, voices, "voice_b", "", false, false)
+	_check(console._voice_row.visible and console._voice_picker.selected == 2 and not console._voice_preview.disabled,
+		"the voice picker selects the saved voice by ID")
+	console.update_voice(true, [], "", "Authorize in the browser", true, false)
+	_check(console._voice_picker.disabled and console._voice_retry.text == "Connect" and console._voice_status_row.visible,
+		"the voice picker guides disconnected players to browser approval")
 	var agents := {"local-codex": "Codex", "local-claude": "Claude", "muse": "Cloud · muse"}
 	var recipients: Array[String] = ["local-codex", "local-claude", "muse"]
 	var tabs: Array[String] = []
@@ -1466,9 +1474,11 @@ func _check_development_session() -> void:
 	session.save_console(lines, prompts)
 	session.save_view("world/scripts/world.gd", "Checks")
 	session.save_chat_tabs(["local-codex", "local-claude", "muse"], "muse")
+	session.save_voice("fixture_voice")
 	var reopened := DevelopmentSession.new(path)
 	_check(reopened.lines == lines and reopened.prompts == prompts, "reopen console scrollback and prompt recall")
 	_check(reopened.file == "world/scripts/world.gd" and reopened.tab == "Checks", "reopen selected Workbench file and tab")
+	_check(reopened.voice_id == "fixture_voice", "remember the selected ElevenLabs voice")
 	_check(reopened.chat_tabs == ["local-codex", "local-claude", "muse"] and reopened.chat_peer == "muse",
 		"reopen the same Agent Chat conversations and selection")
 	Store.write_json(path, {"schema_version": 1, "chat_tabs": ["local-codex", "local-claude"], "chat_peer": "local-claude"})
@@ -1676,6 +1686,28 @@ func _check_wrist_computer() -> void:
 	_check(wrist.handle(back) and not wrist.typing and wrist.is_open, "M2 backs out of a wrist edit")
 	_check(wrist.handle(back) and not wrist.is_open, "M2 lowers the wrist from a top-level page")
 	wrist.free()
+
+func _check_desktop_focus() -> void:
+	const Chrome = preload("res://scripts/ui/desktop_panel.gd")
+	var panel := Chrome.new()
+	root.add_child(panel)
+	panel.position = Vector2(80, 60)
+	panel.size = Vector2(440, 280)
+	var entry := LineEdit.new()
+	panel.content.add_child(entry)
+	panel.set_keyboard_active(true)
+	entry.grab_focus()
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = Vector2(20, 20)
+	panel._input(click)
+	_check(panel.visible and not panel.keyboard_active and not entry.has_focus(),
+		"clicking the world leaves a desktop panel visible and frees the movement keys")
+	click.position = Vector2(280, 200)
+	panel._input(click)
+	_check(panel.keyboard_active and entry.has_focus(), "clicking the desktop panel restores its previous keyboard focus")
+	panel.free()
 
 func _check_agents_panel() -> void:
 	var connected := {"state": "connected", "url": "https://relay.test", "agent_url": "https://relay.test/mcp"}

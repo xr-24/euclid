@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 
 // Euclid's own service credentials. No agent process inherits them.
-const euclidSecrets = ['CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'EUCLID_WORKBENCH_TOKEN', 'EUCLID_GATEWAY_HANDOFF', 'SKETCHFAB_API_TOKEN'];
+const euclidSecrets = ['CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'EUCLID_WORKBENCH_TOKEN', 'EUCLID_GATEWAY_HANDOFF', 'SKETCHFAB_API_TOKEN', 'ELEVENLABS_API_KEY'];
 export const vendorCredentials = {
   openai: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'CODEX_OPENAI_BASE_URL'],
   anthropic: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'],

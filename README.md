@@ -4,7 +4,7 @@ A first-person desktop prototype: applications have places, and agent work can h
 
 ## Run it
 
-Double-click **Start Euclid.cmd**. This starts the local gateway and opens the world in borderless fullscreen with a 1920×1080 launch size. Press **F4** in that session to open Workbench. On this machine Godot is already downloaded into `.tools/godot/`. Node 22 is already installed, and there are no npm dependencies to install.
+Double-click **Start Euclid.cmd**. This starts the local gateway and opens the world in borderless fullscreen with a 1920×1080 launch size. Press **F4** in that session to open Workbench. On this machine Godot is already downloaded into `.tools/godot/`. The launcher installs gateway dependencies on first use. For a manual gateway launch, run `npm ci` once first.
 
 For another Windows machine, install Node 22 or later, then run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1` once. The setup script downloads the pinned Godot build from its official release and verifies its SHA512 checksum. It does not install Godot system-wide.
 
@@ -46,6 +46,7 @@ save and quit, which asks you to confirm twice). You can keep walking and lookin
 only typing holds you still. Opening any panel lowers it.
 
 Drag the three-dot handle to move a desktop panel, or drag its edges and corners to resize it.
+Click the world to use movement keys with the panel open. Click the panel to give it keyboard focus again.
 In Grid or Scene tools, click the color swatch and choose **Apply** to save the change.
 
 **Build → Scan Object** opens a live inspector. Frame a prop or water surface
@@ -154,13 +155,24 @@ Codex can propose one cone with a color and scale. Euclid places it at the cross
 
 ## Agent Chat
 
-Press **F2**, or choose **Message** on the wrist’s Agents page. Use **+** to open a conversation with a local worker or an agent registered in Workbench. Use the conversation tabs to switch between open chats. Codex and Claude take requests through their local CLI workers. Registered agents receive messages in their inbox. The arrow on the Codex tab opens the interactive Codex CLI in a native Windows terminal.
+Press **F2**, or choose **Message** on the wrist’s Agents page. Use **+** to open a conversation with a local worker or an agent registered in Workbench. Use the conversation tabs to switch between open chats. Codex and Claude take requests through their local CLI workers. Agent Chat shows their messages and Euclid tool activity as it happens. Registered agents receive messages in their inbox. The arrow on the Codex tab opens the interactive Codex CLI in a native Windows terminal.
 
 An avatar appears when you first contact its agent in a running session. Codex is red, Claude is orange, and cloud agents have a blue gradient. Aim at a nearby avatar and press **E** to open its conversation.
 
 Local agents can use Euclid’s world tools to find or change environments. Try **Take me to the Roman villa**, **Follow me**, or **Stay here**. **Quick Command** on the wrist also supports the direct world planner for short Codex requests.
 
-Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. The hovering avatars follow across environments and space themselves apart. **Stay here** parks the addressed local agent in its current environment for the session. The musical note toggles spoken world-tool results through an installed English system voice.
+Created environments appear under **Custom spaces** and keep separate entity saves. The Grid is the default template. The hovering avatars follow across environments and space themselves apart. **Stay here** parks the addressed local agent in its current environment for the session.
+
+In **Agent Chat**, click **♪** to enable ElevenLabs speech. The first use opens
+ElevenLabs in your browser for approval, then loads the voices available to your
+account. Pick a voice and use **▶** to hear a sample. **↻** refreshes the list after
+you add voices in ElevenLabs. Euclid remembers your selected voice and uses it
+for new replies in the selected chat and Quick Command results until you turn
+speech off. Speech and samples use ElevenLabs credits.
+
+The gateway reads the browser-approved key from the Git-ignored `.env.local`.
+For a manually managed key, set `ELEVENLABS_API_KEY` there or in the gateway
+environment with permission to read voices and synthesize speech.
 
 ## Choose the agent
 

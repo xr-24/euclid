@@ -13,6 +13,7 @@ const ActivityClient = preload("res://scripts/agents/activity_client.gd")
 const ApplicationWindow = preload("res://scripts/ui/application_window.gd")
 const Presence = preload("res://scripts/agents/agent_presence.gd")
 const ChatHistory = preload("res://scripts/agents/chat_history.gd")
+const SpeechPlayer = preload("res://scripts/agents/speech_player.gd")
 const CONSOLE_SCROLLBACK := 300
 
 ## The local Workbench capability the launcher handed over. Empty without one.
@@ -23,7 +24,7 @@ var console: Control
 var workbench_panel: Control
 var console_lines := PackedStringArray()
 var busy := false
-var voice_enabled := false
+var _voice := SpeechPlayer.new()
 var _world
 var _session: DevelopmentSession
 var _cli_process := -1
@@ -38,17 +39,24 @@ var _conversations := {}
 var _chat_requests := {}
 var _chat_errors := {}
 var _polling_chat := false
+var _next_chat_poll := 0
 var _chat_dirty := false
 var _directory_due := 0
 
 func _init(world) -> void:
 	_world = world
 	name = "Development"
+	add_child(_voice)
+	_voice.changed.connect(_refresh_voice)
+	_voice.voice_selected.connect(func(id: String) -> void:
+		if _session:
+			_session.save_voice(id))
 
 ## Connects to the Workbench once the gateway is known. Without a capability there is nothing to do.
 func connect_gateway(url: String, token: String) -> void:
 	if capability.is_empty() or url.is_empty() or token.is_empty():
 		return
+	_voice.configure(url, token, capability)
 	client = WorldDevelopment.new()
 	add_child(client)
 	client.configure(url, token, capability)
@@ -78,10 +86,16 @@ func connect_gateway(url: String, token: String) -> void:
 					_show_chat_tabs()
 		_poll_chat())
 	var task_poll := Timer.new()
-	task_poll.wait_time = 3
+	task_poll.wait_time = 1
 	add_child(task_poll)
 	task_poll.timeout.connect(func() -> void:
-		if (is_instance_valid(console) and _world.overlay.visible) or _world.wrist.is_open:
+		if is_instance_valid(console) and _world.overlay.visible:
+			var working := _chat_requests.has(chat_peer) or bool(_conversations.get(chat_peer, {}).get("working", false))
+			if working or Time.get_ticks_msec() >= _next_chat_poll:
+				_next_chat_poll = Time.get_ticks_msec() + 3000
+				_poll_chat()
+		elif _world.wrist.is_open and Time.get_ticks_msec() >= _next_chat_poll:
+			_next_chat_poll = Time.get_ticks_msec() + 3000
 			_poll_chat())
 	task_poll.start()
 
@@ -239,10 +253,14 @@ func open_console(peer := "") -> void:
 	console.cli_requested.connect(_open_native_cli)
 	console.minimize_requested.connect(Callable(_world, "_close_panel"))
 	console.layout_requested.connect(_layout_console)
-	console.voice_requested.connect(_set_voice)
+	console.voice_requested.connect(_voice.toggle)
+	console.voice_selected.connect(_voice.select)
+	console.voice_preview_requested.connect(_voice.preview)
+	console.voice_retry_requested.connect(_voice.retry)
 	console.development_requested.connect(_console_action)
 	_layout_console(false)
-	console.setup(console_lines, busy, voice_enabled)
+	console.setup(console_lines, busy, _voice.enabled)
+	_refresh_voice()
 	_show_chat_tabs()
 	refresh_chat()
 	_poll_chat()
@@ -260,7 +278,8 @@ func select_chat(peer: String) -> void:
 		_session.save_chat_tabs(_chat_tabs, peer)
 	if is_instance_valid(console):
 		_show_chat_tabs()
-		console.focus_entry()
+		if _world.overlay.keyboard_active:
+			console.focus_entry()
 	refresh_chat()
 	_poll_chat()
 
@@ -491,6 +510,7 @@ func notice(line: String) -> void:
 
 func resume(path: String) -> void:
 	_session = DevelopmentSession.new(path)
+	_voice.selected = _session.voice_id
 	console_lines = _session.lines
 	CodexConsole.prompts = _session.prompts
 	_chat_tabs = _session.chat_tabs.duplicate()
@@ -549,18 +569,8 @@ func _open_native_cli() -> void:
 		_world._activate_agent(Presence.CODEX)
 
 func speak(text: String) -> void:
-	if not voice_enabled or not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
-		return
-	var voices := DisplayServer.tts_get_voices_for_language("en")
-	if not voices.is_empty():
-		DisplayServer.tts_speak(text.xml_escape(), voices[0], 65, 1.0, 1.0, 0, true)
+	_voice.speak(text)
 
-func _set_voice(enabled: bool) -> void:
-	voice_enabled = enabled
-	if not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
-		if enabled: notice("System voices are unavailable on this device.")
-	elif enabled:
-		if DisplayServer.tts_get_voices_for_language("en").is_empty():
-			notice("Install an English system voice to enable speech.")
-	else:
-		DisplayServer.tts_stop()
+func _refresh_voice() -> void:
+	if is_instance_valid(console):
+		console.update_voice(_voice.enabled, _voice.voices, _voice.selected, _voice.status, _voice.can_connect, _voice.loading)

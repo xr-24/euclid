@@ -3,6 +3,8 @@ import { createCodexAgent } from './agents/codex.mjs';
 import { createClaudeAgent } from './agents/claude.mjs';
 import { createStreamTracker } from './agent-activity.mjs';
 
+const withoutCredential = (content, key) => typeof content === 'string' ? content.replaceAll(key, '[redacted]') : '';
+
 const workers = {
   'local-codex': { label: 'Codex', provider: 'codex', create: createCodexAgent },
   'local-claude': { label: 'Claude', provider: 'claude', create: createClaudeAgent },
@@ -13,6 +15,11 @@ export const listLocalWorkers = () => Object.entries(workers)
 
 // activity, when given, is the agent activity feed (agent-activity.mjs) the world draws above each agent.
 export function createTaskWorkers(board, address, { activity } = {}) {
+  function report(job, kind, content) {
+    const text = withoutCredential(content, job.key);
+    if (text) void board.activity(job.actor, job.task.id, kind, text)
+      .catch(error => console.error('Euclid task activity:', error.message));
+  }
   const active = new Map();
   let timer;
   async function tick(actor, factory) {
@@ -37,18 +44,19 @@ export function createTaskWorkers(board, address, { activity } = {}) {
       const result = await factory().task(input, {
         url: `http://127.0.0.1:${address().port}/mcp/task`,
         token: job.key, signal: controller.signal, onRaw: tracker?.handle,
+        onMessage: text => report(job, 'message', text),
       });
       await tracker?.settled();
       activity?.record(actor, { kind: 'done', title: 'Finished the task' });
       if (board.running(actor, task.id)) {
-        const detail = typeof result === 'string' ? result.replaceAll(job.key, '[redacted]').replaceAll('\0', '').slice(0, 3600) : '';
+        const detail = withoutCredential(result, job.key).replaceAll('\0', '').slice(0, 3600);
         await board.agent(actor, 'finish_task', { id: task.id, status: 'blocked',
           text: 'The CLI exited without recording a task result.' + (detail ? '\n' + detail : '') });
       }
     } catch (error) {
       if (job.task) activity?.record(actor, { kind: 'error', title: 'The task stopped', text: error.message });
       if (job.task && board.running(actor, job.task.id)) {
-        await board.agent(actor, 'finish_task', { id: job.task.id, status: 'blocked', text: error.message.slice(0, 4000) });
+        await board.agent(actor, 'finish_task', { id: job.task.id, status: 'blocked', text: withoutCredential(error.message, job.key).slice(0, 4000) });
       }
     } finally {
       active.delete(actor);
@@ -67,6 +75,11 @@ export function createTaskWorkers(board, address, { activity } = {}) {
     stop() {
       clearInterval(timer);
       for (const job of active.values()) job.controller.abort(new Error('Gateway stopped.'));
+    },
+    toolActivity(job, name, outcome = '') {
+      if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{0,80}$/.test(name) ||
+          ['inbox', 'task_progress', 'finish_task'].includes(name)) return;
+      report(job, 'tool', (outcome || 'Running') + ' · ' + name.replaceAll('_', ' '));
     },
     identify(key) {
       return [...active.values()].find(job => job.key === key && job.task && board.running(job.actor, job.task.id));

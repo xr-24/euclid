@@ -22,7 +22,7 @@ export function frame(type, payload = Buffer.alloc(0)) {
 export function terminalEnvironment(env) {
   const result = { ...env };
   for (const name of Object.keys(result)) {
-    if (/^(?:CONSTRUCT_GATEWAY_TOKEN|EUCLID_WORKBENCH_TOKEN|EUCLID_GATEWAY_HANDOFF|EUCLID_DEVELOPMENT_TOKEN)$/i.test(name)) delete result[name];
+    if (/^(?:CONSTRUCT_GATEWAY_TOKEN|EUCLID_WORKBENCH_TOKEN|EUCLID_GATEWAY_HANDOFF|EUCLID_DEVELOPMENT_TOKEN|ELEVENLABS_API_KEY)$/i.test(name)) delete result[name];
   }
   for (const name of Object.keys(result)) {
     if (name.toUpperCase() === 'TERM') delete result[name];

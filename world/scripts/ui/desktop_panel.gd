@@ -11,6 +11,8 @@ var _pointer_start := Vector2.ZERO
 var _rect_start := Rect2()
 var _edge := Vector2.ZERO
 var _dragging := false
+var keyboard_active := false
+var _last_focus: Control
 
 func _ready() -> void:
 	var stack := VBoxContainer.new()
@@ -32,8 +34,25 @@ func _ready() -> void:
 	content.add_theme_constant_override("separation", 10)
 	scroll.add_child(content)
 	get_viewport().size_changed.connect(_fit_to_viewport.call_deferred)
-	visibility_changed.connect(func() -> void: _dragging = false)
+	visibility_changed.connect(func() -> void:
+		_dragging = false
+		set_keyboard_active(is_visible_in_tree()))
 	resized.connect(queue_redraw)
+
+func set_keyboard_active(active: bool) -> void:
+	if keyboard_active == active:
+		return
+	keyboard_active = active
+	if not active:
+		_release_panel_focus()
+	elif is_instance_valid(_last_focus) and is_ancestor_of(_last_focus) and _last_focus.is_visible_in_tree():
+		_last_focus.grab_focus()
+
+func _release_panel_focus() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focused) and is_ancestor_of(focused):
+		_last_focus = focused
+		focused.release_focus()
 
 func _draw() -> void:
 	for offset in [5.0, 9.0, 13.0]:
@@ -41,6 +60,9 @@ func _draw() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
+		return
+	if event is InputEventKey and not keyboard_active:
+		_release_panel_focus()
 		return
 	if event is InputEventMouseMotion:
 		var point: Vector2 = get_canvas_transform().affine_inverse() * event.position
@@ -52,12 +74,10 @@ func _input(event: InputEvent) -> void:
 				_dragging = false
 		else:
 			_set_edge_cursor(_edge_at(point))
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if not event.pressed and _dragging:
-			_dragging = false
-			get_viewport().set_input_as_handled()
-		elif event.pressed:
-			var point: Vector2 = get_canvas_transform().affine_inverse() * event.position
+	elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
+		var point: Vector2 = get_canvas_transform().affine_inverse() * event.position
+		set_keyboard_active(get_global_rect().has_point(point))
+		if event.button_index == MOUSE_BUTTON_LEFT:
 			var edge := _edge_at(point)
 			if edge != Vector2.ZERO or _grip.get_global_rect().has_point(point):
 				_dragging = true
@@ -65,6 +85,9 @@ func _input(event: InputEvent) -> void:
 				_pointer_start = point
 				_rect_start = get_global_rect()
 				get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and _dragging:
+		_dragging = false
+		get_viewport().set_input_as_handled()
 
 func _edge_at(point: Vector2) -> Vector2:
 	var rect := get_global_rect()

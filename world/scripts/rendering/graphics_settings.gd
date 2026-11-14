@@ -7,6 +7,11 @@ const PROFILES := {
 	"cinematic": {"label":"Cinematic", "msaa":Viewport.MSAA_4X, "shadow_size":8192},
 }
 static var current := "balanced"
+## What agents show above their heads (agents/activity_card.gd): full, icons or off.
+const AGENT_ACTIVITY := ["full", "icons", "off"]
+static var agent_activity := "full"
+## Whether those panels show the code itself; off draws bars in its place, for recording or streaming.
+static var show_code := true
 
 static func configure(viewport: Viewport, automated: bool) -> void:
 	current = "balanced"
@@ -14,6 +19,10 @@ static func configure(viewport: Viewport, automated: bool) -> void:
 		var config := ConfigFile.new()
 		if config.load(PATH) == OK:
 			current = str(config.get_value("graphics", "profile", "balanced"))
+			agent_activity = str(config.get_value("agents", "activity", "full"))
+			show_code = bool(config.get_value("agents", "show_code", true))
+	if agent_activity not in AGENT_ACTIVITY:
+		agent_activity = "full"
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--quality="):
 			current = arg.trim_prefix("--quality=")
@@ -53,8 +62,21 @@ static func select(profile: String, viewport: Viewport) -> void:
 	assert(PROFILES.has(profile))
 	current = profile
 	apply(viewport)
+	_save()
+
+## Set what agents show above their heads, and whether their panels show code.
+static func set_agent_activity(mode: String, code: bool) -> void:
+	assert(mode in AGENT_ACTIVITY)
+	agent_activity = mode
+	show_code = code
+	_save()
+
+static func _save() -> void:
 	var config := ConfigFile.new()
+	config.load(PATH)
 	config.set_value("graphics", "profile", current)
+	config.set_value("agents", "activity", agent_activity)
+	config.set_value("agents", "show_code", show_code)
 	config.save(PATH)
 
 static func label() -> String:

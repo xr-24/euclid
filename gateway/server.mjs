@@ -19,6 +19,7 @@ import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
 import { createRelayLink } from './relay-link.mjs';
 import { createTerminalSessions } from './terminal/sessions.mjs';
 import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
+import { createActivityFeed, createToolObserver } from './agent-activity.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const youtubePage = new URL('./youtube-player.html', import.meta.url);
@@ -47,13 +48,18 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const expected = Buffer.from(`Bearer ${secret}`);
   const workbenchToken = workbenchSecret ?? randomBytes(32).toString('hex');
   const workbenchExpected = Buffer.from(workbenchToken);
-  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), { onGatewayChange: reloadGateway, gatewayNotice, ...workbenchOptions });
+  // What agents are reading, editing and running, for the world to draw above them.
+  const activity = createActivityFeed();
+  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), { onGatewayChange: reloadGateway, gatewayNotice, activity, ...workbenchOptions });
+  const observer = createToolObserver(activity, {
+    readDraftFile: (agent, name) => workbench('file', { name, owner: agent }, AbortSignal.timeout(5000)).then(file => file?.text ?? ''),
+  });
   // A third capability, for agents: source reads, drafts and checks, without commit or preview.
   const developmentSecret = developmentToken ?? randomBytes(32).toString('hex');
   const developmentExpected = Buffer.from(developmentSecret);
   const tasks = await createTaskBoard(path.join(dataDir, 'tasks.json'));
   const views = createAgentViews();
-  const development = createDevelopmentBridge(workbench, { tasks, extraTools: viewTools,
+  const development = createDevelopmentBridge(workbench, { tasks, extraTools: viewTools, observer,
     callExtra: (agent, name, args, signal) => name === 'look_at_world'
       ? views.look(agent) : workbench('checkcapture', { owner: agent, view: args.view }, signal) });
   const agentCredentials = await createAgentCredentials(path.join(dataDir, 'agents.json'));
@@ -78,7 +84,7 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
     if (task) await tasks.agent(id, 'finish_task', { id: task.id, status: 'blocked',
       text: 'The gateway restarted during the task. Review any changes before assigning it again.' });
   }
-  const workers = createTaskWorkers(tasks, () => server.address());
+  const workers = createTaskWorkers(tasks, () => server.address(), { activity });
   function reply(res, code, value) {
     res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(JSON.stringify(value));
@@ -133,6 +139,10 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
           result.result.tools.push(...world.result.tools.filter(tool => !names.has(tool.name)));
         } else if (job.task.session && body?.method === 'tools/call' && result?.error?.message === 'Unknown workbench tool') {
           result = await bridge.rpc(job.task.session, body, signal, job.actor);
+          try {
+            observer.after(job.actor, String(body.params?.name ?? ''), body.params?.arguments ?? {},
+              { ok: !result?.error && !result?.result?.isError });
+          } catch {}
         }
         if (res.destroyed) return;
         return result === null ? res.writeHead(202).end() : reply(res, 200, result);
@@ -196,6 +206,21 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
             }
           }
         } catch (error) { return res.destroyed ? undefined : reply(res, 400, { error: error.message }); }
+      }
+      // The world long-polls the activity feed: one waiting request at a time, outside the rate budget.
+      if (req.url === '/v1/activity/feed') {
+        const capability = Buffer.from(req.headers['x-euclid-workbench'] ?? '');
+        if (capability.length !== workbenchExpected.length || !timingSafeEqual(capability, workbenchExpected)) return reply(res, 403, { error: 'Activity requires the local Euclid launcher.' });
+        if (req.method !== 'POST') return reply(res, 405, { error: 'Use POST' });
+        const body = await readJson(req, res, 1024);
+        if (body === undefined) return;
+        const since = Number.isInteger(body?.since) ? body.since : 0;
+        const wait = Math.min(Math.max(Number(body?.wait) || 0, 0), 25) * 1000;
+        const controller = new AbortController();
+        res.once('close', () => controller.abort());
+        const result = wait ? await activity.wait(since, { timeout: wait, signal: controller.signal }) : activity.since(since);
+        if (res.destroyed) return;
+        return reply(res, 200, result);
       }
       if (Date.now() - rateStart > 60000) { rateStart = Date.now(); rateCount = 0; }
       if (++rateCount > 240) return reply(res, 429, { error: 'Rate limit exceeded' });

@@ -39,7 +39,8 @@ async function readText(file) {
   return decoder.decode(bytes);
 }
 
-export async function writeAgentDraft({ worktree, request, context, evidence, author, onProgress, signal, intent }) {
+// track, when given, returns a handler for the author's raw CLI events (the activity feed).
+export async function writeAgentDraft({ worktree, request, context, evidence, author, onProgress, signal, intent, track }) {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'euclid-source-'));
   try {
     // The worker gets source bytes from the pinned checkout. Its writable directory
@@ -49,7 +50,9 @@ export async function writeAgentDraft({ worktree, request, context, evidence, au
       return path.relative(worktree, source) !== '.git';
     } });
     const before = await inventory(workspace, signal);
-    const summary = await author({ workspace, request, context, evidence, onProgress, signal });
+    const tracker = track?.({ workspace, original: worktree });
+    const summary = await author({ workspace, request, context, evidence, onProgress, onRaw: tracker?.handle, signal });
+    await tracker?.settled();
     const after = await inventory(workspace, signal);
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter(name => before.get(name) !== after.get(name)).sort();
     if (changed.length > sourceDraftLimit) throw new Error(`Split the request into drafts of up to ${sourceDraftLimit} files.`);

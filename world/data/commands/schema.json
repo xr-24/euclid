@@ -297,8 +297,8 @@
     },
     "animation_target": {
       "type": "string",
-      "description": "Exact animation target ID or companion",
-      "pattern": "^(companion|[a-f0-9]{32})$"
+      "description": "Exact animation target ID, companion, or activity:<kind> (read, edit, run, search, think, tool, say) for the motion agents play during that activity",
+      "pattern": "^(companion|activity:[a-z]{1,16}|[a-f0-9]{32})$"
     },
     "workshop_action": {
       "type": "string",

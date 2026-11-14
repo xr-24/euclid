@@ -23,6 +23,7 @@ const MaterialClient = preload("res://scripts/agents/material_client.gd")
 const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
+const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -161,6 +162,7 @@ func _ready() -> void:
 	_register_live_extensions()
 	add_child(agent_presence)
 	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", null)
+	ActivityMotions.use_overrides("" if smoke_mode else "user://activity-motions.json")
 	_setup_ui()
 	_setup_gateway()
 	WorldArt.init(self)
@@ -673,6 +675,17 @@ func _submit_codex_command(prompt: String) -> void:
 		await _call_world_tool(plan)
 	_dev.busy = false
 	_dev.refresh_chat()
+
+## An agent's activity from the gateway feed. An agent that starts work appears beside the player.
+func _agent_activity(entry: Dictionary) -> void:
+	var actor := str(entry.get("actor", ""))
+	if not actor.is_valid_identifier() and not actor.replace("-", "_").replace(".", "_").is_valid_identifier():
+		return
+	if not agent_presence.has_agent(actor):
+		if str(entry.get("kind", "")) == "think" or str(entry.get("kind", "")) == "say":
+			return
+		_activate_agent(actor)
+	agent_presence.activity(entry)
 
 func _activate_agent(id: String) -> Node3D:
 	var avatar := agent_presence.activate(id, zone_id, player, not _is_workshop(zone_id))

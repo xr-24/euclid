@@ -7,6 +7,7 @@ const FILAMENT_SHADER = preload("res://shaders/avatar_filaments.gdshader")
 const FILAMENT_DAYLIGHT_SHADER = preload("res://shaders/avatar_filaments_daylight.gdshader")
 const AvatarFilaments = preload("res://scripts/agents/avatar_filaments.gd")
 const AvatarHover = preload("res://scripts/agents/avatar_hover.gd")
+const ActivityCard = preload("res://scripts/agents/activity_card.gd")
 const HOVER_HEIGHT := 1.46
 const FOLLOW_DISTANCE := 3.3
 const FOLLOW_SPEED := 5.4
@@ -64,6 +65,18 @@ func _ready() -> void:
 
 func animation_player() -> MeshInstance3D:
 	return _projection
+
+## Show an agent activity event (gateway/agent-activity.mjs) above the projection.
+func show_activity(entry: Dictionary) -> void:
+	var card := get_node_or_null("Activity") as ActivityCard
+	if card == null:
+		card = ActivityCard.new()
+		card.name = "Activity"
+		card.tint = tint
+		card.highlight = highlight
+		add_child(card)
+		card.motion.connect(_projection.set_activity)
+	card.push(entry)
 
 func arrive(zone: String, player: CharacterBody3D, daylight := false, occupied: Array[Vector3] = []) -> void:
 	if daylight != _daylight:

@@ -38,6 +38,15 @@ func tick(player: CharacterBody3D, delta: float) -> void:
 func set_mode(id: String, mode: String, zone: String, player: CharacterBody3D) -> void:
 	_avatars[id].set_mode(mode, zone, player, _occupied(id))
 
+## Pass an activity event to the agent it belongs to, when that agent is projected here.
+func activity(entry: Dictionary) -> void:
+	var avatar: Avatar = _avatars.get(str(entry.get("actor", "")))
+	if avatar:
+		avatar.show_activity(entry)
+
+func has_agent(id: String) -> bool:
+	return _avatars.has(id)
+
 func aimed(camera: Camera3D, player: CharacterBody3D) -> String:
 	var selected := ""
 	var distance := INF

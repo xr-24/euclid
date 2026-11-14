@@ -168,6 +168,45 @@ This separates agents that cooperate and keeps attribution honest. It does not
 contain a hostile local process. Anything that can read `.local/gateway.json`
 holds the Workbench capability and can issue itself a credential.
 
+### Seeing what agents do
+
+Every agent's work shows in the world, above and around its projection.
+
+- **The feed.** The gateway turns what agents do into events
+  (`gateway/agent-activity.mjs`). It reads them from the Claude Code and Codex
+  event streams of local tasks and source drafts, and from the development
+  tool calls of connected agents. Event kinds are `read`, `search`, `edit`,
+  `write`, `delete`, `run`, `tool`, `think`, `say`, `start`, `done` and
+  `error`. A read carries the lines read and an edit carries a diff. The world
+  long-polls `POST /v1/activity/feed` (`{since, wait}`), which needs the
+  Workbench capability. The feed keeps the last 400 events in memory and
+  writes nothing to disk.
+- **What is hidden.** Files that look like secrets (`.env`, keys,
+  credentials, `.git`, `.local`) show only their kind and no path or text.
+  Token-like strings are redacted everywhere.
+- **The card.** A panel above the agent plays each event as it arrives:
+  - a read sweeps down the lines;
+  - an edit strikes out removed lines and types in new ones;
+  - a command types out, then shows its output.
+
+  A backlog plays faster. Far away, the card shrinks to its header.
+- **Motions and props.** The agent acts out each event. It holds a book while
+  reading, types on a keyboard while editing, holds a terminal while running
+  a command, searches with a lens and turns an orb while using a tool.
+  - The motions and prop specs are in `world/data/agents/activity_motions.json`.
+  - They are solved from limb directions in `activity_poses.json` by
+    `scripts/diagnostics/solve_activity_poses.gd`.
+  - Agents can revise a motion in the world with the animation tools, using
+    target `activity:<kind>`. A preview plays on the companion, and a saved
+    motion goes to `user://activity-motions.json`.
+- **Settings.** The wrist computer's System page has two rows. **Agent
+  activity** sets `full`, `icons` (header only) or `off`; `off` also stops
+  the motions. **Show code** draws bars in place of text, for screen sharing.
+  Both are saved in `user://graphics.cfg`.
+- **Previewing.** `scripts/diagnostics/activity_preview.gd` renders the card
+  and pose for sample events. Its views are `card`, `side`, `close`, `front`
+  and `back`.
+
 ## Verification
 
 `gateway/workbench-mcp.test.mjs` runs the endpoint against a fixture

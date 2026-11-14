@@ -81,6 +81,10 @@ func _system() -> Dictionary:
 	return {"id": "system", "title": "SYSTEM", "rows": [
 		{"label": "FULLSCREEN", "value": "ON" if fullscreen else "OFF", "tone": "good" if fullscreen else "", "run": _toggle_fullscreen},
 		{"label": "GRAPHICS", "value": Graphics.label().to_upper(), "tone": "accent", "run": _cycle_graphics},
+		{"label": "AGENT ACTIVITY", "value": Graphics.agent_activity.to_upper(), "tone": "accent" if Graphics.agent_activity != "off" else "",
+			"run": _cycle_agent_activity},
+		{"label": "SHOW CODE", "value": "ON" if Graphics.show_code else "OFF", "tone": "good" if Graphics.show_code else "",
+			"run": func() -> void: Graphics.set_agent_activity(Graphics.agent_activity, not Graphics.show_code)},
 		{"label": "QUIT", "confirm": "ENTER AGAIN TO QUIT", "run": Callable(_world, "_quit")},
 	]}
 
@@ -97,6 +101,11 @@ func _toggle_fullscreen() -> void:
 func _cycle_graphics() -> void:
 	Graphics.select("cinematic" if Graphics.current == "balanced" else "balanced", _world.get_viewport())
 	Graphics.apply_zone(_world, _world.zone_id)
+
+## Full panels, header icons only, or nothing above the agents.
+func _cycle_agent_activity() -> void:
+	var modes := Graphics.AGENT_ACTIVITY
+	Graphics.set_agent_activity(modes[(modes.find(Graphics.agent_activity) + 1) % modes.size()], Graphics.show_code)
 
 func _zone_name(id: String) -> String:
 	for zone in _world.manifest.zones:

@@ -240,3 +240,27 @@ test('MCP discovers a live world and waits for its tool result', async t => {
   await previewSync({ id: command.id, value: { ok: true } });
   assert.equal((await custom).result.isError, false);
 });
+
+test('agent tool calls reach the activity feed the world long-polls', async t => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'euclid-activity-test-'));
+  const developmentToken = 'd'.repeat(64);
+  const { server } = await createGateway({ dataDir, token: 'test-only-secret', workbenchToken: 'bench', developmentToken });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(dataDir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Authorization: 'Bearer test-only-secret', 'Content-Type': 'application/json' };
+  const feed = (body, extra = { 'X-Euclid-Workbench': 'bench' }) =>
+    fetch(`${base}/v1/activity/feed`, { method: 'POST', headers: { ...headers, ...extra }, body: JSON.stringify(body) });
+  assert.equal((await feed({}, {})).status, 403);
+  assert.deepEqual(await (await feed({ since: 0 })).json(), { events: [], next: 0, reset: false });
+  const waiting = feed({ since: 0, wait: 5 });
+  const call = await fetch(`${base}/mcp/dev/${developmentToken}/scout`, { method: 'POST', headers,
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'read_source', arguments: { path: 'README.md' } } }) });
+  assert.equal(call.status, 200);
+  const { events, next } = await (await waiting).json();
+  assert.equal(events[0].actor, 'scout');
+  assert.equal(events[0].kind, 'read');
+  assert.equal(events[0].path, 'README.md');
+  assert.ok(events[0].lines.length > 0);
+  assert.equal(next, events.at(-1).seq);
+});

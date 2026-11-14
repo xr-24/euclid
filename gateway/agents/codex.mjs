@@ -34,7 +34,8 @@ export function createCodexAgent({ env = process.env,
     id: 'codex',
     label: 'Codex',
 
-    async task(input, { url, token, signal }) {
+    // onRaw sees every event of the CLI's stream, for the activity feed.
+    async task(input, { url, token, signal, onRaw }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
       try {
@@ -48,6 +49,7 @@ export function createCodexAgent({ env = process.env,
         ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
           input, timeoutMessage: 'Codex exceeded the ten-minute task limit.',
           onEvent(event) {
+            onRaw?.(event);
             if (event.type === 'error' && typeof event.message === 'string') last = event.message;
             if (event.type === 'turn.failed' && typeof event.error?.message === 'string') last = event.error.message;
             if (event.type === 'item.completed' && event.item?.type === 'agent_message') last = event.item.text;
@@ -81,7 +83,7 @@ export function createCodexAgent({ env = process.env,
     },
 
     // Edits files inside the workspace and returns the agent's closing message.
-    async author(input, { workspace, onProgress, signal, timeout }) {
+    async author(input, { workspace, onProgress, onRaw, signal, timeout }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       let complete = false;
       let message = '';
@@ -94,6 +96,7 @@ export function createCodexAgent({ env = process.env,
       ], { cwd: workspace, env: childEnv, signal, timeout, input,
         timeoutMessage: 'The source agent timed out. Try a smaller change.',
         onEvent(event) {
+          onRaw?.(event);
           if (event.type === 'turn.completed') complete = true;
           if (event.type !== 'item.completed') return;
           if (event.item?.type === 'command_execution') onProgress(`Codex completed workspace command ${++commands}.\n`);

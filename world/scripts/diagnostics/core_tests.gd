@@ -10,6 +10,11 @@ const WorldTools = preload("res://scripts/workshop/world_tools.gd")
 const ScenePlacement = preload("res://scripts/workshop/scene_placement.gd")
 const AuthoredProps = preload("res://scripts/zones/authored_props.gd")
 const SceneCommands = preload("res://scripts/workshop/scene_commands.gd")
+const MotionClip = preload("res://scripts/animation/motion_clip.gd")
+const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
+const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
+const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
+const ActivityView = preload("res://scripts/agents/activity_view.gd")
 const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
@@ -262,6 +267,7 @@ func _run() -> void:
 	_check_panel_swap()
 	_check_terminal_keys()
 	_check_agents_panel()
+	_check_agent_activity()
 	_check_wrist_computer()
 	_check_spring_follow()
 	_check_atmosphere()
@@ -1778,3 +1784,52 @@ func _check_palette_reload() -> void:
 	host.free()
 	overlay.free()
 	zone.free()
+
+func _check_agent_activity() -> void:
+	ActivityMotions.use_overrides("")
+	var kinds := ActivityMotions.kinds()
+	_check(["read", "edit", "run", "search", "think", "tool", "say"].all(func(kind: String) -> bool:
+		return kind in kinds and MotionClip.valid(ActivityMotions.clip(kind)) and not ActivityMotions.clip(kind).joint_tracks.is_empty()),
+		"every agent activity has a valid looping joint motion")
+	_check(ActivityMotions.resolve("write") == "edit" and ActivityMotions.prop("delete") == "keyboard"
+		and not ActivityMotions.prop_spec("read").is_empty(), "file writes act out typing and reading conjures its prop")
+	_check(ActivityView.duration({"kind": "edit", "added": 4, "removed": 2, "hunks": []}) > ActivityView.duration({"kind": "tool"}) * 0.5,
+		"activity events have a play length")
+	var body: MeshInstance3D = BinaryAvatar.projection()
+	root.add_child(body)
+	body.set_activity("read")
+	_check(body.activity == "read" and body.prop() != null and body.prop().key == "book", "reading plays its motion and conjures a book")
+	body.set_activity("write")
+	var keyboard: Node3D = body.prop()
+	_check(body.activity == "edit" and keyboard != null and keyboard.key == "keyboard", "editing swaps the book for a keyboard")
+	body.set_activity("think")
+	_check(body.activity == "think" and body.prop() == null and keyboard.leaving, "an activity without a prop dissolves the last one")
+	body.set_activity("")
+	_check(body.activity == "", "agents return to hovering")
+	var animations := SceneAnimations.new("", body)
+	var listed: Dictionary = animations.execute({"tool": "inspect_animation"}, null)
+	_check(listed.ok and listed.targets.any(func(target: Dictionary) -> bool: return target.id == "activity:read"),
+		"agents can find the activity motions among animation targets")
+	var original := ActivityMotions.clip("read")
+	var revised := original.duplicate(true)
+	revised.name = "Agent read, slower"
+	revised.duration = 9.0
+	revised.keyframes.back().time = 9.0
+	for track: Dictionary in revised.joint_tracks:
+		track.keyframes.back().time = 9.0
+	var shown: Dictionary = animations.execute({"tool": "preview_animation", "target": "activity:read", "clip": revised}, null)
+	_check(shown.ok and ActivityMotions.clip("read").duration == 9.0 and body.activity == "read",
+		"previewing an activity motion plays it on the companion")
+	_check(animations.execute({"tool": "discard_animation", "target": "activity:read"}, null).ok
+		and ActivityMotions.clip("read") == original and body.activity == "", "discarding restores the shipped activity motion")
+	var bare := revised.duplicate(true)
+	bare.erase("joint_tracks")
+	_check(not animations.execute({"tool": "preview_animation", "target": "activity:read", "clip": bare}, null).ok,
+		"activity motions need joint tracks")
+	_check(not animations.execute({"tool": "preview_animation", "target": "activity:dance", "clip": revised}, null).ok,
+		"reject unknown activity targets")
+	_check(animations.execute({"tool": "preview_animation", "target": "activity:read", "clip": revised}, null).ok
+		and animations.execute({"tool": "save_animation", "target": "activity:read"}, null).ok
+		and ActivityMotions.clip("read").duration == 9.0, "save a revised activity motion")
+	ActivityMotions.set_override("read", {})
+	body.free()

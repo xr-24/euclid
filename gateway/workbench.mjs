@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { structuredAgent } from './agents/index.mjs';
+import { agentId, structuredAgent } from './agents/index.mjs';
+import { createStreamTracker } from './agent-activity.mjs';
 import { createWorkbenchGit } from './workbench-git.mjs';
 import { livePlugin, pluginContext, pluginFiles, proposePlugin } from './workbench-plugin.mjs';
 import { shorelineAppearance } from './workbench-shoreline.mjs';
@@ -69,10 +70,18 @@ async function readChanges(root, files) {
 
 export function createWorkbench(root, storage, { runner = createPreviewRunner(root, { base: path.join(storage, 'preview-base') }), propose = proposeEdit,
   author = proposePlugin, designShoreline = shorelineAppearance.propose, designGrid = gridAppearance.propose,
-  designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '',
+  designTool = proposeWorkshopTool, editSource = authorSource, onGatewayChange = null, gatewayNotice = () => '', activity = null,
   journal = createJournal(path.join(storage, 'journal.jsonl'), { onError: error => console.error(`Workbench journal: ${error.message}`) }) } = {}) {
   const git = createWorkbenchGit(root);
   const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
+  // The source agent's file reads and edits, for the activity feed, attributed to its local worker.
+  const sourceActor = () => { try { return `local-${agentId('author')}`; } catch { return 'local-codex'; } };
+  const tracking = (submitted, request) => {
+    if (!activity || submitted) return undefined;
+    const actor = sourceActor();
+    activity.record(actor, { kind: 'start', title: `Workbench draft: ${request}` });
+    return ({ workspace, original }) => createStreamTracker(activity, { actor, provider: actor.slice(6), workspace, original });
+  };
   // Every open draft by id. The person's Workbench shows the focused one; an agent sees its own.
   const drafts = new Map();
   let focusId = null;
@@ -307,13 +316,15 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         await mkdir(directory, { recursive: true });
         await git.add(worktree, base);
         const { names, summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), author: submitted ?? editSource,
-          evidence: await benchmarkEvidence(null, base),
+          evidence: await benchmarkEvidence(null, base), track: tracking(submitted, body.prompt.trim()),
           signal: controller.signal, intent: files => git.intent(worktree, files),
           onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         controller.signal.throwIfAborted();
         await registerDraft({ id, names, base, branch, directory, worktree, summary, request: body.prompt.trim(), fromWorld: true, agentSource: true, owner }, job.log);
         sourceJob = null;
+        if (!submitted) activity?.record(sourceActor(), { kind: 'done', title: 'Draft ready for review', text: summary });
       } catch (error) {
+        if (!submitted) activity?.record(sourceActor(), { kind: 'error', title: 'The draft failed', text: error.message });
         await git.remove(worktree).catch(() => {});
         await rm(directory, { recursive: true, force: true }).catch(() => {});
         job.status = 'failed';
@@ -346,7 +357,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           check_status: change.check?.status ?? change.status, check_error: change.check?.error ?? '',
           check_output: change.check?.log ?? '', preview_output: previewOutput };
         const { summary } = await writeAgentDraft({ worktree, request: body.prompt.trim(), context, author: submitted ?? editSource,
-          evidence: await benchmarkEvidence(change, base),
+          evidence: await benchmarkEvidence(change, base), track: tracking(submitted, body.prompt.trim()),
           signal: controller.signal, onProgress: chunk => { job.log = (job.log + chunk).slice(-12000); } });
         const names = await git.changedPaths(worktree, base);
         if (!names.length || names.length > sourceDraftLimit || !names.every(isAgentSourcePath)) throw new Error('The revised draft must contain 1 to 24 eligible source files.');

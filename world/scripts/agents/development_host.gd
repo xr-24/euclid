@@ -9,6 +9,7 @@ const WorldDevelopment = preload("res://scripts/agents/world_development.gd")
 const DevelopmentSession = preload("res://scripts/persistence/development_session.gd")
 const WorkbenchDiagnostics = preload("res://scripts/ui/workbench_diagnostics.gd")
 const TaskClient = preload("res://scripts/agents/task_client.gd")
+const ActivityClient = preload("res://scripts/agents/activity_client.gd")
 const ApplicationWindow = preload("res://scripts/ui/application_window.gd")
 const Presence = preload("res://scripts/agents/agent_presence.gd")
 const ChatHistory = preload("res://scripts/agents/chat_history.gd")
@@ -58,6 +59,12 @@ func connect_gateway(url: String, token: String) -> void:
 	add_child(_tasks)
 	_tasks.configure(url, token, capability)
 	_tasks.notice.connect(notice)
+	# What agents read, edit and run, drawn above them (Graphics: agent activity).
+	var activity := ActivityClient.new()
+	activity.name = "Activity"
+	add_child(activity)
+	activity.activity.connect(_world._agent_activity)
+	activity.configure(url, token, capability)
 	_tasks.addressed.connect(func(peer: String) -> void:
 		if _chat_agents.has(peer):
 			_world._activate_agent(peer)

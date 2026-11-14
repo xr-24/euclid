@@ -247,7 +247,7 @@
     },
     {
       "name": "preview_animation",
-      "description": "Apply or revise a temporary looping clip on an inspected target.",
+      "description": "Apply or revise a temporary looping clip on an inspected target. activity:<kind> targets take joint tracks only and play on the companion while previewing.",
       "service": "animation",
       "handler": "_preview_animation",
       "effect": "preview",

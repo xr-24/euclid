@@ -61,7 +61,8 @@ function validArguments(tool, args) {
   });
 }
 
-export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extraTools = [], callExtra } = {}) {
+// observer, when given, sees each tool call before and after it runs (agent-activity.mjs createToolObserver).
+export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extraTools = [], callExtra, observer } = {}) {
   const live = () => new AbortController().signal;
   const tools = [...developmentTools, ...(tasks ? taskTools : []), ...extraTools];
 
@@ -185,8 +186,10 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
         if (!tool) return error(-32602, 'Unknown workbench tool');
         if (!validArguments(tool, args)) return error(-32602, 'Invalid workbench tool arguments');
         let result;
+        const seen = await observer?.before(agent, tool.name, args).catch(() => ({}));
         try { result = await call(agent, tool.name, args, signal); }
         catch (failure) { result = { ok: false, message: failure.message }; }
+        try { observer?.after(agent, tool.name, args, result, seen ?? {}); } catch {}
         const { image, ...details } = result;
         const content = [{ type: 'text', text: JSON.stringify(details) }];
         if (image) content.push({ type: 'image', mimeType: 'image/jpeg', data: image });

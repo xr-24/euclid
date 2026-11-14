@@ -1,0 +1,1034 @@
+{
+  "version": 1,
+  "about": "Authoring source for agent activity motions. Directions are in the body's frame: +X the agent's left, +Y up, +Z forward. Each activity may name a holographic prop from \"props\" (shape: book, keyboard, terminal, lens, orb or panel; between: bones it floats between; offset in the body frame; face: a bone or direction; size in rig units). aim points a bone at a direction (from the bone to the named child); turn rotates a bone by [pitch, yaw, roll] degrees about the body's axes. scripts/diagnostics/solve_activity_poses.gd turns these into joint clips in activity_motions.json, which the world plays and agents can revise with the animation tools (targets activity:<kind>).",
+  "chains": {
+    "upperarm01.L": "lowerarm01.L",
+    "lowerarm01.L": "wrist.L",
+    "wrist.L": "finger3-1.L",
+    "upperarm01.R": "lowerarm01.R",
+    "lowerarm01.R": "wrist.R",
+    "wrist.R": "finger3-1.R",
+    "finger2-1.L": "finger2-3.L",
+    "finger3-1.L": "finger3-3.L",
+    "finger2-1.R": "finger2-3.R",
+    "finger3-1.R": "finger3-3.R"
+  },
+  "activities": {
+    "read": {
+      "duration": 6.0,
+      "prop": "book",
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "spine01": [
+              6,
+              0,
+              0
+            ],
+            "head": [
+              22,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.L": [
+              -0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.L": [
+              -0.25,
+              0.35,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.R": [
+              0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.R": [
+              0.25,
+              0.35,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 2.6,
+          "turn": {
+            "spine01": [
+              6,
+              0,
+              0
+            ],
+            "head": [
+              24,
+              -6,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.L": [
+              -0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.L": [
+              -0.25,
+              0.35,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.R": [
+              0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.R": [
+              0.25,
+              0.35,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 3.3,
+          "turn": {
+            "spine01": [
+              6,
+              0,
+              0
+            ],
+            "head": [
+              22,
+              4,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.L": [
+              -0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.L": [
+              -0.25,
+              0.35,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.1,
+              -0.8,
+              0.55
+            ],
+            "lowerarm01.R": [
+              0.75,
+              0.3,
+              0.6
+            ],
+            "wrist.R": [
+              0.8,
+              0.2,
+              0.5
+            ]
+          }
+        },
+        {
+          "time": 4.0,
+          "turn": {
+            "spine01": [
+              6,
+              0,
+              0
+            ],
+            "head": [
+              22,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.L": [
+              -0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.L": [
+              -0.25,
+              0.35,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.2,
+              -0.85,
+              0.45
+            ],
+            "lowerarm01.R": [
+              0.35,
+              0.2,
+              0.9
+            ],
+            "wrist.R": [
+              0.25,
+              0.35,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 6.0,
+          "same_as": 0
+        }
+      ]
+    },
+    "edit": {
+      "duration": 1.2,
+      "prop": "keyboard",
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "spine01": [
+              8,
+              0,
+              0
+            ],
+            "head": [
+              16,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.2,
+              -0.12,
+              1.0
+            ],
+            "wrist.L": [
+              -0.05,
+              -0.35,
+              1.0
+            ],
+            "upperarm01.R": [
+              -0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.R": [
+              0.2,
+              -0.12,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              -0.35,
+              1.0
+            ],
+            "finger2-1.L": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger3-1.L": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger2-1.R": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger3-1.R": [
+              0,
+              -0.7,
+              0.7
+            ]
+          }
+        },
+        {
+          "time": 0.3,
+          "turn": {
+            "spine01": [
+              8,
+              0,
+              0
+            ],
+            "head": [
+              16,
+              2,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.2,
+              -0.08,
+              1.0
+            ],
+            "wrist.L": [
+              -0.05,
+              -0.3,
+              1.0
+            ],
+            "upperarm01.R": [
+              -0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.R": [
+              0.2,
+              -0.14,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              -0.38,
+              1.0
+            ],
+            "finger2-1.L": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger3-1.L": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger2-1.R": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger3-1.R": [
+              0,
+              -0.4,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 0.6,
+          "turn": {
+            "spine01": [
+              8,
+              0,
+              0
+            ],
+            "head": [
+              16,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.2,
+              -0.14,
+              1.0
+            ],
+            "wrist.L": [
+              -0.05,
+              -0.38,
+              1.0
+            ],
+            "upperarm01.R": [
+              -0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.R": [
+              0.2,
+              -0.08,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              -0.3,
+              1.0
+            ],
+            "finger2-1.L": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger3-1.L": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger2-1.R": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger3-1.R": [
+              0,
+              -0.7,
+              0.7
+            ]
+          }
+        },
+        {
+          "time": 0.9,
+          "turn": {
+            "spine01": [
+              8,
+              0,
+              0
+            ],
+            "head": [
+              16,
+              -2,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.2,
+              -0.1,
+              1.0
+            ],
+            "wrist.L": [
+              -0.05,
+              -0.32,
+              1.0
+            ],
+            "upperarm01.R": [
+              -0.15,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.R": [
+              0.2,
+              -0.1,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              -0.32,
+              1.0
+            ],
+            "finger2-1.L": [
+              0,
+              -0.4,
+              0.9
+            ],
+            "finger3-1.L": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger2-1.R": [
+              0,
+              -0.7,
+              0.7
+            ],
+            "finger3-1.R": [
+              0,
+              -0.4,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 1.2,
+          "same_as": 0
+        }
+      ]
+    },
+    "run": {
+      "duration": 3.0,
+      "prop": "terminal",
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "spine01": [
+              2,
+              0,
+              0
+            ],
+            "head": [
+              2,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.15,
+              -0.35,
+              0.9
+            ],
+            "lowerarm01.R": [
+              0.1,
+              0.2,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              0.15,
+              1.0
+            ],
+            "upperarm01.L": [
+              0.15,
+              -0.95,
+              0.2
+            ],
+            "lowerarm01.L": [
+              0.05,
+              -0.6,
+              0.8
+            ],
+            "wrist.L": [
+              0.0,
+              -0.7,
+              0.7
+            ]
+          }
+        },
+        {
+          "time": 1.5,
+          "turn": {
+            "spine01": [
+              2,
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.15,
+              -0.3,
+              0.92
+            ],
+            "lowerarm01.R": [
+              0.1,
+              0.12,
+              1.0
+            ],
+            "wrist.R": [
+              0.05,
+              0.0,
+              1.0
+            ],
+            "upperarm01.L": [
+              0.15,
+              -0.95,
+              0.2
+            ],
+            "lowerarm01.L": [
+              0.05,
+              -0.55,
+              0.85
+            ],
+            "wrist.L": [
+              0.0,
+              -0.7,
+              0.7
+            ]
+          }
+        },
+        {
+          "time": 3.0,
+          "same_as": 0
+        }
+      ]
+    },
+    "search": {
+      "duration": 4.0,
+      "prop": "lens",
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "head": [
+              6,
+              22,
+              0
+            ],
+            "spine01": [
+              0,
+              8,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.25,
+              -0.45,
+              0.85
+            ],
+            "lowerarm01.R": [
+              0.25,
+              0.55,
+              0.8
+            ],
+            "wrist.R": [
+              0.2,
+              0.6,
+              0.75
+            ],
+            "upperarm01.L": [
+              0.15,
+              -0.95,
+              0.15
+            ],
+            "lowerarm01.L": [
+              0.05,
+              -0.9,
+              0.3
+            ]
+          }
+        },
+        {
+          "time": 2.0,
+          "turn": {
+            "head": [
+              6,
+              -22,
+              0
+            ],
+            "spine01": [
+              0,
+              -8,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.1,
+              -0.45,
+              0.9
+            ],
+            "lowerarm01.R": [
+              0.5,
+              0.5,
+              0.7
+            ],
+            "wrist.R": [
+              0.45,
+              0.55,
+              0.7
+            ],
+            "upperarm01.L": [
+              0.15,
+              -0.95,
+              0.15
+            ],
+            "lowerarm01.L": [
+              0.05,
+              -0.9,
+              0.3
+            ]
+          }
+        },
+        {
+          "time": 4.0,
+          "same_as": 0
+        }
+      ]
+    },
+    "think": {
+      "duration": 5.0,
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "head": [
+              -6,
+              0,
+              8
+            ],
+            "spine01": [
+              -2,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.1,
+              -0.95,
+              0.3
+            ],
+            "lowerarm01.R": [
+              0.45,
+              0.8,
+              0.4
+            ],
+            "wrist.R": [
+              0.3,
+              0.9,
+              0.3
+            ],
+            "upperarm01.L": [
+              0.05,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.8,
+              0.05,
+              0.6
+            ]
+          }
+        },
+        {
+          "time": 2.5,
+          "turn": {
+            "head": [
+              -10,
+              6,
+              10
+            ],
+            "spine01": [
+              -2,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.1,
+              -0.95,
+              0.3
+            ],
+            "lowerarm01.R": [
+              0.45,
+              0.82,
+              0.38
+            ],
+            "wrist.R": [
+              0.3,
+              0.9,
+              0.3
+            ],
+            "upperarm01.L": [
+              0.05,
+              -0.9,
+              0.4
+            ],
+            "lowerarm01.L": [
+              -0.8,
+              0.05,
+              0.6
+            ]
+          }
+        },
+        {
+          "time": 5.0,
+          "same_as": 0
+        }
+      ]
+    },
+    "tool": {
+      "duration": 2.4,
+      "prop": "orb",
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "head": [
+              4,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.35,
+              -0.45,
+              0.8
+            ],
+            "lowerarm01.L": [
+              -0.25,
+              0.3,
+              0.92
+            ],
+            "wrist.L": [
+              -0.3,
+              0.2,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.35,
+              -0.45,
+              0.8
+            ],
+            "lowerarm01.R": [
+              0.25,
+              0.3,
+              0.92
+            ],
+            "wrist.R": [
+              0.3,
+              0.2,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 1.2,
+          "turn": {
+            "head": [
+              8,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.L": [
+              0.4,
+              -0.4,
+              0.82
+            ],
+            "lowerarm01.L": [
+              -0.15,
+              0.4,
+              0.9
+            ],
+            "wrist.L": [
+              -0.2,
+              0.35,
+              0.9
+            ],
+            "upperarm01.R": [
+              -0.4,
+              -0.4,
+              0.82
+            ],
+            "lowerarm01.R": [
+              0.15,
+              0.4,
+              0.9
+            ],
+            "wrist.R": [
+              0.2,
+              0.35,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 2.4,
+          "same_as": 0
+        }
+      ]
+    },
+    "say": {
+      "duration": 3.0,
+      "keys": [
+        {
+          "time": 0.0,
+          "turn": {
+            "head": [
+              0,
+              0,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.15,
+              -0.9,
+              0.35
+            ],
+            "lowerarm01.R": [
+              0.1,
+              0.25,
+              1.0
+            ],
+            "wrist.R": [
+              0.0,
+              0.4,
+              0.9
+            ]
+          }
+        },
+        {
+          "time": 1.5,
+          "turn": {
+            "head": [
+              -3,
+              4,
+              0
+            ]
+          },
+          "aim": {
+            "upperarm01.R": [
+              -0.25,
+              -0.85,
+              0.4
+            ],
+            "lowerarm01.R": [
+              -0.15,
+              0.35,
+              0.92
+            ],
+            "wrist.R": [
+              -0.2,
+              0.45,
+              0.85
+            ]
+          }
+        },
+        {
+          "time": 3.0,
+          "same_as": 0
+        }
+      ]
+    }
+  },
+  "aliases": {
+    "write": "edit",
+    "delete": "edit"
+  },
+  "props": {
+    "book": {
+      "shape": "book",
+      "between": [
+        "wrist.L",
+        "wrist.R"
+      ],
+      "offset": [
+        0,
+        0.09,
+        0.06
+      ],
+      "face": "head",
+      "size": [
+        0.34,
+        0.22
+      ]
+    },
+    "keyboard": {
+      "shape": "keyboard",
+      "between": [
+        "finger3-1.L",
+        "finger3-1.R"
+      ],
+      "offset": [
+        0,
+        -0.05,
+        0.02
+      ],
+      "face": [
+        0,
+        1,
+        -0.35
+      ],
+      "size": [
+        0.42,
+        0.14
+      ]
+    },
+    "terminal": {
+      "shape": "terminal",
+      "between": [
+        "finger3-1.R"
+      ],
+      "offset": [
+        0.06,
+        0.12,
+        0.12
+      ],
+      "face": "head",
+      "size": [
+        0.36,
+        0.24
+      ]
+    },
+    "lens": {
+      "shape": "lens",
+      "between": [
+        "finger3-1.R"
+      ],
+      "offset": [
+        0,
+        0.08,
+        0.04
+      ],
+      "face": "head",
+      "size": [
+        0.16,
+        0.16
+      ]
+    },
+    "orb": {
+      "shape": "orb",
+      "between": [
+        "wrist.L",
+        "wrist.R"
+      ],
+      "offset": [
+        0,
+        0.08,
+        0.07
+      ],
+      "size": [
+        0.13,
+        0.13
+      ]
+    }
+  }
+}

@@ -4,10 +4,14 @@ extends RefCounted
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const MotionClip = preload("res://scripts/animation/motion_clip.gd")
 const Store = preload("res://scripts/persistence/world_state_store.gd")
+const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
 const COMPANION := "companion"
+## Targets "activity:<kind>" revise the motion agents play while they read, edit, run, ...
+const ACTIVITY := "activity:"
 var _path: String
 var _companion: Node
-var _draft: Node
+var _activities := {}
+var _draft: Object
 var _target := ""
 var _previous := {}
 var _draft_value := {}
@@ -35,7 +39,7 @@ func context(workshop: RefCounted) -> Dictionary:
 		var player := _player(target.id, workshop)
 		if player and player.rig and remaining_joints > 0:
 			var names := _joint_names(player.rig)
-			if target.id == COMPANION:
+			if target.id == COMPANION or target.id.begins_with(ACTIVITY):
 				names = names.filter(func(name: String) -> bool:
 					return name.begins_with("spine") or name.begins_with("neck") or name in ["head", "root"] or \
 						["upperarm", "lowerarm", "wrist", "upperleg", "lowerleg", "foot"].any(func(prefix: String) -> bool: return name.begins_with(prefix)))
@@ -61,7 +65,7 @@ func _inspect_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
 	if not player:
 		return _error("That animation target is unavailable in this environment.")
 	var joints := _joint_names(player.rig)
-	var channels := ["lift", "drift"] if id == COMPANION else ["offset", "rotation"]
+	var channels := ["lift", "drift"] if id == COMPANION else [] if id.begins_with(ACTIVITY) else ["offset", "rotation"]
 	if not joints.is_empty():
 		channels.append("joint_rotation")
 	return {"ok": true, "message": "This target supports %s." % ", ".join(channels), "channels": channels,
@@ -72,7 +76,7 @@ func _preview_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
 	var player := _player(id, workshop)
 	if not player:
 		return _error("That animation target is unavailable in this environment.")
-	if id == COMPANION and not _companion.is_visible_in_tree():
+	if (id == COMPANION or id.begins_with(ACTIVITY)) and not _companion.is_visible_in_tree():
 		return _error("The companion is parked in another environment. Ask it to follow to preview its animation here.")
 	var clip: Variant = plan.get("clip")
 	if not _valid_for(clip, player):
@@ -93,7 +97,11 @@ func _finish_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
 	if Commands.command(plan.tool).mode == "discard":
 		clear_preview()
 		return {"ok": true, "message": "Discarded %s and restored the previous motion." % name}
-	if _target == COMPANION:
+	if _target.begins_with(ACTIVITY):
+		if not ActivityMotions.save():
+			return _error("The activity motion could not be saved.")
+		_companion.set_activity("")
+	elif _target == COMPANION:
 		if not _path.is_empty() and Store.write_json(_path, {"schema_version": 1, "clip": _draft.clip}) != OK:
 			return _error("The companion animation could not be saved.")
 	else:
@@ -106,12 +114,14 @@ func _finish_animation(plan: Dictionary, workshop: RefCounted) -> Dictionary:
 	return {"ok": true, "message": "Saved %s." % name}
 
 func leave_workshop() -> void:
-	if _target != COMPANION:
+	if _target != COMPANION and not _target.begins_with(ACTIVITY):
 		clear_preview()
 
 func clear_preview() -> void:
 	if _has_preview():
 		_draft.set_clip(_previous)
+		if _target.begins_with(ACTIVITY) and is_instance_valid(_companion):
+			_companion.set_activity("")
 	_forget()
 
 func _forget() -> void:
@@ -123,9 +133,16 @@ func _forget() -> void:
 func _has_preview() -> bool:
 	return is_instance_valid(_draft) and _draft.clip == _draft_value
 
-func _player(id: String, workshop: RefCounted) -> Node:
+func _player(id: String, workshop: RefCounted) -> Object:
 	if id == COMPANION:
 		return _companion
+	if id.begins_with(ACTIVITY):
+		var kind := id.trim_prefix(ACTIVITY)
+		if not is_instance_valid(_companion) or kind not in ActivityMotions.kinds():
+			return null
+		if not _activities.has(kind):
+			_activities[kind] = ActivityTarget.new(kind, _companion)
+		return _activities[kind]
 	return workshop.animation_player(id) if workshop else null
 
 func _targets(workshop: RefCounted) -> Array[Dictionary]:
@@ -134,14 +151,18 @@ func _targets(workshop: RefCounted) -> Array[Dictionary]:
 		targets.append({"id": COMPANION, "name": "Codex companion", "channels": ["lift", "drift", "joint_rotation"]})
 	if workshop:
 		targets.append_array(workshop.animation_targets())
+	if is_instance_valid(_companion):
+		for kind in ActivityMotions.kinds():
+			targets.append({"id": ACTIVITY + kind, "name": "Agent %s motion" % kind, "channels": ["joint_rotation"]})
 	return targets
 
-func _valid_for(clip: Variant, player: Node) -> bool:
-	if not MotionClip.valid(clip) or not MotionClip.supports(clip, player == _companion):
+func _valid_for(clip: Variant, player: Object) -> bool:
+	var hover := player == _companion or player is ActivityTarget
+	if not MotionClip.valid(clip) or not MotionClip.supports(clip, hover):
 		return false
 	var tracks: Array = clip.get("joint_tracks", [])
 	if tracks.is_empty():
-		return true
+		return not player is ActivityTarget
 	if not player.rig or tracks.any(func(track: Dictionary) -> bool: return player.rig.find_bone(track.joint) < 0):
 		return false
 	# Lift and Drift are baked from the original rest pose. Joint clips use the rig directly.
@@ -156,3 +177,26 @@ static func _joint_names(rig: Skeleton3D) -> Array[String]:
 
 static func _error(message: String) -> Dictionary:
 	return {"ok": false, "message": message}
+
+## An agent activity's motion as an animation target: previews play it on the companion.
+class ActivityTarget extends RefCounted:
+	var kind: String
+	var companion: Node
+	var clip: Dictionary:
+		get: return ActivityMotions.clip(kind)
+	var rig: Skeleton3D:
+		get: return companion.rig if is_instance_valid(companion) else null
+
+	func _init(activity: String, owner: Node) -> void:
+		kind = activity
+		companion = owner
+
+	func set_clip(value: Dictionary) -> void:
+		ActivityMotions.set_override(kind, {})
+		if value != ActivityMotions.clip(kind):
+			ActivityMotions.set_override(kind, value)
+		if is_instance_valid(companion):
+			if companion.activity == ActivityMotions.resolve(kind):
+				companion.refresh_activity()
+			else:
+				companion.set_activity(kind)

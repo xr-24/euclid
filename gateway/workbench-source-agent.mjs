@@ -5,7 +5,7 @@ const timeout = 6 * 60 * 1000;
 
 // Builds the provider-neutral brief. The selected adapter owns the process, its
 // sandbox flags, and progress events, and returns the agent's closing message.
-export async function authorSource({ workspace, request, context, evidence, onProgress, signal }, agent = agentFor('author')) {
+export async function authorSource({ workspace, request, context, evidence, onProgress, onRaw, signal }, agent = agentFor('author')) {
   const input = [
     'You are implementing a user-requested Euclid source change in a writable source snapshot.',
     'Read README.md and docs/architecture.md for project context. Search the workspace and make the change in its normal entry points. Add or update a focused regression test when needed.',
@@ -19,6 +19,6 @@ export async function authorSource({ workspace, request, context, evidence, onPr
     ...(evidence ? ['The benchmark measurements are prior evidence for this Git base or draft. Use them when relevant to the user request.'] : []),
     JSON.stringify({ request, draft: context, benchmark: evidence }),
   ].join('\n');
-  const message = await agent.author(input, { workspace, onProgress, signal, timeout });
+  const message = await agent.author(input, { workspace, onProgress, onRaw, signal, timeout });
   return message.replace(/\[([^\]\r\n]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim().slice(0, 320);
 }

@@ -47,7 +47,8 @@ export function createClaudeAgent({ env = process.env,
     id: 'claude',
     label: 'Claude',
 
-    async task(input, { url, token, signal }) {
+    // onRaw sees every event of the CLI's stream, for the activity feed.
+    async task(input, { url, token, signal, onRaw }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       const cwd = await mkdtemp(path.join(os.tmpdir(), 'euclid-task-'));
       try {
@@ -60,7 +61,7 @@ export function createClaudeAgent({ env = process.env,
           '--permission-mode', 'dontAsk', '--no-session-persistence', ...model, 'Carry out the Euclid task supplied on standard input.',
         ], { cwd, env: { ...childEnv, EUCLID_TASK_TOKEN: token }, signal, timeout: 600000,
           input, timeoutMessage: 'Claude exceeded the ten-minute task limit.',
-          onEvent(event) { if (event.type === 'result') result = event.result; } });
+          onEvent(event) { onRaw?.(event); if (event.type === 'result') result = event.result; } });
         if (code !== 0) throw new Error('Claude exited before completing the task. Check its sign-in and CLI availability.');
         return result;
       } finally {
@@ -91,7 +92,7 @@ export function createClaudeAgent({ env = process.env,
 
     // Edits files inside the workspace and returns the agent's closing message.
     // Restricted mode confines the file tools to the workspace; no tool runs commands.
-    async author(input, { workspace, onProgress, signal, timeout }) {
+    async author(input, { workspace, onProgress, onRaw, signal, timeout }) {
       const { file, args, env: childEnv } = await signedIn(signal);
       let result = null;
       let steps = 0;
@@ -100,6 +101,7 @@ export function createClaudeAgent({ env = process.env,
       ], { cwd: workspace, env: childEnv, signal, timeout, input,
         timeoutMessage: 'The source agent timed out. Try a smaller change.',
         onEvent(event) {
+          onRaw?.(event);
           if (event.type === 'result') result = event;
           if (event.type !== 'assistant' || !Array.isArray(event.message?.content)) return;
           for (const block of event.message.content) {

@@ -63,6 +63,29 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 	await HotLoad.finish("view", false, host)
 	if ActivityView.duration({"kind": "unknown"}) != 2.0 or HotLoad.status("view") != "":
 		return _fail(tree, "discard did not restore the script")
+	# Two live drafts on one file: discarding the lower one keeps the upper one's text.
+	var reports: Array = []
+	var told := HotLoad.reporter
+	HotLoad.reporter = func(draft: String, version: String, report: Dictionary) -> void: reports.append([draft, report.status])
+	var base := FileAccess.get_file_as_string(VIEW)
+	await HotLoad.apply("lower", "1", {VIEW: base.replace("\treturn 2.0\n", "\treturn 3.0\n")}, host, {"label": "Lower"})
+	await HotLoad.apply("upper", "1", {VIEW: base.replace("\treturn 2.0\n", "\treturn 4.0\n")}, host, {"label": "Upper"})
+	await HotLoad.finish("lower", false, host)
+	if ActivityView.duration({"kind": "unknown"}) != 4.0:
+		return _fail(tree, "discarding the lower draft undid the upper one")
+	# The timeline unloads a change and loads it again.
+	var off: Dictionary = await HotLoad.unload("upper", host)
+	if not off.ok or ActivityView.duration({"kind": "unknown"}) != 2.0 or HotLoad.timeline()[0].status != "unloaded":
+		return _fail(tree, "unload from the timeline: %s" % off)
+	var on: Dictionary = await HotLoad.reload("upper", host)
+	if not on.ok or ActivityView.duration({"kind": "unknown"}) != 4.0 or HotLoad.timeline()[0].label != "Upper":
+		return _fail(tree, "reload from the timeline: %s" % on)
+	await HotLoad.finish("upper", false, host)
+	if ActivityView.duration({"kind": "unknown"}) != 2.0:
+		return _fail(tree, "discarding the last draft did not restore the file")
+	if reports != [["lower", "active"], ["upper", "active"], ["upper", "unloaded"], ["upper", "active"]]:
+		return _fail(tree, "load reports: %s" % [reports])
+	HotLoad.reporter = told
 	# The quick gate refuses data that does not parse, before anything changes.
 	var refused: Dictionary = await HotLoad.apply("bad", "1", {MOTIONS: "{ not json"}, host)
 	if refused.ok or not str(refused.message).begins_with("Not loaded:"):

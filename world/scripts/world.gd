@@ -560,6 +560,18 @@ func _finish_live_change(action: String, draft_id: String, files: Array = []) ->
 		_load_from_disk(files)
 	return finished
 
+## The wrist's Live page: unload a change loaded live, or load it again.
+func _toggle_live_change(draft: String) -> void:
+	var on := HotLoad.status(draft) == "active"
+	var result: Dictionary
+	if on:
+		result = await HotLoad.unload(draft, _hot_host())
+	else:
+		result = await HotLoad.reload(draft, _hot_host())
+	_console_notice(str(result.get("message", "")))
+	if is_instance_valid(_dev):
+		_dev.refresh_actions()
+
 func _load_from_disk(files: Array) -> void:
 	if files.is_empty():
 		return

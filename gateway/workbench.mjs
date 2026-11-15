@@ -737,7 +737,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
             await verifyReview(change);
             const files = await readHotFiles(change.worktree, hot);
             await verifyReview(change);
-            live = { draft: change.id, version: fingerprint(change.diff), hot: files };
+            live = { draft: change.id, version: fingerprint(change.diff), hot: files,
+              summary: (change.summary ?? '').slice(0, 120), owner: change.owner ?? '' };
             break;
           }
           if (change.agentSource) throw new Error('This draft changes files that need a restart. Commit it, then restart Euclid.');

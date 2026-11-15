@@ -21,6 +21,8 @@ const WATCH := 6.0
 ## Errors raised from the changed scripts, for the rollback watch and the probe compile.
 class Watch extends Logger:
 	var paths := {}
+	## Catch every error, not only those from the watched scripts (the shader gate).
+	var any := false
 	var _errors: Array[String] = []
 	var _mutex := Mutex.new()
 
@@ -28,7 +30,7 @@ class Watch extends Logger:
 			_editor_notify: bool, error_type: int, traces: Array[ScriptBacktrace]) -> void:
 		if error_type == Logger.ERROR_TYPE_WARNING:
 			return
-		var at := "%s:%d" % [file, line] if paths.has(file) else ""
+		var at := "%s:%d" % [file, line] if paths.has(file) or any else ""
 		if at.is_empty():
 			for trace in traces:
 				for index in trace.get_frame_count():
@@ -49,13 +51,21 @@ class Watch extends Logger:
 		_mutex.unlock()
 		return errors
 
-## draft id -> {"version", "files": {res path: text}, "originals": {res path: text}, "tier", "status", "error"}
+## Each file shows the top of a stack of layers over its committed text: one layer per live draft.
+## Discarding a draft removes only its layers; committing one folds them into the base.
+static var _base := {}
+## path -> Array of [draft, text], bottom first
+static var _layers := {}
+## draft id -> {"version", "files": {path: text}, "tier", "status", "error", "label", "owner", "at"}
 static var _held := {}
+## Draft ids in the order they were loaded, for the timeline.
+static var _order: Array[String] = []
 static var _serial := 0
 static var _watch: Watch
 static var _watch_draft := ""
 static var _watch_until := 0
-
+## Told about every load, failure, rollback and unload: reporter.call(draft, version, report).
+static var reporter := Callable()
 ## Whether a project path (world/...) can be hot loaded: a text file the project reads, other than
 ## the engine settings, which only a full restart applies.
 static func supports(path: String) -> bool:
@@ -85,6 +95,18 @@ static func gate(files: Dictionary) -> String:
 				if probe.reload() != OK:
 					var errors := watch.take()
 					problem = "%s does not compile%s" % [path.trim_prefix("res://"), (": " + errors[0]) if not errors.is_empty() else "."]
+			"gdshader":
+				# Compile on the renderer; any error it raises meanwhile refuses the shader.
+				var catch := Watch.new()
+				catch.any = true
+				OS.add_logger(catch)
+				var shader := RenderingServer.shader_create()
+				RenderingServer.shader_set_code(shader, text)
+				RenderingServer.free_rid(shader)
+				OS.remove_logger(catch)
+				var errors := catch.take()
+				if not errors.is_empty():
+					problem = "%s does not compile: %s" % [path.trim_prefix("res://"), errors[0]]
 			"json":
 				var json := JSON.new()
 				if json.parse(text) != OK:
@@ -127,65 +149,117 @@ static func plan(files: Dictionary) -> Dictionary:
 	return {"tier": tier, "reasons": reasons}
 
 ## Apply a draft's files. host holds callables from the world: "rebuild_zone" (awaitable),
-## "soft_restart"(between: Callable) and "busy" (-> bool). Returns {"ok", "message", "tier"}.
-static func apply(draft: String, version: String, files: Dictionary, host: Dictionary) -> Dictionary:
+## "soft_restart"(between: Callable) and "busy" (-> bool). A newer version of a held draft replaces
+## its layers. about may carry a "label" and "owner" for the timeline. Returns {"ok", "message", "tier"}.
+static func apply(draft: String, version: String, files: Dictionary, host: Dictionary, about := {}) -> Dictionary:
 	var size := 0
 	for path in files:
 		size += str(files[path]).length()
 	if size > MAX_BYTES:
-		return {"ok": false, "message": "This draft is too large to hot load. Commit it and restart Euclid."}
+		return _told(draft, version, {"ok": false, "message": "This draft is too large to hot load. Commit it and restart Euclid."})
 	if host.has("busy") and host.busy.call():
 		return {"ok": false, "message": "Wait for the environment to finish loading, then try again."}
 	var problem := gate(files)
 	if not problem.is_empty():
-		return {"ok": false, "message": "Not loaded: " + problem}
-	var previous: Dictionary = _held.get(draft, {})
-	var originals: Dictionary = previous.get("originals", {}).duplicate()
-	for path in files:
-		if not originals.has(path):
-			originals[path] = _current(path)
-	var planned := plan(files)
-	var result := await _install(files, planned.tier, host)
+		return _told(draft, version, {"ok": false, "status": "refused", "message": "Not loaded: " + problem, "error": problem})
+	var before := _showing(_touched(draft, files.keys()))
+	for path: String in files:
+		if not _base.has(path):
+			_base[path] = _current(path)
+	_drop_layers(draft)
+	for path: String in files:
+		if not _layers.has(path):
+			_layers[path] = []
+		_layers[path].append([draft, files[path]])
+	var changed := _changes(before)
+	var planned := plan(changed)
+	var result := await _install(changed, planned.tier, host)
 	if not result.ok:
-		return result
-	_held[draft] = {"version": version, "files": files, "originals": originals, "tier": planned.tier, "status": "active", "error": ""}
+		return _told(draft, version, result)
+	_held[draft] = {"version": version, "files": files, "tier": planned.tier, "status": "active", "error": "",
+		"label": str(about.get("label", "")), "owner": str(about.get("owner", "")), "at": Time.get_unix_time_from_system()}
+	_order.erase(draft)
+	_order.append(draft)
 	_start_watch(draft, files)
 	var how := {"instant": "Swapped in place.", "in_place": "Reloaded in place.",
 		"zone": "Rebuilt this environment.", "restart": "Restarted the world in place."}
 	var message := "Loaded %d file%s live. %s" % [files.size(), "" if files.size() == 1 else "s", how[planned.tier]]
 	if not planned.reasons.is_empty():
 		message += " (" + "; ".join(planned.reasons) + ")"
-	return {"ok": true, "message": message, "tier": planned.tier}
+	return _told(draft, version, {"ok": true, "status": "active", "message": message, "tier": planned.tier})
 
-## Keep a held draft (it was committed) or put the files back as they were (it was discarded).
+## Keep a held draft (it was committed: its text becomes the base) or drop it (discarded).
 static func finish(draft: String, keep: bool, host: Dictionary) -> bool:
 	if not _held.has(draft):
 		return false
 	var record: Dictionary = _held[draft]
 	_held.erase(draft)
+	_order.erase(draft)
 	if _watch_draft == draft:
 		_stop_watch()
-	if not keep:
-		var originals: Dictionary = record.originals
-		await _install(originals, plan(originals).tier, host)
+	if keep and record.status == "active":
+		for path: String in record.files:
+			_base[path] = record.files[path]
+	var before := _showing(record.files.keys())
+	_drop_layers(draft)
+	var changed := _changes(before)
+	if not changed.is_empty():
+		await _install(changed, plan(changed).tier, host)
 	return true
 
-## Load files exactly as they are on disk now, after a commit or a revert of drafts that were not
-## held live. Only files whose loaded version differs are applied. Returns the same as apply.
-static func apply_disk(paths: Array, host: Dictionary) -> Dictionary:
-	var files := {}
-	for path: String in paths:
-		if not supports(path):
+## Take a held draft out of the world but keep it listed, so it can be loaded again (the timeline).
+static func unload(draft: String, host: Dictionary) -> Dictionary:
+	var record: Dictionary = _held.get(draft, {})
+	if record.is_empty() or record.status != "active":
+		return {"ok": false, "message": "That change is not loaded."}
+	if _watch_draft == draft:
+		_stop_watch()
+	var before := _showing(record.files.keys())
+	_drop_layers(draft)
+	var changed := _changes(before)
+	if not changed.is_empty():
+		await _install(changed, plan(changed).tier, host)
+	record.status = "unloaded"
+	return _told(draft, record.version, {"ok": true, "status": "unloaded", "message": "Unloaded %s." % _name(record)})
+
+## Load an unloaded change from the timeline again.
+static func reload(draft: String, host: Dictionary) -> Dictionary:
+	var record: Dictionary = _held.get(draft, {})
+	if record.is_empty() or record.status == "active":
+		return {"ok": false, "message": "That change is already loaded."}
+	return await apply(draft, record.version, record.files, host, {"label": record.label, "owner": record.owner})
+
+## Live changes, newest first: {"draft", "label", "owner", "files", "tier", "status", "error", "at"}.
+static func timeline() -> Array:
+	var entries := []
+	for index in range(_order.size() - 1, -1, -1):
+		var draft := _order[index]
+		var record: Dictionary = _held.get(draft, {})
+		if record.is_empty():
 			continue
-		var local := "res://" + path.trim_prefix("world/")
+		entries.append({"draft": draft, "label": _name(record), "owner": record.owner, "files": record.files.keys(),
+			"tier": record.tier, "status": record.status, "error": record.error, "at": record.at})
+	return entries
+
+## Load files exactly as they are on disk now, after a commit or a revert: they become the base.
+## Files a live draft still covers keep showing the draft. Returns the same as apply.
+static func apply_disk(paths: Array, host: Dictionary) -> Dictionary:
+	var local_paths: Array[String] = []
+	for path: String in paths:
+		if supports(path):
+			local_paths.append("res://" + path.trim_prefix("world/"))
+	var before := _showing(local_paths)
+	for local: String in local_paths:
 		var disk := ProjectSettings.globalize_path(local)
-		var text := FileAccess.get_file_as_string(disk) if FileAccess.file_exists(disk) else ""
-		if text != _current(local):
-			files[local] = text
-	if files.is_empty():
+		_base[local] = FileAccess.get_file_as_string(disk) if FileAccess.file_exists(disk) else ""
+	var changed := _changes(before)
+	if changed.is_empty():
 		return {"ok": true, "message": "", "tier": ""}
-	_serial += 1
-	return await apply("disk-%d" % _serial, "", files, host)
+	var planned := plan(changed)
+	var result := await _install(changed, planned.tier, host)
+	if not result.ok:
+		return result
+	return {"ok": true, "message": "Loaded the committed change here.", "tier": planned.tier}
 
 ## Turn the watch over: report and roll back a held draft whose scripts raised errors.
 static func poll(host: Dictionary) -> String:
@@ -198,18 +272,76 @@ static func poll(host: Dictionary) -> String:
 			_stop_watch()
 		return ""
 	_stop_watch()
-	if not _held.has(draft):
+	var record: Dictionary = _held.get(draft, {})
+	if record.is_empty():
 		return ""
-	var record: Dictionary = _held[draft]
-	await _install(record.originals, plan(record.originals).tier, host)
+	var before := _showing(record.files.keys())
+	_drop_layers(draft)
+	var changed := _changes(before)
+	if not changed.is_empty():
+		await _install(changed, plan(changed).tier, host)
 	record.status = "failed"
 	record.error = errors[0]
-	return "Rolled back the live change: " + errors[0]
+	var message := "Rolled back the live change: " + errors[0]
+	_told(draft, record.version, {"ok": false, "status": "rolled_back", "message": message, "error": errors[0], "errors": errors.slice(0, 8)})
+	return message
+
+static func _told(draft: String, version: String, result: Dictionary) -> Dictionary:
+	if reporter.is_valid() and not draft.begins_with("disk-"):
+		var report := result.duplicate()
+		if not report.has("status"):
+			report["status"] = "active" if result.get("ok", false) else "refused"
+		reporter.call(draft, version, report)
+	return result
+
+static func _name(record: Dictionary) -> String:
+	if not str(record.get("label", "")).is_empty():
+		return str(record.label)
+	var names: Array = record.files.keys().map(func(path: String) -> String: return path.get_file())
+	return ", ".join(names.slice(0, 3)) + ("…" if names.size() > 3 else "")
+
+## Every path a draft held before, plus the ones it brings now.
+static func _touched(draft: String, paths: Array) -> Array:
+	var all := paths.duplicate()
+	for path in _held.get(draft, {}).get("files", {}):
+		if path not in all:
+			all.append(path)
+	return all
+
+static func _drop_layers(draft: String) -> void:
+	for path in _layers.keys():
+		_layers[path] = _layers[path].filter(func(layer: Array) -> bool: return layer[0] != draft)
+		if _layers[path].is_empty():
+			_layers.erase(path)
+
+## What each path shows: its top layer, else its base, else the file as loaded.
+static func _top(path: String) -> String:
+	if _layers.has(path) and not _layers[path].is_empty():
+		return _layers[path].back()[1]
+	return _base[path] if _base.has(path) else _current(path)
+
+static func _showing(paths: Array) -> Dictionary:
+	var shown := {}
+	for path: String in paths:
+		shown[path] = _top(path)
+	return shown
+
+## Paths whose shown text differs from before, with the text they show now.
+static func _changes(before: Dictionary) -> Dictionary:
+	var changed := {}
+	for path: String in before:
+		var now := _top(path)
+		if now != before[path]:
+			changed[path] = now
+	return changed
 
 ## Overlay the files, then bring the world up to date at the given tier.
 static func _install(files: Dictionary, tier: String, host: Dictionary) -> Dictionary:
+	if files.is_empty():
+		return {"ok": true}
 	if not _overlay(files):
 		return {"ok": false, "message": "Could not overlay the changed files."}
+	_announce(files.keys())
 	if tier == "restart":
 		if not host.has("soft_restart"):
 			return {"ok": false, "message": "This change needs Euclid restarted."}
@@ -219,6 +351,17 @@ static func _install(files: Dictionary, tier: String, host: Dictionary) -> Dicti
 	if tier == "zone" and host.has("rebuild_zone"):
 		await host.rebuild_zone.call()
 	return {"ok": true}
+
+## Scripts may keep caches built from files: any loaded script under res://scripts that declares
+## static func _hot_changed(paths: PackedStringArray) hears which files changed.
+static func _announce(paths: Array) -> void:
+	var changed := PackedStringArray(paths)
+	for script_path in _project_scripts():
+		if not ResourceLoader.has_cached(script_path):
+			continue
+		var script: GDScript = load(script_path)
+		if script.get_script_method_list().any(func(method: Dictionary) -> bool: return method.name == "_hot_changed"):
+			script.call("_hot_changed", changed)
 
 ## Write the files into a new pack and mount it over res://. Later packs win.
 static func _overlay(files: Dictionary) -> bool:
@@ -293,18 +436,22 @@ static func _scripts_reading(paths: Array) -> Array[String]:
 	for path: String in paths:
 		needles.append(path.trim_prefix("res://"))
 	var found: Array[String] = []
+	for path in _project_scripts():
+		var text := FileAccess.get_file_as_string(path)
+		if needles.any(func(needle: String) -> bool: return text.contains(needle)):
+			found.append(path)
+	return found
+
+static func _project_scripts() -> Array[String]:
+	var found: Array[String] = []
 	var folders: Array[String] = ["res://scripts"]
 	while not folders.is_empty():
 		var folder: String = folders.pop_back()
 		for sub in DirAccess.get_directories_at(folder):
 			folders.append(folder.path_join(sub))
 		for file in DirAccess.get_files_at(folder):
-			if file.get_extension() != "gd":
-				continue
-			var path := folder.path_join(file)
-			var text := FileAccess.get_file_as_string(path)
-			if needles.any(func(needle: String) -> bool: return text.contains(needle)):
-				found.append(path)
+			if file.get_extension() == "gd":
+				found.append(folder.path_join(file))
 	return found
 
 ## What changed in a loaded script that objects already running cannot take: "" if nothing.

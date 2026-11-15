@@ -170,7 +170,8 @@ class Hot extends "res://scripts/extensions/live_kind.gd":
 			if not HotLoad.supports(path) or not candidate.hot[path] is String:
 				return {"ok": false, "message": "%s cannot be hot loaded. Commit it and restart Euclid." % path}
 			files["res://" + path.trim_prefix("world/")] = candidate.hot[path]
-		return await HotLoad.apply(str(candidate.draft), str(candidate.get("version", "")), files, _host)
+		return await HotLoad.apply(str(candidate.draft), str(candidate.get("version", "")), files, _host,
+			{"label": str(candidate.get("summary", "")), "owner": str(candidate.get("owner", ""))})
 
 	func status(draft: String) -> String:
 		return HotLoad.status(draft)

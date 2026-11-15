@@ -7,6 +7,7 @@ extends RefCounted
 
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
 const Presence = preload("res://scripts/agents/agent_presence.gd")
+const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 
 var _world # world.gd
 
@@ -18,7 +19,20 @@ func status_line() -> String:
 	return "%s  ·  %02d:%02d" % [_zone_name(_world.zone_id).to_upper(), clock.hour, clock.minute]
 
 func pages() -> Array:
-	return [_areas(), _build(), _world.scanner.page(), _agents(), _workbench(), _system()]
+	return [_areas(), _build(), _world.scanner.page(), _agents(), _workbench(), _live(), _system()]
+
+## Changes loaded live, newest first. Selecting one unloads it, or loads it again.
+func _live() -> Dictionary:
+	var rows := []
+	var states := {"active": "LIVE", "unloaded": "OFF", "failed": "ROLLED BACK"}
+	for entry: Dictionary in HotLoad.timeline().slice(0, 12):
+		var label: String = str(entry.label).to_upper()
+		rows.append({"label": label.left(30) + ("…" if label.length() > 30 else ""), "value": states.get(entry.status, str(entry.status).to_upper()),
+			"tone": "good" if entry.status == "active" else ("warn" if entry.status == "failed" else ""),
+			"run": Callable(_world, "_toggle_live_change").bind(entry.draft)})
+	if rows.is_empty():
+		rows.append({"label": "NOTHING LOADED LIVE", "value": "", "enabled": false, "why": "", "run": func() -> void: pass})
+	return {"id": "live", "title": "LIVE", "rows": rows}
 
 func _areas() -> Dictionary:
 	var rows := []

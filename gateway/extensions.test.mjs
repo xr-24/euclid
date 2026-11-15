@@ -78,3 +78,13 @@ test('hot loading takes text files under world/ that no restart-only kind claims
   assert.match(files['world/data/hot_reload.json'], /"rules"/);
   await assert.rejects(readHotFiles(project, ['world/scripts/missing.gd']), /removed in this draft/);
 });
+
+test('agents get a primer built from the live data when they connect', async () => {
+  const { agentPrimer } = await import('./agent-primer.mjs');
+  const primer = agentPrimer();
+  for (const phrase of ['capture_view', 'pointed_at', 'tweak_property', 'submit_draft', 'frame_ms', 'save_environment',
+    'project source', 'environment package', 'scripts/world.gd → restart', 'Never put passwords']) {
+    assert.ok(primer.includes(phrase), phrase);
+  }
+  assert.ok(primer.length < 4000, 'the primer stays short');
+});

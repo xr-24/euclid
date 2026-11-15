@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { agentPrimer } from './agent-primer.mjs';
 import { taskTools } from './agent-tasks.mjs';
 
 const text = (description, maxLength) => ({ type: 'string', description, minLength: 1, maxLength });
@@ -179,7 +180,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
           instructions: 'Read Euclid source with list_source and read_source. Propose a change with submit_draft, start its checks with ' +
             'run_checks, and read the result with draft_status. If the main branch moved, rebase_draft replays your draft onto it. ' +
             'task_history shows what happened to earlier drafts. ' +
-            'A person reviews and commits the draft in Euclid’s Workbench.',
+            'A person reviews and commits the draft in Euclid’s Workbench.\n\n' + agentPrimer(),
         });
       case 'ping': return reply({});
       case 'tools/list': return reply({ tools: offered });

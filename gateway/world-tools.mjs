@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { agentPrimer } from './agent-primer.mjs';
 import { commandFor, isRuntimeName, isWorkshopName, limits, mcpTools, mcpToolsFor, nativePlan, runtimeCommands, runtimePlan, validRegistry, validWorldPlan } from './command-registry.mjs';
 
 export { validWorldPlan };
@@ -101,7 +102,7 @@ export function createWorldBridge(assets) {
         return reply({
           protocolVersion: '2025-03-26', capabilities: { tools: {} },
           serverInfo: { name: 'euclid-world', version: '0.1.0' },
-          instructions: 'Use these tools for the live Euclid world. Call list_environments to discover destinations.',
+          instructions: 'Use these tools for the live Euclid world. Call list_environments to discover destinations.\n\n' + agentPrimer(),
         });
       case 'ping': return reply({});
       case 'tools/list': return reply({ tools: [...mcpToolsFor(context), ...runtime.map(({ name, description, inputSchema }) => ({

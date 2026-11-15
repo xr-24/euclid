@@ -179,7 +179,7 @@ by vsync) over 20 frames before and after. It reports the difference with the
 load, to you and to the draft's agent as `frame_ms`. The compatibility
 renderer does not measure render time, so there the figure is left out.
 
-## F. A primer for agents (planned)
+## F. A primer for agents (done)
 
 On connecting, agents receive a short, current briefing built from the same
 data files: what loads live and at which tier, tweaks versus drafts, saving

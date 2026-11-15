@@ -132,8 +132,8 @@ for byte.
 # Working together in the world
 
 The next round makes the loop of asking for a change, seeing it and approving
-it work without leaving the world, for you and for agents. Status: **planned**,
-**done**, updated as each lands.
+it work without leaving the world, for you and for agents. Status: everything
+below is **done**.
 
 ## A. Agent vision (done)
 
@@ -185,11 +185,13 @@ On connecting, agents receive a short, current briefing built from the same
 data files: what loads live and at which tier, tweaks versus drafts, saving
 environments, vision, and the house rules.
 
-## Smaller (planned)
+## Smaller (done)
 
-- **Undo by agent.** "Undo what scout did" unloads its live changes and
-  reverts its commits.
-- **Optional auto-commit.** A draft whose checks passed and which stayed live
-  without a rollback for a set time can commit itself. Off by default.
-- **Who is touching what.** `draft_status` lists the files other agents hold
-  live, so an agent can avoid them before editing.
+- **Undo by agent.** `undo_agent` unloads every change one agent has live. If
+  its commit is the latest one, a card offers to revert it with Y.
+- **Optional auto-commit.** **Auto-commit** on the wrist (off, 5 or 15
+  minutes): a live draft whose checks passed, and which stayed loaded without
+  a rollback for that long, commits itself with its summary as the message.
+  It is off by default.
+- **Who is touching what.** `draft_status` lists the drafts other agents hold,
+  with their files and whether each is live in the world.

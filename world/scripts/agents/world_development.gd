@@ -57,6 +57,16 @@ func report_live(id: String, version: String, report: Dictionary) -> void:
 func submit(request: String, summary: String, files: Array) -> Dictionary:
 	return await _send("submit", {"request": request, "summary": summary, "files": files})
 
+## Recent Workbench events, newest first, and the main branch's current commit.
+func history() -> Dictionary:
+	var events := await _send("history", {"limit": 50})
+	var current := await _send("state", {})
+	return {"entries": events.get("entries", []), "revision": current.get("revision", "")}
+
+## Revert the commit at the tip of the main branch.
+func revert(revision: String) -> Dictionary:
+	return await _send("restore", {"revision": revision})
+
 ## Commit the draft in view with a one-line message.
 func commit(message: String) -> Dictionary:
 	if draft.is_empty():

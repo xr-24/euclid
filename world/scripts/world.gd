@@ -639,6 +639,38 @@ func pointing_note() -> String:
 		shown.erase(key)
 	return "[The player is pointing at: %s]" % JSON.stringify(shown).left(900)
 
+## undo_agent: unload everything an agent has live; offer to revert its commit if it is the latest.
+func _undo_agent(agent: String) -> Dictionary:
+	var unloaded := 0
+	for entry: Dictionary in HotLoad.timeline():
+		if entry.owner == agent and entry.status == "active":
+			var result: Dictionary = await HotLoad.unload(entry.draft, _hot_host())
+			if result.ok:
+				unloaded += 1
+	var message := "Unloaded %d live change%s from %s." % [unloaded, "" if unloaded == 1 else "s", agent]
+	if is_instance_valid(_dev) and _dev.client:
+		var known: Dictionary = await _dev.client.history()
+		var latest: Dictionary = {}
+		for entry: Dictionary in known.entries:
+			if entry.get("event") in ["committed", "reverted"]:
+				latest = entry
+				break
+		if latest.get("event") == "committed" and latest.get("owner") == agent and latest.get("commit") == known.revision:
+			var revision: String = known.revision
+			live_hud.ask("revert:" + revision, "Also revert %s's latest commit: %s?" % [agent, str(latest.get("message", "")).left(80)],
+				func() -> void: _revert_commit(revision))
+			message += " Its latest commit can be reverted: answer Y on the card."
+	_console_notice(message)
+	return {"ok": true, "message": message, "unloaded": unloaded}
+
+func _revert_commit(revision: String) -> void:
+	var result: Dictionary = await _dev.client.revert(revision)
+	if result.has("error"):
+		_console_notice(str(result.error))
+		return
+	_finish_live_change("restore", "", result.get("files", []))
+	_console_notice("Reverted %s with %s." % [revision.left(7), str(result.get("commit", "")).left(7)])
+
 ## The wrist's Live page: unload a change loaded live, or load it again.
 func _toggle_live_change(draft: String) -> void:
 	var on := HotLoad.status(draft) == "active"

@@ -536,6 +536,26 @@
       "undo": "none",
       "scope": "session",
       "mutates_world": false
+    },
+    {
+      "name": "undo_agent",
+      "description": "Undo what one agent did: unload every change it has live, and, if its commit is the latest one, offer the player a one-key revert.",
+      "service": "world",
+      "handler": "_undo_agent",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "agent": "agent_name"
+      },
+      "required": [
+        "agent"
+      ],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": true
     }
   ]
 }

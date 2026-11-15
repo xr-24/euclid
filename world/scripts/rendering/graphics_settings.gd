@@ -22,6 +22,10 @@ static var live_edits := "local"
 ## nothing. Agents never see interface or private surfaces either way.
 const AGENT_VISION := ["all", "cameras", "off"]
 static var agent_vision := "all"
+## Minutes a live draft whose checks passed must stay loaded without a rollback before it commits
+## itself; 0 turns auto-commit off (the default).
+const AUTO_COMMIT := [0, 5, 15]
+static var auto_commit := 0
 
 static func configure(viewport: Viewport, automated: bool) -> void:
 	current = "balanced"
@@ -34,6 +38,9 @@ static func configure(viewport: Viewport, automated: bool) -> void:
 			speak_replies = bool(config.get_value("agents", "speak_replies", true))
 			live_edits = str(config.get_value("agents", "live_edits", "local"))
 			agent_vision = str(config.get_value("agents", "vision", "all"))
+			auto_commit = int(config.get_value("agents", "auto_commit", 0))
+	if auto_commit not in AUTO_COMMIT:
+		auto_commit = 0
 	if agent_vision not in AGENT_VISION:
 		agent_vision = "all"
 	if live_edits not in LIVE_EDITS:
@@ -81,6 +88,11 @@ static func select(profile: String, viewport: Viewport) -> void:
 	apply(viewport)
 	_save()
 
+static func set_auto_commit(minutes: int) -> void:
+	if minutes in AUTO_COMMIT:
+		auto_commit = minutes
+		_save()
+
 static func set_agent_vision(mode: String) -> void:
 	if mode in AGENT_VISION:
 		agent_vision = mode
@@ -112,6 +124,7 @@ static func _save() -> void:
 	config.set_value("agents", "speak_replies", speak_replies)
 	config.set_value("agents", "live_edits", live_edits)
 	config.set_value("agents", "vision", agent_vision)
+	config.set_value("agents", "auto_commit", auto_commit)
 	config.save(PATH)
 
 static func label() -> String:

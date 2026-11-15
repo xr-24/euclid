@@ -15,6 +15,7 @@ const Presence = preload("res://scripts/agents/agent_presence.gd")
 const ChatHistory = preload("res://scripts/agents/chat_history.gd")
 const SpeechPlayer = preload("res://scripts/agents/speech_player.gd")
 const Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 const CONSOLE_SCROLLBACK := 300
 
 ## The local Workbench capability the launcher handed over. Empty without one.
@@ -103,6 +104,11 @@ func connect_gateway(url: String, token: String) -> void:
 			_next_chat_poll = Time.get_ticks_msec() + 3000
 			_poll_chat())
 	task_poll.start()
+	var settle := Timer.new()
+	settle.wait_time = 20
+	add_child(settle)
+	settle.timeout.connect(_auto_commit)
+	settle.start()
 
 func is_task_command(prompt: String) -> bool:
 	return prompt.begins_with("@") or prompt.get_slice(" ", 0) in ["/task", "/msg", "/inbox", "/cancel", "/journal", "/share-view"]
@@ -480,6 +486,22 @@ func _ask_about(draft: Dictionary, status: String) -> void:
 		hud.withdraw(load_id)
 	if status != "passed":
 		hud.withdraw(commit_id)
+
+## Auto-commit (wrist, off by default): a live draft whose checks passed and which has stayed
+## loaded without a rollback for the set minutes commits itself.
+func _auto_commit() -> void:
+	if Graphics.auto_commit <= 0 or not client or client.draft.is_empty() or _action_busy:
+		return
+	var draft := client.draft
+	var held := HotLoad.held(str(draft.id))
+	if draft.status != "passed" or not draft.get("hot", false) or held.is_empty() or held.status != "active" \
+			or held.version != draft.get("version", ""):
+		return
+	if Time.get_unix_time_from_system() - float(held.at) < Graphics.auto_commit * 60.0:
+		return
+	notice("Auto-commit: %s stayed live for %d minutes without a rollback." % [draft.get("owner", "your draft"), Graphics.auto_commit])
+	_world.live_hud.withdraw_prefix("commit:")
+	await _commit_in_view()
 
 func _commit_in_view() -> void:
 	if not client or client.draft.is_empty() or _action_busy:

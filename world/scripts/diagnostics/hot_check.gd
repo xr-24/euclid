@@ -108,6 +108,13 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 		return _fail(tree, "hot-load kept tweaks: %s" % kept)
 	await HotLoad.finish("tweaks", false, host)
 	world.player.floor_max_angle = angle
+	# Undo by agent: everything one agent has live unloads; others' changes stay.
+	var scout_text := FileAccess.get_file_as_string(VIEW).replace("\treturn 2.0\n", "\treturn 5.0\n")
+	await HotLoad.apply("scout-draft", "1", {VIEW: scout_text}, host, {"owner": "scout"})
+	var undone: Dictionary = await world._undo_agent("scout")
+	if undone.get("unloaded") != 1 or ActivityView.duration({"kind": "unknown"}) != 2.0:
+		return _fail(tree, "undo an agent's live changes: %s" % undone)
+	await HotLoad.finish("scout-draft", false, host)
 	# Point and ask: looking down at the floor names its piece and node for agents.
 	var ScenePlacement = load("res://scripts/workshop/scene_placement.gd")
 	var tilt: float = world.camera.rotation.x

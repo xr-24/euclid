@@ -16,7 +16,8 @@ export const developmentTools = [
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
   { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
-      'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold. ' +
+      'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold, their files and ' +
+      'whether each is live in the world; avoid editing those files. ' +
       'live says what happened when the running world last loaded the draft: active (with the tier: instant, in_place, zone ' +
       'or restart), refused by the quick gate, rolled_back after an error (with the errors and their file and line), or unloaded; and frame_ms, render time before and after the load in milliseconds. ' +
       'Drafts of text files under world/ load live before their checks finish.',
@@ -71,8 +72,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
   const tools = [...developmentTools, ...(tasks ? taskTools : []), ...extraTools];
 
   // Other agents' drafts, so an agent can avoid overlapping work.
+  // Who is touching what: other drafts' files, and whether each is live in the world right now.
   const others = (state, agent) => (state.drafts ?? []).filter(item => item.owner !== agent)
-    .map(({ owner, files, status, summary }) => ({ owner: owner || 'workbench', files, status, summary }));
+    .map(({ owner, files, status, summary, live }) => ({ owner: owner || 'workbench', files, status, summary, live: live === true }));
 
   function report(state, agent, withDiff = true) {
     const draft = state.draft;

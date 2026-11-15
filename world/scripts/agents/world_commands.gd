@@ -199,3 +199,6 @@ func _pointed_at(_plan: Dictionary) -> Dictionary:
 	if _world.pointed.is_empty():
 		return {"ok": false, "message": "The player has not pointed at anything. Ask them to look at it and press T."}
 	return {"ok": true, "message": "The player is pointing at %s." % _world.pointed.get("label", "something"), "pointed": _world.pointed}
+
+func _undo_agent(plan: Dictionary) -> Dictionary:
+	return await _world._undo_agent(str(plan.agent))

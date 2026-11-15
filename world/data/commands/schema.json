@@ -321,6 +321,11 @@
       "type": "number",
       "description": "Field of view in degrees, 20 to 110. Default 70."
     },
+    "agent_name": {
+      "type": "string",
+      "description": "An agent's name, as chat and draft_status show it, such as local-claude",
+      "pattern": "^[a-z0-9_.-]{1,64}$"
+    },
     "asset_id": {
       "type": "string",
       "description": "Exact downloadable model ID",

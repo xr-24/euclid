@@ -190,6 +190,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const behind = item => Boolean(main) && item.base !== main;
     const state = { ...pending, revision, diagnostic, preview_log: previewLog, focus: focusId ?? '',
       drafts: [...drafts.values()].map(item => ({ id: item.id, owner: item.owner ?? '', status: item.status, files: item.names,
+        live: item.liveResult?.status === 'active',
         version: fingerprint(item.diff), base: item.base, summary: item.summary ?? '', behind_main: behind(item) })) };
     if (authoring && !authoring.revising) {
       const { id, status, error, log } = authoring;

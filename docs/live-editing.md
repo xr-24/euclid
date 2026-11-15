@@ -153,7 +153,7 @@ camera they place.
   and placed cameras, placed cameras only, or off. A short notice tells you
   each time an agent looks.
 
-## B. Point and ask (planned)
+## B. Point and ask (done)
 
 You look at something and press a key. Your next message to an agent then
 carries what you are looking at: the node's path, its piece or asset ID, its

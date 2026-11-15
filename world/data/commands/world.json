@@ -520,6 +520,22 @@
       "undo": "none",
       "scope": "scene",
       "mutates_world": false
+    },
+    {
+      "name": "pointed_at",
+      "description": "What the player last pointed at with T: its node path (for inspect_scene and tweak_property), its piece and asset or material, the point hit and where the player stood. Messages sent right after pointing carry it too.",
+      "service": "world",
+      "handler": "_pointed_at",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
     }
   ]
 }

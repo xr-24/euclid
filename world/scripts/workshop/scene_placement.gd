@@ -62,7 +62,7 @@ static func aim_at(player: CharacterBody3D, camera: Camera3D, pixel: Vector2, re
 		hit = picker
 		point = picker.position
 	var collider := hit.get("collider") as Node
-	return {"id": _entity(hit), "piece": _piece(hit), "point": point, "from": from, "direction": direction,
+	return {"id": _entity(hit), "piece": _piece(hit), "point": point, "from": from, "direction": direction, "node": collider,
 		"interaction": collider.get_meta("piece_interaction", null) if collider and collider.has_meta("piece_interaction") else null}
 
 static func _piece(hit: Dictionary) -> String:

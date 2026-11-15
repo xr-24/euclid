@@ -194,3 +194,8 @@ func _capture_view(plan: Dictionary) -> Dictionary:
 func _place_camera(plan: Dictionary) -> Dictionary:
 	var at: Array = plan.position
 	return _world.vision.place(str(plan.camera), Vector3(at[0], at[1], at[2]), plan.target, float(plan.get("fov", 70.0)))
+
+func _pointed_at(_plan: Dictionary) -> Dictionary:
+	if _world.pointed.is_empty():
+		return {"ok": false, "message": "The player has not pointed at anything. Ask them to look at it and press T."}
+	return {"ok": true, "message": "The player is pointing at %s." % _world.pointed.get("label", "something"), "pointed": _world.pointed}

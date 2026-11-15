@@ -108,6 +108,16 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 		return _fail(tree, "hot-load kept tweaks: %s" % kept)
 	await HotLoad.finish("tweaks", false, host)
 	world.player.floor_max_angle = angle
+	# Point and ask: looking down at the floor names its piece and node for agents.
+	var ScenePlacement = load("res://scripts/workshop/scene_placement.gd")
+	var tilt: float = world.camera.rotation.x
+	world.camera.rotation.x = -1.2
+	var aim: Dictionary = ScenePlacement.aim_at(world.player, world.camera, world.get_viewport().get_visible_rect().size * 0.5, 60.0)
+	world.pointed = world.describe_point(aim)
+	world.camera.rotation.x = tilt
+	if str(world.pointed.get("piece", "")).is_empty() or not world.has_node(NodePath(str(world.pointed.get("node", "")))) \
+			or not world.pointing_note().contains(str(world.pointed.piece)):
+		return _fail(tree, "point at the floor: %s" % world.pointed)
 	# Saving an environment with no edits reproduces its package exactly; edits change only their lines.
 	var package_path := "res://data/zones/%s/zone.json" % world.zone_id
 	var package := FileAccess.get_file_as_string(package_path)

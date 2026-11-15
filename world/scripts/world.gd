@@ -70,6 +70,8 @@ var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
 var vision: Node
+## What you last pointed at with T, for your next message to an agent (and pointed_at).
+var pointed := {}
 var player_avatar: PlayerAvatar
 var grabber: PropGrabber
 ## Drag handles on the selected prop while the build palette is open.
@@ -579,6 +581,57 @@ func _finish_live_change(action: String, draft_id: String, files: Array = []) ->
 func _report_live(draft: String, version: String, report: Dictionary) -> void:
 	if is_instance_valid(_dev) and _dev.client:
 		_dev.client.report_live(draft, version, report)
+
+## Point and ask: remember what is under the crosshair, so an agent knows exactly what "this" is.
+func _point() -> void:
+	pointed = describe_point(ScenePlacement.aim_at(player, camera, get_viewport().get_visible_rect().size * 0.5, 60.0))
+	_console_notice("Pointing at %s. Your next message to an agent includes it." % pointed.get("label", "nothing"))
+
+## What a hit is, in the terms agents use: its node path for inspect_scene and tweak_property, its
+## piece and the asset or material it uses, where it was hit and from where.
+func describe_point(aim: Dictionary) -> Dictionary:
+	var at: Vector3 = aim.get("point", Vector3.ZERO)
+	var described := {"zone": zone_id, "point": ScenePlacement.coordinates(at),
+		"player": ScenePlacement.coordinates(player.global_position), "distance": snappedf(player.global_position.distance_to(at), 0.1),
+		"at": Time.get_unix_time_from_system()}
+	var node := aim.get("node") as Node
+	var piece_id := str(aim.get("piece", ""))
+	if not piece_id.is_empty():
+		described["piece"] = piece_id
+		for piece: Dictionary in pieces.saved_pieces():
+			if str(piece.get("id")) == piece_id:
+				for key in ["type", "name", "asset_id", "material"]:
+					if piece.has(key):
+						described["piece_" + key if key != "asset_id" else key] = piece[key]
+				break
+		var holder := node
+		while holder and not holder.has_meta("piece_id"):
+			holder = holder.get_parent()
+		node = holder if holder else node
+	if not str(aim.get("id", "")).is_empty():
+		described["entity"] = aim.id
+	if node and is_ancestor_of(node):
+		described["node"] = str(get_path_to(node))
+		described["type"] = node.get_class()
+		var mesh := node as MeshInstance3D
+		if mesh == null:
+			for child in node.find_children("*", "MeshInstance3D", true, false).slice(0, 1):
+				mesh = child
+		if mesh and mesh.get_active_material(0) is BaseMaterial3D:
+			var color: Color = (mesh.get_active_material(0) as BaseMaterial3D).albedo_color
+			described["color"] = [snappedf(color.r, 0.01), snappedf(color.g, 0.01), snappedf(color.b, 0.01)]
+			described["mesh_node"] = str(get_path_to(mesh))
+	described["label"] = str(described.get("piece_name", described.get("piece", node.name if node else "open space")))
+	return described
+
+## The pointing context as a line for a message, or "" if there is nothing recent.
+func pointing_note() -> String:
+	if pointed.is_empty() or pointed.get("sent", false) or Time.get_unix_time_from_system() - float(pointed.get("at", 0.0)) > 600.0:
+		return ""
+	var shown := pointed.duplicate()
+	for key in ["at", "label", "sent"]:
+		shown.erase(key)
+	return "[The player is pointing at: %s]" % JSON.stringify(shown).left(900)
 
 ## The wrist's Live page: unload a change loaded live, or load it again.
 func _toggle_live_change(draft: String) -> void:
@@ -1261,6 +1314,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not overlay.visible and not wrist.is_open and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _scene_ready() and grabber.handle(event):
 		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_T:
+		if not overlay.visible and _scene_ready():
+			_point()
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_B:
 		if not overlay.visible and _scene_ready():

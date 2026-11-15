@@ -344,6 +344,11 @@ func send_chat(prompt: String) -> void:
 	refresh_chat()
 	var session: String = _world.world_bridge.session if is_instance_valid(_world.world_bridge) else ""
 	var local: bool = _chat_agents[peer].kind == "worker"
+	# Point and ask: what you pointed at with T travels with this message, once.
+	var note: String = _world.pointing_note()
+	if not note.is_empty() and prompt.length() + note.length() + 2 <= 4000:
+		prompt += "\n\n" + note
+		_world.pointed["sent"] = true
 	var result := await _tasks.send_chat(peer, prompt, session, local)
 	_chat_requests.erase(peer)
 	if result.has("error"):

@@ -17,7 +17,7 @@ export const developmentTools = [
   { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
       'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold. ' +
       'live says what happened when the running world last loaded the draft: active (with the tier: instant, in_place, zone ' +
-      'or restart), refused by the quick gate, rolled_back after an error (with the errors and their file and line), or unloaded. ' +
+      'or restart), refused by the quick gate, rolled_back after an error (with the errors and their file and line), or unloaded; and frame_ms, render time before and after the load in milliseconds. ' +
       'Drafts of text files under world/ load live before their checks finish.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'list_extensions', description: 'List the kinds of extension Euclid takes, whether each previews live in the running world ' +

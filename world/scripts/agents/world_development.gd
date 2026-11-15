@@ -47,7 +47,7 @@ func report_live(id: String, version: String, report: Dictionary) -> void:
 	sender.configure(_access[0], _access[1], _access[2])
 	sender.timeout = 10.0
 	var body := {"id": id, "version": version}
-	for key in ["status", "tier", "message", "error", "errors"]:
+	for key in ["status", "tier", "message", "error", "errors", "frame_ms"]:
 		if report.has(key):
 			body[key] = report[key]
 	await sender.send("livereport", body)

@@ -172,10 +172,12 @@ half-loaded change waiting on you.
 A thin line at the edge of your view shows what is live, which checks are
 running, which approvals wait and the last rollback.
 
-## E. Frame-time cost of every live load (planned)
+## E. Frame-time cost of every live load (done)
 
-Each live load measures frame time before and after and reports the
-difference with the load, to you and to the draft's agent.
+Each live load measures the main view's render time (CPU and GPU, not capped
+by vsync) over 20 frames before and after. It reports the difference with the
+load, to you and to the draft's agent as `frame_ms`. The compatibility
+renderer does not measure render time, so there the figure is left out.
 
 ## F. A primer for agents (planned)
 

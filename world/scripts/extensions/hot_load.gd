@@ -179,9 +179,16 @@ static func apply(draft: String, version: String, files: Dictionary, host: Dicti
 		_layers[path].append([draft, files[path]])
 	var changed := _changes(before)
 	var planned := plan(changed)
+	var cost_before := await render_ms() if planned.tier != "restart" else -1.0
 	var result := await _install(changed, planned.tier, host)
 	if not result.ok:
 		return _told(draft, version, result)
+	var cost_after := -1.0
+	if cost_before >= 0.0:
+		# Give new shaders and rebuilt nodes a moment to compile and settle before measuring.
+		for frame in 10:
+			await (Engine.get_main_loop() as SceneTree).process_frame
+		cost_after = await render_ms()
 	_held[draft] = {"version": version, "files": files, "tier": planned.tier, "status": "active", "error": "",
 		"label": str(about.get("label", "")), "owner": str(about.get("owner", "")), "at": Time.get_unix_time_from_system()}
 	_order.erase(draft)
@@ -192,7 +199,27 @@ static func apply(draft: String, version: String, files: Dictionary, host: Dicti
 	var message := "Loaded %d file%s live. %s" % [files.size(), "" if files.size() == 1 else "s", how[planned.tier]]
 	if not planned.reasons.is_empty():
 		message += " (" + "; ".join(planned.reasons) + ")"
-	return _told(draft, version, {"ok": true, "status": "active", "message": message, "tier": planned.tier})
+	var report := {"ok": true, "status": "active", "message": message, "tier": planned.tier}
+	if cost_before >= 0.0 and cost_after >= 0.0:
+		report["frame_ms"] = [snappedf(cost_before, 0.01), snappedf(cost_after, 0.01)]
+		report.message += " Render time %.2f → %.2f ms (%+.2f)." % [cost_before, cost_after, cost_after - cost_before]
+	return _told(draft, version, report)
+
+## The main view's measured CPU and GPU render time, averaged over some frames, in milliseconds;
+## -1 without a renderer, or with one that does not measure (the compatibility renderer). Unlike
+## frame time it is not capped by vsync.
+static func render_ms(frames := 20) -> float:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or DisplayServer.get_name() == "headless":
+		return -1.0
+	var view := tree.root.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(view, true)
+	await RenderingServer.frame_post_draw
+	var total := 0.0
+	for frame in frames:
+		await RenderingServer.frame_post_draw
+		total += RenderingServer.viewport_get_measured_render_time_cpu(view) + RenderingServer.viewport_get_measured_render_time_gpu(view)
+	return total / frames if total > 0.0 else -1.0
 
 ## Keep a held draft (it was committed: its text becomes the base) or drop it (discarded).
 static func finish(draft: String, keep: bool, host: Dictionary) -> bool:

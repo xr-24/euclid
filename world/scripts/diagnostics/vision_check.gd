@@ -49,7 +49,11 @@ static func run(world: Node3D) -> void:
 		return _fail(tree, "placed camera: %s %s" % [placed.message, from_camera.message])
 	image.load_jpg_from_buffer(Marshalls.base64_to_raw(from_camera.image))
 	image.save_jpg(output.path_join("camera.jpg"))
-	print("VISION_CHECK_OK: %d-byte view without the private panel; placed camera works" % Marshalls.base64_to_raw(seen.image).size())
+	var cost: float = await load("res://scripts/extensions/hot_load.gd").render_ms(5)
+	# The compatibility renderer does not measure render time; Forward+ does.
+	if cost == 0.0:
+		return _fail(tree, "render time should be measured or reported as unavailable, not zero")
+	print("VISION_CHECK_OK: render time %.2f ms; %d-byte view without the private panel; placed camera works" % [cost, Marshalls.base64_to_raw(seen.image).size()])
 	tree.quit(0)
 
 static func _red(color: Color) -> float:

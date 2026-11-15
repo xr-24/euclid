@@ -226,7 +226,10 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const clip = (value, limit) => typeof value === 'string' ? value.slice(0, limit) : '';
     const result = { status: body.status, version: clip(body.version, 64), tier: clip(body.tier, 16),
       message: clip(body.message, 600), error: clip(body.error, 600),
-      errors: Array.isArray(body.errors) ? body.errors.slice(0, 8).map(item => clip(item, 300)) : [], at: new Date().toISOString() };
+      errors: Array.isArray(body.errors) ? body.errors.slice(0, 8).map(item => clip(item, 300)) : [], at: new Date().toISOString(),
+      // Render time before and after the load, in milliseconds, when the world has a renderer.
+      ...(Array.isArray(body.frame_ms) && body.frame_ms.length === 2 && body.frame_ms.every(Number.isFinite)
+        ? { frame_ms: body.frame_ms.map(value => Math.round(value * 100) / 100) } : {}) };
     change.liveResult = result;
     await journal.record('loaded', { draft: change.id, version: result.version, owner: change.owner, status: result.status,
       tier: result.tier, error: result.error }).catch(() => {});

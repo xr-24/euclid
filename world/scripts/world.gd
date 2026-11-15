@@ -498,6 +498,9 @@ func _register_live_extensions() -> void:
 	context["catalog"] = _workshop_action_catalog
 	context["run_action"] = _run_palette_action
 	context["hot"] = _hot_host()
+	HotLoad.reporter = func(draft: String, version: String, report: Dictionary) -> void:
+		if is_instance_valid(_dev) and _dev.client:
+			_dev.client.report_live(draft, version, report)
 	var watch := Timer.new()
 	watch.wait_time = 0.5
 	add_child(watch)

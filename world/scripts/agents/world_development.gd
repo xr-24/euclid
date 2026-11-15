@@ -14,11 +14,13 @@ var diagnostic_notice := ""
 var _client: Client
 var _busy := false
 var _refreshing := false
+var _access := []
 
 func configure(url: String, token: String, capability: String) -> void:
 	_client = Client.new()
 	add_child(_client)
 	_client.configure(url, token, capability)
+	_access = [url, token, capability]
 	var timer := Timer.new()
 	timer.wait_time = 2.5
 	timer.timeout.connect(func() -> void:
@@ -34,6 +36,22 @@ func request(definition: Dictionary, prompt: String, context: Dictionary) -> Dic
 	if definition.get("from_world", false):
 		arguments["from_world"] = true
 	return await _send(definition.action, arguments)
+
+## Tell the gateway what happened when the world loaded a draft live, for the draft's agent. Each
+## report has its own request, so it never waits behind (or blocks) a Workbench command.
+func report_live(id: String, version: String, report: Dictionary) -> void:
+	if _access.is_empty():
+		return
+	var sender := Client.new()
+	add_child(sender)
+	sender.configure(_access[0], _access[1], _access[2])
+	sender.timeout = 10.0
+	var body := {"id": id, "version": version}
+	for key in ["status", "tier", "message", "error", "errors"]:
+		if report.has(key):
+			body[key] = report[key]
+	await sender.send("livereport", body)
+	sender.queue_free()
 
 func command(action: String) -> Dictionary:
 	if draft.is_empty():

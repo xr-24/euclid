@@ -193,6 +193,13 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   assert.deepEqual(Object.keys(early.body.live.hot).sort(), [name, other].sort());
   assert.match(early.body.live.hot[name], /VALUE := 2/);
   assert.equal(recovered.activation, 'hot');
+  // The world reports the load; the draft carries it for its agent.
+  assert.deepEqual((await call('livereport', { id, version: recovered.version, status: 'rolled_back', tier: 'in_place',
+    message: 'Rolled back', error: 'scripts/a.gd:3  Invalid call', errors: ['scripts/a.gd:3  Invalid call'] })).body, { ok: true });
+  const reported = (await call('state')).body.draft.live_result;
+  assert.equal(reported.status, 'rolled_back');
+  assert.equal(reported.error, 'scripts/a.gd:3  Invalid call');
+  assert.deepEqual((await call('livereport', { id, status: 'exploded' })).body, { ok: false });
   async function checks() {
     await call('check', { id });
     for (let tries = 0; tries < 30; tries++) {

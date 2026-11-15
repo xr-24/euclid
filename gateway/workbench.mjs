@@ -215,7 +215,28 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       checked_preview: Boolean(appearance || tool || palette || (change.fromWorld && !hot)), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
       owner: change.owner ?? '', base: change.base, behind_main: behind(change), kinds: draftKinds(table, change.names),
+      live_result: change.liveResult ?? null,
     } };
+  }
+
+  const liveStatuses = new Set(['active', 'refused', 'rolled_back', 'unloaded']);
+  async function liveReport(body) {
+    const change = drafts.get(body.id);
+    if (!change || !liveStatuses.has(body.status)) return { ok: false };
+    const clip = (value, limit) => typeof value === 'string' ? value.slice(0, limit) : '';
+    const result = { status: body.status, version: clip(body.version, 64), tier: clip(body.tier, 16),
+      message: clip(body.message, 600), error: clip(body.error, 600),
+      errors: Array.isArray(body.errors) ? body.errors.slice(0, 8).map(item => clip(item, 300)) : [], at: new Date().toISOString() };
+    change.liveResult = result;
+    await journal.record('loaded', { draft: change.id, version: result.version, owner: change.owner, status: result.status,
+      tier: result.tier, error: result.error }).catch(() => {});
+    if (change.owner && activity) {
+      const failed = result.status === 'refused' || result.status === 'rolled_back';
+      activity.record(change.owner, { kind: failed ? 'error' : 'done', ok: !failed,
+        title: { active: 'Loaded live', unloaded: 'Unloaded', refused: 'Not loaded', rolled_back: 'Rolled back' }[result.status],
+        text: result.error || result.message });
+    }
+    return { ok: true };
   }
 
   async function readPreviewLog(change) {
@@ -663,6 +684,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       return { ...await readAgentSource(own?.worktree ?? root, body.name), draft: own?.id ?? '' };
     }
     if (action === 'propose') return ask(body, signal);
+    // The world reports what happened when it loaded a draft live, so the draft's agent can see it.
+    if (action === 'livereport') return liveReport(body);
     if (action === 'cancelbenchmark') {
       if (!diagnosticJob || body.id !== diagnosticJob.id) throw new Error('There is no matching benchmark running.');
       diagnosticJob.controller.abort(new Error('Benchmark cancelled.'));

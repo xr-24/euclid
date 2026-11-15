@@ -15,13 +15,16 @@ export const developmentTools = [
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
   { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
-      'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold.',
+      'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold. ' +
+      'live says what happened when the running world last loaded the draft: active (with the tier: instant, in_place, zone ' +
+      'or restart), refused by the quick gate, rolled_back after an error (with the errors and their file and line), or unloaded. ' +
+      'Drafts of text files under world/ load live before their checks finish.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'list_extensions', description: 'List the kinds of extension Euclid takes, whether each previews live in the running world ' +
       'or needs a restart, and every installed extension with its kind, id, files and version. draft_status names the kinds your draft changes.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'task_history', description: 'List recent Workbench events, newest first: drafts, revisions, checks with their scope, ' +
-      'commits, discards and reverts. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
+      'commits, discards, reverts and live loads. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
     inputSchema: { type: 'object', properties: { draft: { type: 'string', pattern: '^[a-f0-9-]{36}$', description: 'A draft id from draft_status or an earlier entry.' } },
       additionalProperties: false }, ...read },
   { name: 'submit_draft', description: 'Create your source draft, or revise it by sending changes on top of its current version. ' +
@@ -77,7 +80,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
       id: draft.id, version: draft.version ?? '', status: draft.status, owner: draft.owner ?? '', yours: draft.owner === agent,
       files: draft.files, summary: draft.summary ?? '', error: draft.error ?? '', check_status: draft.check_status ?? '', check_scope: draft.check_scope ?? '',
       activation: draft.activation ?? '', notice: draft.revision_notice ?? '', base: draft.base ?? '', kinds: draft.kinds ?? [],
-      captures: draft.check_captures ?? [],
+      captures: draft.check_captures ?? [], live: draft.live_result ?? null,
       ...(withDiff ? { diff: clip(draft.diff, 96000) } : {}),
       output: tail(draft.log, 12000), preview_output: tail(state.preview_log, 4000),
     } };

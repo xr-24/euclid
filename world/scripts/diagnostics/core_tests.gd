@@ -275,6 +275,7 @@ func _run() -> void:
 	_check_tweaks()
 	_check_environment_export()
 	_check_asset_refresh()
+	await _check_agent_vision()
 	_check_wrist_computer()
 	_check_desktop_focus()
 	_check_spring_follow()
@@ -1957,3 +1958,22 @@ func _check_asset_refresh() -> void:
 	_check(not runtime._scenes.has("fixture-model"), "forgetting a model drops its cached scene")
 	_check(Commands.command("refresh_asset").fields.has("asset_id") and Commands.command("save_environment").effect == "draft",
 		"refresh_asset and save_environment are registered commands")
+
+func _check_agent_vision() -> void:
+	var Vision = preload("res://scripts/agents/agent_vision.gd")
+	var Graphics = preload("res://scripts/rendering/graphics_settings.gd")
+	var vision = Vision.new(Node3D.new())
+	root.add_child(vision)
+	var mode: String = Graphics.agent_vision
+	Graphics.agent_vision = "off"
+	_check(not (await vision.capture("point", "", Vector3.ZERO, [0, 0, -1])).ok and not vision.place("a", Vector3.ZERO, [0, 0, -1], 60.0).ok,
+		"agent vision off refuses looks and cameras")
+	Graphics.agent_vision = "cameras"
+	_check(str((await vision.capture("player")).message).contains("placed cameras only"), "cameras-only vision refuses the player's view")
+	_check(vision.place("door", Vector3(0, 2, 5), [0, 1, 0], 60.0).ok and vision.cameras.has("door"), "place a named camera")
+	_check(not vision.place("door", Vector3.ZERO, "No/Such/Node", 60.0).ok, "refuse aiming at a node that does not exist")
+	Graphics.agent_vision = mode
+	_check(Commands.valid_plan(Commands.command("capture_view"), {"tool": "capture_view", "from": "point", "position": [1, 2, 3], "target": [0, 0, 0]})
+		and not Commands.valid_plan(Commands.command("capture_view"), {"tool": "capture_view", "from": "behind"}), "the view command's arguments are validated")
+	vision._world.free()
+	vision.free()

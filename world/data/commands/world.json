@@ -471,6 +471,55 @@
       "undo": "none",
       "scope": "scene",
       "mutates_world": true
+    },
+    {
+      "name": "capture_view",
+      "description": "See the 3D world: through the player's current view (from player), from a point you choose aimed at a point or node (from point), or from a camera you placed (from camera). Returns an image of the world only; interface and private surfaces never appear. The player's Agent vision setting may limit this to placed cameras or turn it off.",
+      "service": "world",
+      "handler": "_capture_view",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "from": "view_source",
+        "camera": "camera_name",
+        "position": "position",
+        "target": "view_target",
+        "fov": "field_of_view"
+      },
+      "required": [
+        "from"
+      ],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": false
+    },
+    {
+      "name": "place_camera",
+      "description": "Place a named camera at a position, aimed at a point or node, to look through later with capture_view from camera. Placing a name again moves it.",
+      "service": "world",
+      "handler": "_place_camera",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "camera": "camera_name",
+        "position": "position",
+        "target": "view_target",
+        "fov": "field_of_view"
+      },
+      "required": [
+        "camera",
+        "position",
+        "target"
+      ],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": false
     }
   ]
 }

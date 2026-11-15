@@ -16,5 +16,9 @@ const ALL := (1 << 20) - 1
 
 ## What the player's camera draws: everything except the lights meant only for mirrors.
 const MAIN_VIEW := ALL & ~MIRROR_LIGHT
+# layer 20: private surfaces (terminals, desktop and app panels, the wrist) move here while an
+# agent's camera renders, so agent vision sees the world but not your screen.
+const PRIVATE := 1 << 19
+const AGENT_VIEW := MAIN_VIEW & ~PRIVATE
 ## What a mirror draws: ordinary geometry, lit by mirror lights.
 const MIRROR_VIEW := SCENE | MIRROR_LIGHT

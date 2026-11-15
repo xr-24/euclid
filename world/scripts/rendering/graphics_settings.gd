@@ -18,6 +18,10 @@ static var speak_replies := true
 ## running on this machine with your permissions), all agents, or none (you press Preview).
 const LIVE_EDITS := ["local", "all", "off"]
 static var live_edits := "local"
+## What agents may see (agents/agent_vision.gd): your view and cameras they place, cameras only, or
+## nothing. Agents never see interface or private surfaces either way.
+const AGENT_VISION := ["all", "cameras", "off"]
+static var agent_vision := "all"
 
 static func configure(viewport: Viewport, automated: bool) -> void:
 	current = "balanced"
@@ -29,6 +33,9 @@ static func configure(viewport: Viewport, automated: bool) -> void:
 			show_code = bool(config.get_value("agents", "show_code", true))
 			speak_replies = bool(config.get_value("agents", "speak_replies", true))
 			live_edits = str(config.get_value("agents", "live_edits", "local"))
+			agent_vision = str(config.get_value("agents", "vision", "all"))
+	if agent_vision not in AGENT_VISION:
+		agent_vision = "all"
 	if live_edits not in LIVE_EDITS:
 		live_edits = "local"
 	if agent_activity not in AGENT_ACTIVITY:
@@ -74,6 +81,11 @@ static func select(profile: String, viewport: Viewport) -> void:
 	apply(viewport)
 	_save()
 
+static func set_agent_vision(mode: String) -> void:
+	if mode in AGENT_VISION:
+		agent_vision = mode
+		_save()
+
 static func set_live_edits(mode: String) -> void:
 	if mode in LIVE_EDITS:
 		live_edits = mode
@@ -99,6 +111,7 @@ static func _save() -> void:
 	config.set_value("agents", "show_code", show_code)
 	config.set_value("agents", "speak_replies", speak_replies)
 	config.set_value("agents", "live_edits", live_edits)
+	config.set_value("agents", "vision", agent_vision)
 	config.save(PATH)
 
 static func label() -> String:

@@ -31,6 +31,7 @@ const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
 const RuntimeAssets = preload("res://scripts/assets/runtime_assets.gd")
 const RuntimeMaterials = preload("res://scripts/assets/runtime_materials.gd")
 const AssetLibrary = preload("res://scripts/assets/asset_library.gd")
+const AgentVision = preload("res://scripts/agents/agent_vision.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -68,6 +69,7 @@ var zone_id := ""
 var zone_root: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
+var vision: Node
 var player_avatar: PlayerAvatar
 var grabber: PropGrabber
 ## Drag handles on the selected prop while the build palette is open.
@@ -143,7 +145,7 @@ func _ready() -> void:
 	add_child(_dev)
 	manifest = ZoneCatalog.read("res://data/world.json")
 	var args := OS.get_cmdline_user_args()
-	var water_check := "--water-check" in args or "--coast-check" in args or "--hot-check" in args
+	var water_check := "--water-check" in args or "--coast-check" in args or "--hot-check" in args or "--vision-check" in args
 	var benchmark := "--benchmark" in args
 	smoke_mode = "--smoke" in args or "--capture" in args or water_check or benchmark
 	if not smoke_mode and "--workbench-preview" not in args:
@@ -168,6 +170,10 @@ func _ready() -> void:
 	world_tools = scene_tools[workshop]
 	_register_live_extensions()
 	TweakLayer.attach(self)
+	vision = AgentVision.new(self)
+	add_child(vision)
+	vision.looked.connect(func(agent: String, source: String) -> void:
+		_console_notice("%s looked at the world through %s." % [agent if not agent.is_empty() else "An agent", source]))
 	add_child(agent_presence)
 	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", null)
 	ActivityMotions.use_overrides("" if smoke_mode else "user://activity-motions.json")
@@ -185,6 +191,8 @@ func _ready() -> void:
 		call_deferred("_run_diagnostic", "draft_views.gd")
 	elif "--hot-check" in args:
 		call_deferred("_run_diagnostic", "hot_check.gd")
+	elif "--vision-check" in args:
+		call_deferred("_run_diagnostic", "vision_check.gd")
 	elif water_check:
 		var diagnostic := "coast_check.gd" if "--coast-check" in args else "water_check.gd"
 		var check: Node = load("res://scripts/diagnostics/" + diagnostic).new()

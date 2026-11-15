@@ -185,3 +185,12 @@ func _save_environment(_plan: Dictionary) -> Dictionary:
 
 func _refresh_asset(plan: Dictionary) -> Dictionary:
 	return await _world._refresh_asset(plan)
+
+func _capture_view(plan: Dictionary) -> Dictionary:
+	var at: Array = plan.get("position", [0.0, 0.0, 0.0])
+	return await _world.vision.capture(str(plan.from), str(plan.get("camera", "")), Vector3(at[0], at[1], at[2]),
+		plan.get("target"), float(plan.get("fov", 70.0)), str(plan.get("agent_peer", "")))
+
+func _place_camera(plan: Dictionary) -> Dictionary:
+	var at: Array = plan.position
+	return _world.vision.place(str(plan.camera), Vector3(at[0], at[1], at[2]), plan.target, float(plan.get("fov", 70.0)))

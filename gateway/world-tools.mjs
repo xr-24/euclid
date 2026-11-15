@@ -111,7 +111,15 @@ export function createWorldBridge(assets) {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
         const definition = commandFor(name, context);
-        const send = result => reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.ok });
+        // A world result may carry a JPEG (capture_view): agents receive it as an image, not text.
+        const send = result => {
+          const { image, ...details } = result ?? {};
+          const content = [{ type: 'text', text: JSON.stringify(image === undefined ? result : details) }];
+          if (typeof image === 'string' && image.length <= 3000000 && /^[A-Za-z0-9+/]+={0,2}$/.test(image)) {
+            content.push({ type: 'image', mimeType: 'image/jpeg', data: image });
+          }
+          return reply({ content, isError: !result?.ok });
+        };
         if (!definition && isRuntimeName(name, context)) {
           const command = runtime.find(entry => entry.name === name);
           if (!command) return send({ ok: false, message: 'That command is no longer registered in this scene.' });

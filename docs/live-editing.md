@@ -128,3 +128,65 @@ for byte.
 - **Environment packages and command sets.** These are now hot: a changed
   `zone.json` rebuilds the environment, and a changed command set reloads the
   command registry. Agents see the new tools on the world's next sync.
+
+# Working together in the world
+
+The next round makes the loop of asking for a change, seeing it and approving
+it work without leaving the world, for you and for agents. Status: **planned**,
+**done**, updated as each lands.
+
+## A. Agent vision (done)
+
+Agents can see the world: through your eyes when they need to, or from a
+camera they place.
+
+- `capture_view` renders the 3D world off-screen and returns an image to the
+  agent. It can look from your current view or from a point the agent chooses,
+  aimed at a point or a node. It can also use a named camera the agent placed
+  earlier with `place_camera`. The image comes back to the agent as an
+  image. It is 768 by 432, includes the first-person body, and is checked by
+  `-- --vision-check <dir>` (needs a renderer).
+- The render never contains Euclid's interface or private surfaces: terminals,
+  desktop and app panels, and anything else in the `private_world_surfaces`
+  group. Agents see the world, not your screen.
+- **Agent vision** on the wrist's System page sets what is allowed: your view
+  and placed cameras, placed cameras only, or off. A short notice tells you
+  each time an agent looks.
+
+## B. Point and ask (planned)
+
+You look at something and press a key. Your next message to an agent then
+carries what you are looking at: the node's path, its piece or asset ID, its
+material and where you stand. "Make this warmer" then needs no searching.
+
+## C. Approvals in the world (planned)
+
+When something needs your yes, a card appears by the agent (or in front of
+you) with a one-key answer: loading a connected agent's draft live,
+committing a draft whose checks passed, or restarting the world in place. F4
+remains for reading diffs.
+
+## D. Status strip (planned)
+
+A thin line at the edge of your view shows what is live, which checks are
+running, which approvals wait and the last rollback.
+
+## E. Frame-time cost of every live load (planned)
+
+Each live load measures frame time before and after and reports the
+difference with the load, to you and to the draft's agent.
+
+## F. A primer for agents (planned)
+
+On connecting, agents receive a short, current briefing built from the same
+data files: what loads live and at which tier, tweaks versus drafts, saving
+environments, vision, and the house rules.
+
+## Smaller (planned)
+
+- **Undo by agent.** "Undo what scout did" unloads its live changes and
+  reverts its commits.
+- **Optional auto-commit.** A draft whose checks passed and which stayed live
+  without a rollback for a set time can commit itself. Off by default.
+- **Who is touching what.** `draft_status` lists the files other agents hold
+  live, so an agent can avoid them before editing.

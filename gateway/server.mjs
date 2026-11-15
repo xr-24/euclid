@@ -378,7 +378,8 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
           .map(id => ({ id, task: (current.get(id) ?? '').slice(0, 120) })) });
       }
       if (req.method === 'POST' && req.url === '/v1/companion/sync') {
-        const body = await readJson(req, res, 128 * 1024);
+        // Results can carry an agent's view of the world (capture_view), so allow a JPEG's worth.
+        const body = await readJson(req, res, 2 * 1024 * 1024);
         if (body === undefined) return;
         const response = bridge.sync(body);
         return response ? reply(res, 200, response) : reply(res, 400, { error: 'Invalid live world context' });

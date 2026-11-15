@@ -300,6 +300,27 @@
         {"type": "array", "items": {"type": "number"}}
       ]
     },
+    "view_source": {
+      "type": "string",
+      "description": "player: the player's current view. point: from position, aimed at target. camera: a camera placed with place_camera.",
+      "enum": ["player", "point", "camera"]
+    },
+    "camera_name": {
+      "type": "string",
+      "description": "A short name for a placed camera",
+      "pattern": "^[a-z0-9_-]{1,32}$"
+    },
+    "view_target": {
+      "description": "Where to aim: a point [x, y, z] in metres, or a node path from inspect_scene.",
+      "anyOf": [
+        {"type": "array", "items": {"type": "number"}},
+        {"type": "string", "pattern": "^[A-Za-z0-9_@ .:/-]{1,240}$"}
+      ]
+    },
+    "field_of_view": {
+      "type": "number",
+      "description": "Field of view in degrees, 20 to 110. Default 70."
+    },
     "asset_id": {
       "type": "string",
       "description": "Exact downloadable model ID",

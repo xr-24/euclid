@@ -67,7 +67,8 @@ static func valid_plan(definition: Dictionary, plan: Dictionary) -> bool:
 					value.erase(field_name)
 			if value.is_empty() and not required.has(key):
 				continue
-		elif (value == null or (PLACEHOLDERS.has(key) and value == PLACEHOLDERS[key])) and not required.has(key):
+		elif (value == null or (PLACEHOLDERS.has(key) and typeof(value) == typeof(PLACEHOLDERS[key]) and value == PLACEHOLDERS[key])) \
+				and not required.has(key):
 			continue
 		if not fields.has(key) or not valid_field(fields[key], value):
 			return false

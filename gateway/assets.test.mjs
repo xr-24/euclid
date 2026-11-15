@@ -65,3 +65,32 @@ test('authenticated asset download and MCP spawn wait for the world result', asy
   const answer = await (await waiting).json();
   assert.deepEqual(JSON.parse(answer.result.content[0].text), outcome);
 });
+
+test('a world result carrying a view reaches the agent as an image', async t => {
+  const folder = await mkdtemp(path.join(os.tmpdir(), 'euclid-vision-gateway-'));
+  const { server } = await createGateway({ dataDir: folder, token: 'vision-test-secret' });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    await rm(folder, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Authorization: 'Bearer vision-test-secret', 'Content-Type': 'application/json' };
+  const post = (route, body) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
+  const session = 'c'.repeat(32);
+  const context = { current: 'construct', environments: [{ id: 'construct', name: 'The Grid', description: 'Workspace' }] };
+  const sync = result => post('/v1/companion/sync', { session, context, result }).then(response => response.json());
+  await sync();
+  const waiting = post('/mcp/' + session, { jsonrpc: '2.0', id: 1, method: 'tools/call',
+    params: { name: 'capture_view', arguments: { from: 'player' } } });
+  let command;
+  for (let i = 0; !command && i < 10; i++) ({ command } = await sync());
+  assert.equal(command?.tool, 'capture_view');
+  // A view is larger than ordinary results; the sync route takes it.
+  const image = Buffer.alloc(200000, 7).toString('base64');
+  await sync({ id: command.id, value: { ok: true, message: 'Captured 768x432 from your view.', image } });
+  const answer = await (await waiting).json();
+  assert.deepEqual(JSON.parse(answer.result.content[0].text), { ok: true, message: 'Captured 768x432 from your view.' });
+  assert.deepEqual(answer.result.content[1], { type: 'image', mimeType: 'image/jpeg', data: image });
+});

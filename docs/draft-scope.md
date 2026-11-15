@@ -24,7 +24,11 @@ Checks follow the same table. A draft of documentation alone runs nothing. A
 draft of gateway code and docs imports the preview project and runs the gateway
 tests, including the command contract against Godot, but skips the Godot core
 and smoke tests. Any other change, or a draft mixing them, runs every check.
-The check result reports this as `scope`: `docs`, `gateway` or `full`.
+A draft of Godot scripts, shaders or scenes alone runs the Godot checks
+without the gateway tests, because the gateway never reads them. Screenshots
+of every environment are taken only when a draft changes how something looks
+or is built. The check result reports this as `scope`: `docs`, `gateway`,
+`world` or `full`.
 
 ## The kernel
 

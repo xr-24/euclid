@@ -386,7 +386,15 @@ agents, which already run on this machine with your permissions. Connected
 agents' drafts wait for you to press **Load live**, unless you choose
 **All agents**.
 
-`data/hot_reload.json` is data that agents can extend. `scripts/diagnostics/hot_check.gd`
+Each file keeps a stack of layers over its committed text, one per live draft.
+Discarding a draft removes only its layers, and committing one folds them into
+the base, so drafts that touch the same file do not undo each other. The
+wrist's **Live** page lists live changes and toggles each one. Every load,
+refusal, rollback and unload is reported to the gateway for the draft's agent
+(see [live editing](live-editing.md)).
+
+`data/hot_reload.json` is data that agents can extend. A rule marked `exact`
+settles a file's tier, for files whose readers refresh through `_hot_changed`. `scripts/diagnostics/hot_check.gd`
 (`-- --hot-check`, part of `scripts/check.*`) runs every tier in the real world.
 
 ### Hot-swappable panels

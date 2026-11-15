@@ -6,9 +6,9 @@ waiting, and it works for any file, not a list of editable properties. [Hot
 loading](architecture.md#hot-loading) is the base this plan builds on. Each
 item below names what is missing, what will change and how we know it works.
 
-Status: **planned**, **building** or **done**, updated as each lands.
+Status: everything below is **done**. Each item names the commit's tests.
 
-## 1. Agents learn what happened to their change (planned)
+## 1. Agents learn what happened to their change (done)
 
 Missing: an agent submits a draft and it loads into your world, but the agent
 never learns whether it loaded, which tier it used, whether it rolled back or
@@ -22,11 +22,13 @@ Change:
 - The agent's activity panel shows the result above its head.
 - A rollback includes the first error and its file and line, so the agent can
   revise without you passing it along.
+- No screenshot is sent with a report: what the agent may see of your screen
+  stays your choice, through `/share-view`.
 
-Verified by: gateway tests for the route and the draft state, plus the world's
-hot check posting a report.
+Verified by: gateway tests for the route and the draft state, and the world's
+hot check recording the reports of a sequence of loads.
 
-## 2. Live tweak, then keep (planned)
+## 2. Live tweak, then keep (done)
 
 Missing: tuning a value (a light's energy, a colour, a position) takes a source
 edit and a reload.
@@ -45,7 +47,7 @@ Change:
 Verified by: core tests for the tweak layer, and the hot check tweaking a node
 in the real world.
 
-## 3. Two live drafts on the same file (planned)
+## 3. Two live drafts on the same file (done)
 
 Missing: when two live drafts change the same file, discarding the earlier one
 put back the text it saw at load time, silently undoing the later one.
@@ -59,46 +61,64 @@ committed text:
 Verified by: the hot check loads two drafts on one file, discards the lower one
 and keeps the upper one's text.
 
-## 4. Assets without a restart (planned)
+## 4. Assets without a restart (done)
 
-Missing: replacing a downloaded model, material or sky under the same ID kept
-the old copy cached until a restart.
+Missing: downloaded models and materials already load at runtime, but once one
+was cached there was no way to load it again after its files were replaced.
 
 Change:
-- Asset libraries clear a replaced asset from their caches.
-- The environment rebuilds when something in it uses that asset.
+- `refresh_asset` (by `asset_id` for a model, or by `material`) clears every
+  cache layer for it: the model's scene, or the material's decoded maps, its
+  texture set and the materials built from it.
+- It rebuilds the environment when the environment uses that asset.
 - Scripts can declare `static func _hot_changed(paths)` to refresh any other
-  cache when hot loading changes files.
+  cache when hot loading changes files. The package registry, the command
+  registry and the tweak layer do.
+
+Project art stays out of Git, so it never travels in a draft.
 
 Verified by: core tests for cache invalidation.
 
-## 5. Faster commit checks (planned)
+## 5. Faster commit checks (done)
 
 Missing: a commit's checks took about 6.5 minutes whatever the draft changed.
 
 Change: checks are scoped by what the draft touches:
-- A draft of world files skips the gateway tests unless it changes the command
-  sets the gateway validates.
+- A draft of Godot scripts, shaders or scenes runs every Godot check but skips
+  the gateway tests (scope `world`), because the gateway never reads those
+  files. World data still runs everything, because the gateway reads it.
 - Screenshots of every environment are taken only when a draft changes how
-  something looks or is built: shaders, art, rendering, zones, pieces, scenes.
+  something looks or is built: shaders, scenes, assets, rendering, zones,
+  pieces and simulation scripts, `world_art.gd`, and environment data.
+
+Checks no longer block seeing a change, since hot loading runs first; they
+only gate the commit.
 
 Verified by: gateway tests for the scope rules.
 
-## 6. In-world edits into the project (planned)
+## 6. In-world edits into the project (done)
 
 Missing: props you place, pieces you edit and atmosphere you set live in your
 user data. They do not ship with the project or show up in Git history.
 
 Change:
 - `save_environment` turns the current environment's in-world edits into a
-  draft of the environment's own files in `world/data/zones/<id>/`: its pieces
-  and its saved props.
-- After review, the commit makes them part of the project for everyone.
+  draft of its package, `world/data/zones/<id>/zone.json`:
+  - its pieces, which include the props you placed and the terrain you
+    sculpted;
+  - its atmosphere settings.
+- Unchanged pieces keep their exact text. New and changed ones follow the
+  package's own formatting, so the diff shows only what you changed.
+- The piece revision rises, so your saved document folds into the new
+  defaults after the commit.
+- Environments made in Euclid live only in your user data; they have no
+  package to save into yet.
 
-Verified by: core tests for the export, plus a gateway test that the draft
-contains the expected files.
+Verified by: a core test of changed, added and removed pieces and atmosphere
+on a real package, and the hot check exporting an unedited environment byte
+for byte.
 
-## Smaller seams (planned)
+## Smaller seams (done)
 
 - **Shader gate.** Changed shaders compile before they load. A shader that
   fails to compile is refused with its error, like a script that fails.

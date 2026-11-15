@@ -8,6 +8,7 @@ if ($env:GODOT_BIN) { $godotPath = $env:GODOT_BIN }
 $worldPath = Join-Path $projectRoot 'world'
 # The Workbench sets this for a draft that changes only gateway code and docs.
 $gatewayOnly = $env:EUCLID_CHECK_SCOPE -eq 'gateway'
+$worldOnly = $env:EUCLID_CHECK_SCOPE -eq 'world'
 
 function Invoke-GodotCheck([string[]]$CheckArguments, [string]$SuccessMarker) {
     $lines = @(& $godotPath @CheckArguments 2>&1 | ForEach-Object { "$_" })
@@ -35,8 +36,12 @@ try {
         Invoke-GodotCheck @('--headless','--path',$worldPath,'--quit-after','3600','--','--smoke') 'CONSTRUCT_SMOKE_OK'
         Invoke-GodotCheck @('--headless','--path',$worldPath,'--quit-after','3600','--','--hot-check') 'HOT_CHECK_OK'
     }
-    & npm.cmd test
-    if ($LASTEXITCODE -ne 0) { throw 'Gateway integration tests failed.' }
+    if ($worldOnly) {
+        Write-Host 'World-only check: skipping the gateway tests, which do not read Godot scripts, shaders or scenes.'
+    } else {
+        & npm.cmd test
+        if ($LASTEXITCODE -ne 0) { throw 'Gateway integration tests failed.' }
+    }
     if ($Performance) {
         foreach ($zone in @('villa', 'beach')) {
             & powershell -NoProfile -File (Join-Path $PSScriptRoot 'benchmark.ps1') -Zone $zone -Width 1920 -Height 1080 -MinimumFps 60 -MaximumP95Ms 16.67 `

@@ -35,5 +35,9 @@ else
 	godot_check CONSTRUCT_SMOKE_OK smoke --headless --path world --quit-after 3600 -- --smoke
 	godot_check HOT_CHECK_OK hot --headless --path world --quit-after 3600 -- --hot-check
 fi
-GODOT_BIN="$godot" npm test || { echo "Gateway integration tests failed."; exit 1; }
+if [ "${EUCLID_CHECK_SCOPE:-}" = "world" ]; then
+	echo "World-only check: skipping the gateway tests, which do not read Godot scripts, shaders or scenes."
+else
+	GODOT_BIN="$godot" npm test || { echo "Gateway integration tests failed."; exit 1; }
+fi
 echo "All Euclid checks passed."

@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/pr
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkScope, createPreviewRunner } from './workbench-runner.mjs';
+import { checkScope, createPreviewRunner, visualChange } from './workbench-runner.mjs';
 
 test('a draft is checked for what it can change', () => {
   assert.equal(checkScope(['README.md', 'docs/agents.md']), 'docs');
@@ -13,6 +13,13 @@ test('a draft is checked for what it can change', () => {
   assert.equal(checkScope(['world/data/commands/scene.json']), 'full');
   assert.equal(checkScope(['docs/nested/guide.md']), 'full');
   assert.equal(checkScope(['scripts/check.ps1']), 'full');
+  // Godot scripts, shaders and scenes skip the gateway tests; data the gateway reads does not.
+  assert.equal(checkScope(['world/scripts/agents/activity_view.gd', 'world/shaders/sky.gdshader', 'docs/agents.md']), 'world');
+  assert.equal(checkScope(['world/scripts/world.gd', 'world/data/zones/villa/zone.json']), 'full');
+  assert.equal(checkScope(['world/assets/library/catalog.json']), 'full');
+  assert.equal(visualChange(['world/scripts/agents/activity_view.gd', 'docs/a.md']), false);
+  for (const name of ['world/shaders/sky.gdshader', 'world/scripts/world_art.gd', 'world/scripts/rendering/atmosphere.gd',
+    'world/data/zones/villa/zone.json', 'world/main.tscn']) assert.equal(visualChange([name]), true, name);
   for (const unknown of [[], undefined, null, 'README.md', [7]]) assert.equal(checkScope(unknown), 'full');
 });
 
@@ -64,18 +71,20 @@ const check = async (runner, draft) => {
   return { result, log };
 };
 
-test('a full check links the base into a preview of the reviewed worktree', async t => {
+test('a check links the base into a preview of the reviewed worktree', async t => {
   const setup = await fixture(t);
   if (!setup) return;
   const { area, root, base, runner, calls, draft } = setup;
   assert.throws(() => createPreviewRunner(root, { base: path.join(root, 'world/base') }), /outside the project world/);
   const { result, log } = await check(runner, draft(['world/scripts/world.gd']));
-  assert.deepEqual(result, { scope: 'full', captures: [] });
+  // A script alone is world scope: every Godot check, no gateway tests.
+  assert.deepEqual(result, { scope: 'world', captures: [] });
   assert.match(log, /Linked 2 art and import files\./);
-  assert.match(log, /Running Euclid project checks/);
+  assert.match(log, /Running the Godot checks without the gateway tests/);
+  assert.match(log, /Skipping the environment screenshots/);
   const [importCall, checkCall] = await calls();
   assert.match(importCall, /^godot --headless --path .*--editor --import$/);
-  assert.equal(checkCall, 'check scope=full gateway=none', 'the check gets every test and no gateway credential');
+  assert.equal(checkCall, 'check scope=world gateway=none', 'the check gets the Godot tests and no gateway credential');
 
   const tree = path.join(area, 'draft/preview');
   assert.equal(await readFile(path.join(tree, 'world/scripts/world.gd'), 'utf8'), 'reviewed script');

@@ -12,12 +12,22 @@ export const validCheckView = name => typeof name === 'string' && /^[a-z0-9_-]{1
 // What a draft's checks must cover. Documentation runs nothing. Gateway code skips the
 // Godot core and smoke tests, whose code it cannot change, but keeps the import so the
 // command contract test can compare the gateway with Godot. Anything else gets every check.
+// Godot source the gateway never reads: scripts, shaders and scenes. The gateway reads world data
+// and the asset catalog, so drafts touching those still run its tests.
+const worldOnly = /^world\/(?:scripts|shaders|scenes)\/|^world\/main\.tscn$/;
+// Files that change how something looks or is built, which the draft screenshots show.
+const visual = /^world\/(?:shaders\/|scenes\/|assets\/|main\.tscn$|scripts\/(?:rendering|zones|pieces|simulation)\/|scripts\/world_art\.gd$|data\/(?:zones|pieces|dressing|vegetation)\/|data\/(?:grid|shoreline)_appearance\.json$)/;
+
 export function checkScope(names) {
   if (!Array.isArray(names) || !names.length || !names.every(name => typeof name === 'string')) return 'full';
   if (names.every(isDocPath)) return 'docs';
   if (names.every(name => isDocPath(name) || isGatewayPath(name))) return 'gateway';
+  if (names.every(name => isDocPath(name) || worldOnly.test(name))) return 'world';
   return 'full';
 }
+
+// Whether a draft's screenshots of every environment are worth taking.
+export const visualChange = names => Array.isArray(names) && names.some(name => typeof name === 'string' && visual.test(name));
 
 function childEnvironment(godot) {
   const env = { ...process.env, GODOT_BIN: godot };
@@ -123,13 +133,20 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
       const tree = await prepare(draft, onOutput, signal);
       onOutput(scope === 'gateway'
         ? 'This draft changes only the gateway and docs. Running the gateway tests and command contract without the Godot core and smoke tests.\n'
-        : 'Running Euclid project checks.\n');
+        : scope === 'world'
+          ? 'This draft changes only Godot scripts, shaders or scenes, which the gateway does not read. Running the Godot checks without the gateway tests.\n'
+          : 'Running Euclid project checks.\n');
       const code = await run(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(tree, 'scripts/check.ps1')],
-        { cwd: tree, env: scope === 'gateway' ? { ...env, EUCLID_CHECK_SCOPE: 'gateway' } : env,
+        { cwd: tree, env: scope === 'full' ? env : { ...env, EUCLID_CHECK_SCOPE: scope },
           timeout: 300000, phase: scope === 'gateway' ? 'Gateway checks' : 'Project checks', onOutput, signal });
       if (code !== 0) throw new Error('The preview failed its project checks.');
       const captures = [];
-      if (scope === 'full' && process.platform === 'win32' && existsSync(path.join(tree, 'scripts/background-render.py'))) {
+      if (scope !== 'full' && scope !== 'world') return { scope, captures };
+      if (!visualChange(draft.names)) {
+        onOutput('Skipping the environment screenshots: nothing in this draft changes how the world looks.\n');
+        return { scope, captures };
+      }
+      if (process.platform === 'win32' && existsSync(path.join(tree, 'scripts/background-render.py'))) {
         const output = path.join(draft.directory, `check-images-${fingerprint(draft.diff)}`);
         try {
           await rm(output, { recursive: true, force: true });

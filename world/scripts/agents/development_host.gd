@@ -430,7 +430,7 @@ func refresh_actions() -> void:
 		if draft.get("agent_source", false) and draft.get("subject") != "grid_palette":
 			available = true
 		console.update_development(draft, available and not _world.shifting and not _action_busy,
-			_world._live_change_status(draft.get("id", "")) == "active")
+			_world._live_change_status(draft.get("id", ""), str(draft.get("version", ""))) == "active")
 
 func _client_changed() -> void:
 	var reviewed := client.benchmark_target
@@ -447,14 +447,26 @@ func _client_changed() -> void:
 			notice("Codex is revising a copy of the active draft. Open Workbench to see progress.")
 		else:
 			_announce(draft, status)
+		if status == "staged" and draft.get("hot", false) and _loads_on_its_own(draft):
+			_console_action.call_deferred("live")
 	refresh_actions()
+
+## Whether a draft hot loads as soon as it arrives (Live agent edits on the wrist's System page).
+## Local agents run on this machine with your permissions already; connected agents do not.
+func _loads_on_its_own(draft: Dictionary) -> bool:
+	var owner: String = draft.get("owner", "")
+	var local := owner.is_empty() or owner.begins_with("local-")
+	return Graphics.live_edits == "all" or (Graphics.live_edits == "local" and local and draft.get("agent_source", false))
 
 func _announce(draft: Dictionary, status: String) -> void:
 	match status:
 		"staged":
 			if draft.get("agent_source", false):
 				notice(draft.summary if not draft.summary.is_empty() else "Codex prepared the source draft.")
-				notice("Review the diff, then run checks to prepare a playable build.")
+				if not draft.get("hot", false):
+					notice("Review the diff, then run checks to prepare a playable build.")
+				elif not _loads_on_its_own(draft):
+					notice("Load it live from here or Workbench; checks run while you look.")
 		"passed": notice("Draft checks passed. Preview the change or review the diff.")
 		"failed":
 			if draft.get("has_patch", false):
@@ -475,7 +487,8 @@ func _console_action(action: String) -> void:
 		return
 	var id: String = client.draft.id
 	var revising: bool = client.draft.status == "revising"
-	if action == "live" and client.draft.get("agent_source", false):
+	var hot: bool = client.draft.get("hot", false)
+	if action == "live" and client.draft.get("agent_source", false) and not hot:
 		if client.draft.status != "passed":
 			action = "check"
 		elif client.draft.get("subject") != "grid_palette":
@@ -488,6 +501,11 @@ func _console_action(action: String) -> void:
 	elif action == "live":
 		var activated: Dictionary = await _world._preview_live_change(result.live)
 		notice(activated.message)
+		# Seeing a change does not wait for checks; committing it does, so they start now.
+		if activated.ok and hot and client.draft.get("id") == id and client.draft.status in ["staged", "failed"]:
+			var checking := await client.command("check")
+			if checking.has("error"):
+				notice(checking.error)
 	elif action == "play":
 		notice("Opened the checked build in a separate Euclid window.")
 	elif action == "check":

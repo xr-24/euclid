@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "about": "How a changed file reaches the running world without a restart (scripts/extensions/hot_load.gd). Each file gets the least disruptive tier that covers it: instant (shader code swaps), in_place (the file is overlaid and scripts that use it reload, keeping their state), zone (the current environment rebuilds around the player), restart (an in-process soft restart of the world; the window stays open). A script whose variables change always needs a restart, because objects already running cannot take new variables. Rules raise the tier for files whose effect is built once, when an environment loads. Agents may add rules here; the first matching glob with the highest tier wins.",
+  "rules": [
+    {"files": "main.tscn", "tier": "restart"},
+    {"files": "scripts/world.gd", "tier": "restart"},
+    {"files": "data/world.json", "tier": "restart"},
+    {"files": "data/zones/**", "tier": "zone"},
+    {"files": "data/pieces/**", "tier": "zone"},
+    {"files": "data/dressing/**", "tier": "zone"},
+    {"files": "data/vegetation/**", "tier": "zone"},
+    {"files": "scripts/zones/**", "tier": "zone"},
+    {"files": "scripts/pieces/**", "tier": "zone"},
+    {"files": "scripts/world_art.gd", "tier": "zone"},
+    {"files": "scripts/rendering/**", "tier": "zone"},
+    {"files": "scenes/**", "tier": "zone"},
+    {"files": "**.tscn", "tier": "zone"}
+  ]
+}

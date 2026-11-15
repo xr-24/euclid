@@ -14,10 +14,11 @@ func kind_ids() -> PackedStringArray:
 		ids.append(kind.id())
 	return ids
 
+## Some kinds take a moment (a hot load may rebuild the environment), so callers await this.
 func preview(candidate: Dictionary) -> Dictionary:
 	for kind in _kinds:
 		if kind.accepts(candidate):
-			return kind.preview(candidate)
+			return await kind.preview(candidate)
 	return {"ok": false, "message": "No live extension kind accepts this draft."}
 
 func status(draft: String) -> String:

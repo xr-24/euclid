@@ -224,6 +224,10 @@ func update_development(draft: Dictionary, can_preview: bool, live: bool) -> voi
 	_draft_strip.visible = not draft.is_empty()
 	var status: String = draft.get("status", "")
 	_discard_draft.text = "Cancel revision" if status == "revising" else ("Cancel" if status == "authoring" else "Discard")
+	if draft.get("agent_source", false) and draft.get("hot", false):
+		_preview_draft.disabled = not can_preview or live or status in ["authoring", "revising"]
+		_preview_draft.text = "Live" if live else "Load live"
+		return
 	if draft.get("agent_source", false):
 		var can_check: bool = status in ["staged", "failed"] and draft.get("has_patch", false)
 		var playing: bool = draft.get("playing", false)

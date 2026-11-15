@@ -13,7 +13,7 @@ const project = fileURLToPath(new URL('../', import.meta.url));
 test('the shared kind table matches the candidates the Workbench serves', async () => {
   const kinds = await loadKinds(project);
   const kind = id => kinds.find(item => item.id === id);
-  assert.deepEqual(kinds.filter(item => item.live).map(item => item.id), ['grid_palette', 'shoreline', 'grid', 'workshop_tool', 'behavior']);
+  assert.deepEqual(kinds.filter(item => item.live).map(item => item.id), ['grid_palette', 'shoreline', 'grid', 'workshop_tool', 'behavior', 'hot']);
   assert.equal(kind('shoreline').candidate, shorelineAppearance.payload);
   assert.equal(kind('grid').candidate, gridAppearance.payload);
   assert.equal(kind('shoreline').activation, shorelineAppearance.activation);
@@ -24,7 +24,8 @@ test('the shared kind table matches the candidates the Workbench serves', async 
   assert.deepEqual(draftKinds(kinds, ['world/scripts/plugins/pulse.gd', 'world/data/behavior_plugins/pulse.json']), ['behavior']);
   assert.deepEqual(draftKinds(kinds, ['world/data/zones/villa/zone.json', 'world/data/commands/scene.json', 'docs/x.md']),
     ['environment', 'command', 'source']);
-  assert.deepEqual(draftKinds(kinds, ['world/data/commands/schema.json']), ['source'], 'the command schema is not a command set');
+  assert.deepEqual(draftKinds(kinds, ['world/data/commands/schema.json']), ['hot'], 'the command schema is not a command set');
+  assert.deepEqual(draftKinds(kinds, ['world/project.godot', 'world/assets/rock.png']), ['source'], 'engine settings and binary assets are not hot loaded');
 });
 
 test('installed extensions are listed as one kind of record', async () => {
@@ -61,4 +62,18 @@ test('a malformed kind table is refused and packages are read from their folders
   const kinds = await loadKinds(area);
   assert.deepEqual((await listExtensions(area, kinds)).map(item => [item.kind, item.id, item.name, item.detail]), [
     ['workshop_tool', 'reset_demo', 'Reset demo', 'Grid space lab'], ['behavior', 'blink', 'Blink', 'Package, for lamp']]);
+});
+
+test('hot loading takes text files under world/ that no restart-only kind claims', async () => {
+  const { hotFiles, readHotFiles } = await import('./workbench-hot.mjs');
+  const kinds = await loadKinds(project);
+  assert.deepEqual(hotFiles(kinds, ['world/scripts/world_art.gd', 'world/shaders/sky.gdshader', 'docs/x.md', 'gateway/a.mjs']),
+    ['world/scripts/world_art.gd', 'world/shaders/sky.gdshader']);
+  assert.equal(hotFiles(kinds, ['docs/x.md']), null, 'nothing in world/ to load');
+  assert.equal(hotFiles(kinds, ['world/scripts/a.gd', 'world/project.godot']), null, 'engine settings need a restart');
+  assert.equal(hotFiles(kinds, ['world/scripts/a.gd', 'world/assets/rock.glb']), null, 'binary assets need an import');
+  assert.equal(hotFiles(kinds, ['world/data/zones/villa/zone.json']), null, 'environment packages restart');
+  const files = await readHotFiles(project, ['world/data/hot_reload.json']);
+  assert.match(files['world/data/hot_reload.json'], /"rules"/);
+  await assert.rejects(readHotFiles(project, ['world/scripts/missing.gd']), /removed in this draft/);
 });

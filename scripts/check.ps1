@@ -33,6 +33,7 @@ try {
             Invoke-GodotCheck @('--headless','--path',$worldPath,'--script','res://scripts/diagnostics/gateway_check.gd','--quit-after','1800') 'CONSTRUCT_GATEWAY_CLIENT_OK'
         }
         Invoke-GodotCheck @('--headless','--path',$worldPath,'--quit-after','3600','--','--smoke') 'CONSTRUCT_SMOKE_OK'
+        Invoke-GodotCheck @('--headless','--path',$worldPath,'--quit-after','3600','--','--hot-check') 'HOT_CHECK_OK'
     }
     & npm.cmd test
     if ($LASTEXITCODE -ne 0) { throw 'Gateway integration tests failed.' }

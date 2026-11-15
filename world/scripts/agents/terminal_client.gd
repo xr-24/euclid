@@ -130,3 +130,13 @@ func _post(node: HTTPRequest, action: String, body: Dictionary) -> Dictionary:
 	if response[1] != 200 and not data.has("error"):
 		data["error"] = "The gateway answered %d." % response[1]
 	return data
+
+## A hot reload of this script ends the read and write loops mid-request; start them again.
+func _hot_reload() -> void:
+	_reader.cancel_request()
+	_input.cancel_request()
+	_reading = false
+	_writing = false
+	if not session_id.is_empty():
+		_read_loop()
+	_flush()

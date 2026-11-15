@@ -71,8 +71,8 @@ test('committing or reverting gateway source asks the gateway to reload', async 
   assert.equal((await call('state')).gateway_notice, 'Fixture notice');
   const docs = await commit([{ path: 'docs/guide.md', content: 'Guide, revised.\n' }], 'none');
   assert.deepEqual([docs.warning, reloads], ['', 0]);
-  const world = await commit([{ path: 'world/scripts/example.gd', content: 'extends Node3D\n' }], 'restart');
-  assert.deepEqual([world.warning, reloads], ['', 0]);
+  const world = await commit([{ path: 'world/scripts/example.gd', content: 'extends Node3D\n' }], 'hot');
+  assert.deepEqual([world.warning, reloads, world.files], ['', 0, ['world/scripts/example.gd']]);
   const gateway = await commit([{ path: 'gateway/example.mjs', content: 'export const ready = true;\n' }], 'gateway_restart');
   assert.match(gateway.warning, /gateway is restarting/);
   assert.equal(reloads, 1);
@@ -82,7 +82,7 @@ test('committing or reverting gateway source asks the gateway to reload', async 
   assert.equal(reloads, 2);
   assert.match(await readFile(path.join(root, 'gateway/example.mjs'), 'utf8'), /ready = false/);
   const mixed = await commit([{ path: 'gateway/example.mjs', content: 'export const ready = 1;\n' },
-    { path: 'world/scripts/example.gd', content: 'extends Node\n' }], 'restart');
+    { path: 'world/scripts/example.gd', content: 'extends Node\n' }], 'hot');
   assert.match(mixed.warning, /gateway is restarting/);
   assert.equal(reloads, 3);
 

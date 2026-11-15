@@ -33,6 +33,7 @@ elif [ ! -x "$godot" ]; then
 else
 	godot_check CONSTRUCT_CORE_TESTS_OK core --headless --path world --script res://scripts/diagnostics/core_tests.gd --quit-after 1800
 	godot_check CONSTRUCT_SMOKE_OK smoke --headless --path world --quit-after 3600 -- --smoke
+	godot_check HOT_CHECK_OK hot --headless --path world --quit-after 3600 -- --hot-check
 fi
 GODOT_BIN="$godot" npm test || { echo "Gateway integration tests failed."; exit 1; }
 echo "All Euclid checks passed."

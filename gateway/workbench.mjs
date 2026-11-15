@@ -13,6 +13,7 @@ import { createPreviewRunner, validCheckView } from './workbench-runner.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
 import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
+import { hotFiles, readHotFiles } from './workbench-hot.mjs';
 import { fingerprint, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
 import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
@@ -199,6 +200,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const appearance = change && !change.agentSource && appearanceFor(change.names);
     const tool = change && !change.agentSource && workshopToolFile(change.names);
     const palette = change && isPalette(change.names);
+    const hot = change && !appearance && !tool && !palette && !(change.plugin && !change.agentSource) && hotFiles(table, change.names);
     return { ...state, draft: change && {
       id: change.id, name: change.names.length === 1 ? change.names[0] : `${change.names.length} files`, files: change.names,
       diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
@@ -207,10 +209,10 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       check_captures: change.check?.captures ?? [],
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
-      live: Boolean(change.plugin || appearance || tool || palette),
-      activation: appearance?.activation ?? (palette ? 'reload_palette' : change.plugin || tool ? 'live' : sourceActivation(change.names)),
+      live: Boolean(change.plugin || appearance || tool || palette || hot), hot: Boolean(hot),
+      activation: appearance?.activation ?? (palette ? 'reload_palette' : (change.plugin && !hot) || tool ? 'live' : hot ? 'hot' : sourceActivation(change.names)),
       subject: appearance?.payload ?? (palette ? 'grid_palette' : tool ? 'workshop_tool' : change.plugin ? 'behavior' : 'source'),
-      checked_preview: Boolean(appearance || tool || palette || change.fromWorld), from_world: change.fromWorld === true,
+      checked_preview: Boolean(appearance || tool || palette || (change.fromWorld && !hot)), from_world: change.fromWorld === true,
       preview_zone: change.binding?.zone ?? '', summary: change.summary ?? '', agent_source: change.agentSource === true,
       owner: change.owner ?? '', base: change.base, behind_main: behind(change), kinds: draftKinds(table, change.names),
     } };
@@ -691,6 +693,8 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     let revision;
     let warning = '';
     let live;
+    // What a commit or revert changed, so the world can load it without a restart.
+    let files;
     try {
       switch (action) {
         case 'benchmark': operation = 'diagnosing'; await startBenchmark(body); break;
@@ -725,7 +729,18 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
             live = { draft: change.id, version: body.version, grid_palette: { source: text, digest: hash } };
             break;
           }
-          if (change.agentSource) throw new Error('Use the separate preview build for agent-authored source changes.');
+          // Any other draft of text files under world/ hot loads into the running world. It does not
+          // wait for checks: the checks decide whether it can be committed, not whether it can be seen.
+          const hot = !(change.plugin && !change.agentSource) && !appearanceFor(change.names) && !workshopToolFile(change.names)
+            && hotFiles(await kinds(), change.names);
+          if (hot) {
+            await verifyReview(change);
+            const files = await readHotFiles(change.worktree, hot);
+            await verifyReview(change);
+            live = { draft: change.id, version: fingerprint(change.diff), hot: files };
+            break;
+          }
+          if (change.agentSource) throw new Error('This draft changes files that need a restart. Commit it, then restart Euclid.');
           const appearance = appearanceFor(change.names);
           const tool = workshopToolFile(change.names);
           if ((appearance || tool || change.fromWorld) && change.status !== 'passed') {
@@ -770,6 +785,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           await verifyReview(change);
           await runner.stop();
           revision = await git.commit(change, message);
+          files = change.names;
           forget(change);
           await journal.record('committed', { draft: change.id, version: fingerprint(change.diff), owner: change.owner, files: change.names, commit: revision, message });
           try {
@@ -798,6 +814,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           if (!latest || latest !== body.revision) throw new Error('The reviewed commit is no longer the tip of the main branch.');
           revision = await git.revert(latest);
           const touched = await git.touched(latest);
+          files = touched;
           await journal.record('reverted', { commit: revision, reverted: latest, files: touched });
           warning = loadGateway(touched);
           break;
@@ -807,6 +824,6 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     } finally {
       if (operation !== 'checking' && !diagnosticJob && (!['authoring', 'revising'].includes(operation) || !sourceJob)) operation = '';
     }
-    return { ...await state(), commit: revision ?? '', warning, ...(live ? { live } : {}) };
+    return { ...await state(), commit: revision ?? '', warning, ...(live ? { live } : {}), ...(files ? { files } : {}) };
   };
 }

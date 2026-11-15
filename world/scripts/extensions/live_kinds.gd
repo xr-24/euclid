@@ -2,17 +2,19 @@ extends RefCounted
 ## Euclid's live extension kinds behind the one lifecycle in live_extensions.gd. Each adapter wraps
 ## the service that already owns that kind. The world passes a context of callables:
 ##   zone() -> String, workshop() -> the Grid workshop tools in a Grid space or null,
-##   catalog and run_action for the Grid palette.
+##   catalog and run_action for the Grid palette, hot for hot loading.
 ## world/data/extension_kinds.json lists the same live kinds in the same order for the gateway.
 
 ## Registers every live kind in table order. services holds palette, shoreline, grid, workshop_actions
-## and behaviors. The behavior kind accepts any remaining candidate, so it comes last.
+## and behaviors; the world context also carries "hot", what hot loading may do to the world. Each
+## kind accepts only its own candidate; the hot kind takes every other change to the project.
 static func register_all(live: RefCounted, services: Dictionary, world: Dictionary) -> void:
 	live.register(Palette.new(services.get("palette"), world))
 	live.register(Appearance.new("shoreline", services.get("shoreline")))
 	live.register(Appearance.new("grid", services.get("grid")))
 	live.register(WorkshopAction.new(services.get("workshop_actions"), world))
 	live.register(Behavior.new(services.get("behaviors"), world))
+	live.register(Hot.new(world.get("hot", {})))
 
 ## The replaceable Grid palette. It previews only inside a Grid space.
 class Palette extends "res://scripts/extensions/live_kind.gd":
@@ -103,7 +105,6 @@ class WorkshopAction extends "res://scripts/extensions/live_kind.gd":
 		return true
 
 ## A behavior plugin, optionally with a test link to entities in the Grid space it was authored in.
-## It accepts every remaining candidate, so register it last.
 class Behavior extends "res://scripts/extensions/live_kind.gd":
 	var _runtime
 	var _world: Dictionary
@@ -115,8 +116,8 @@ class Behavior extends "res://scripts/extensions/live_kind.gd":
 	func id() -> String:
 		return "behavior"
 
-	func accepts(_candidate: Dictionary) -> bool:
-		return true
+	func accepts(candidate: Dictionary) -> bool:
+		return candidate.has("plugin")
 
 	func preview(candidate: Dictionary) -> Dictionary:
 		var binding: Dictionary = candidate.get("binding", {})
@@ -146,3 +147,38 @@ class Behavior extends "res://scripts/extensions/live_kind.gd":
 
 	func reload_committed() -> void:
 		_runtime.reload_committed()
+
+## Any other change to the project's text files: scripts, shaders, data and scenes, hot loaded at
+## the least disruptive tier (extensions/hot_load.gd). The candidate's "hot" maps project paths to
+## their reviewed text.
+class Hot extends "res://scripts/extensions/live_kind.gd":
+	const HotLoad = preload("res://scripts/extensions/hot_load.gd")
+	var _host: Dictionary
+
+	func _init(host: Dictionary) -> void:
+		_host = host
+
+	func id() -> String:
+		return "hot"
+
+	func accepts(candidate: Dictionary) -> bool:
+		return candidate.get("hot") is Dictionary
+
+	func preview(candidate: Dictionary) -> Dictionary:
+		var files := {}
+		for path: String in candidate.hot:
+			if not HotLoad.supports(path) or not candidate.hot[path] is String:
+				return {"ok": false, "message": "%s cannot be hot loaded. Commit it and restart Euclid." % path}
+			files["res://" + path.trim_prefix("world/")] = candidate.hot[path]
+		return await HotLoad.apply(str(candidate.draft), str(candidate.get("version", "")), files, _host)
+
+	func status(draft: String) -> String:
+		return HotLoad.status(draft)
+
+	## Dropping a draft puts its files back; that may rebuild the environment, so it runs on.
+	func finish(draft: String, keep: bool) -> Dictionary:
+		if HotLoad.status(draft).is_empty():
+			return {"live": false}
+		var host := _host
+		(func() -> void: await HotLoad.finish(draft, keep, host)).call()
+		return {"live": true}

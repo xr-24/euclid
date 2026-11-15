@@ -263,7 +263,7 @@ func _run() -> void:
 	_check_development_session()
 	await _check_development_refresh()
 	await _check_workbench_drafts()
-	_check_live_extensions()
+	await _check_live_extensions()
 	_check_palette_reload()
 	_check_panel_swap()
 	_check_terminal_keys()
@@ -1515,9 +1515,10 @@ func _check_live_extensions() -> void:
 	for kind in [palette, tools, behavior]:
 		live.register(kind)
 	_check(live.kind_ids() == PackedStringArray(["grid_palette", "workshop_tool", "behavior"]), "list live extension kinds in order")
-	_check(live.preview({"draft": "p", "grid_palette": {}}).message == "grid_palette"
-		and live.preview({"draft": "t", "workshop_tool": {}}).message == "workshop_tool"
-		and live.preview({"draft": "b", "plugin": "pulse"}).message == "behavior", "route each live draft to the first kind that accepts it")
+	var routed: Array[String] = []
+	for candidate in [{"draft": "p", "grid_palette": {}}, {"draft": "t", "workshop_tool": {}}, {"draft": "b", "plugin": "pulse"}]:
+		routed.append(str((await live.preview(candidate)).message))
+	_check(routed == ["grid_palette", "workshop_tool", "behavior"], "route each live draft to the first kind that accepts it")
 	_check(live.status("t") == "active" and live.status("b") == "active" and live.status("missing").is_empty(),
 		"report a live draft's status from the kind that holds it")
 	var kept: Dictionary = live.finish("t", true)
@@ -1530,7 +1531,7 @@ func _check_live_extensions() -> void:
 	_check(tools.reloads == 1 and palette.reloads == 0 and behavior.reloads == 0, "reload only commit-time kinds after a commit")
 	live.reload_committed()
 	_check(tools.reloads == 2 and palette.reloads == 1 and behavior.reloads == 1, "reload every kind after a revert")
-	_check(not LiveExtensions.new().preview({"draft": "x"}).ok, "refuse a draft no kind accepts")
+	_check(not (await LiveExtensions.new().preview({"draft": "x"})).ok, "refuse a draft no kind accepts")
 	# The world's live kinds and the gateway's shared kind table name the same kinds in the same order.
 	var table: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/extension_kinds.json"))
 	var listed := PackedStringArray()

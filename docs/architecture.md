@@ -320,17 +320,17 @@ kind of draft that can do so follows one lifecycle, defined by
 | `reload_committed()` | Load committed definitions again after a revert, or after any commit when `reloads_on_commit()` |
 
 `extensions/live_extensions.gd` routes each candidate to the first registered
-kind that accepts it. The world registers five kinds in `extensions/live_kinds.gd`:
-the Grid palette, the shoreline look, the Grid scenery, workshop actions, and
-behavior plugins, which accept every remaining candidate and are registered
-last. Each adapter wraps the service that already owned that kind. Kinds get a
+kind that accepts it. The world registers six kinds in `extensions/live_kinds.gd`:
+the Grid palette, the shoreline look, the Grid scenery, workshop actions,
+behavior plugins and, last, hot loading, which takes every other change to the
+project's text files (see [Hot loading](#hot-loading)). Each adapter wraps the service that already owned that kind. Kinds get a
 context of callables for the current zone, the Grid workshop tools and the
 palette's action catalog, so they never reach into the world coordinator.
 
 ### One table of kinds
 
 `world/data/extension_kinds.json` lists every kind of extension Euclid takes,
-live or not: the five above, environment packages and command sets. Each entry
+live or not: the six above, environment packages and command sets. Each entry
 has an id, a name, a description, a file pattern, whether it previews live,
 the candidate field the Workbench serves for it, and how a commit takes effect.
 The gateway (`gateway/extensions.mjs`) uses the table to name the kinds a draft
@@ -342,6 +342,52 @@ a core test fails if the two disagree.
 To add a live kind, add it to the table before `behavior`, subclass
 `live_kind.gd`, register it in `register_all` at the same position, and teach
 the Workbench to serve its candidate.
+
+### Hot loading
+
+Every other change to the project's text files under `world/`: scripts, shaders,
+data and scenes. This is the `hot` kind, the last in the table, and it covers
+whatever no other kind claims. No list of editable properties is involved: it
+works on files.
+
+1. **Serve.** The gateway (`gateway/workbench-hot.mjs`) serves the draft's
+   reviewed text as the candidate. A draft cannot be hot loaded if it holds a
+   binary asset, the engine settings, or a file of a kind the table marks
+   restart-only.
+2. **Gate.** In the world, `extensions/hot_load.gd` first runs a quick gate,
+   which takes milliseconds: every script compiles as a probe and every JSON
+   file parses.
+3. **Overlay.** It writes the files into a ZIP pack and mounts it over `res://`
+   with `ProjectSettings.load_resource_pack`. From then on every file read and
+   resource load sees the draft, while the checkout stays clean for the
+   Workbench's commit.
+4. **Refresh.** It brings what is already loaded up to date at the least
+   disruptive tier the files need:
+
+| Tier | What happens | When |
+| --- | --- | --- |
+| instant | The loaded shader's code is replaced; every material using it updates | Shaders and shader includes |
+| in_place | Scripts reload keeping their objects and state. `.tres` and `.tscn` reload into the loaded copy | Most scripts and resources |
+| zone | The current environment rebuilds on a worker thread and the player stays where they are | Files an environment is built from, per `world/data/hot_reload.json` |
+| restart | `extensions/soft_restart.gd` saves your place, frees the world and builds a new one from `main.tscn` in the same process. The window, gateway connection and loaded resources stay | A script whose variables or base class changed, and data a loaded script keeps its own copy of (named by its full path) |
+
+Godot cancels a function suspended in `await` when its script reloads. A node
+with a long-running loop restarts it in `_hot_reload()`; `agents/activity_client.gd`
+and `agents/terminal_client.gd` do. Signal connections survive a reload.
+
+For six seconds after a change, errors raised from the changed scripts roll it
+back and F2 reports the first one. Discarding a draft puts the previous text
+back the same way. The held state is static, so it survives a soft restart.
+
+Hot loading runs before checks: the checks decide whether a draft can be
+committed, not whether it can be seen. **Live agent edits** on the wrist
+computer's System page loads drafts as they arrive. It defaults to local
+agents, which already run on this machine with your permissions. Connected
+agents' drafts wait for you to press **Load live**, unless you choose
+**All agents**.
+
+`data/hot_reload.json` is data that agents can extend. `scripts/diagnostics/hot_check.gd`
+(`-- --hot-check`, part of `scripts/check.*`) runs every tier in the real world.
 
 ### Hot-swappable panels
 

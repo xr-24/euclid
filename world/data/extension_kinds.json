@@ -61,6 +61,15 @@
       "files": "^world/data/commands/(world|scene|development)\\.json$",
       "live": false,
       "activation": "restart"
+    },
+    {
+      "id": "hot",
+      "name": "Project source",
+      "description": "Any other script, shader, data file or scene under world/. It hot loads into the running world: shaders swap, scripts reload keeping their state, and the environment rebuilds or the world restarts in place only when a change needs it.",
+      "files": "^world/(?!project\\.godot$).+\\.(gd|gdshader|gdshaderinc|json|tscn|tres|cfg|txt|md|csv)$",
+      "live": true,
+      "candidate": "hot",
+      "activation": "hot"
     }
   ]
 }

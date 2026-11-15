@@ -6,15 +6,19 @@ when a committed change takes effect.
 
 | Area | F4 editor | Agent drafts | Checked by | Takes effect |
 | --- | --- | --- | --- | --- |
-| Godot scripts, shaders, data, `main.tscn` | Yes | Yes | Core tests and smoke test | Live swap, reload, or **Restart Euclid** |
+| Godot scripts, shaders, data, `main.tscn` | Yes | Yes | Core tests, smoke test and hot-load check | [Hot load](architecture.md#hot-loading), before checks; checks gate the commit |
+| Engine settings (`world/project.godot` is outside drafts) and binary assets | — | — | Core tests and smoke test | **Restart Euclid** |
 | Godot diagnostics and `world/scenes` | No | Yes | Core tests and smoke test | **Restart Euclid** |
 | Gateway source, tests and schemas in `gateway/` | No | Yes | Gateway tests | Gateway reload on commit |
 | `README.md` and `docs/*.md` | No | Yes | None | At once |
 
 Agent drafts are the F2 source agent and drafts submitted over the
 [development MCP endpoint](agents.md#development-tools-for-connected-agents).
-The draft reports `activation` as `restart`, `gateway_restart` or `none`. The
-Workbench status line still reads **Restart Euclid** for the last two.
+The draft reports `activation` as `hot`, `restart`, `gateway_restart` or
+`none`. A draft that mixes world and gateway files hot loads its world files
+and reloads the gateway when it is committed. A commit or a revert also hot
+loads what it changed on disk, so a change made outside a live preview, such as
+an F4 edit or a revert, takes effect without a restart too.
 
 Checks follow the same table. A draft of documentation alone runs nothing. A
 draft of gateway code and docs imports the preview project and runs the gateway

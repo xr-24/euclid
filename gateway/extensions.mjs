@@ -6,7 +6,7 @@ import path from 'node:path';
 // same order (world/scripts/extensions/live_kinds.gd), and a core test holds the two together.
 export const kindsFile = 'world/data/extension_kinds.json';
 const kindId = /^[a-z][a-z0-9_]{0,31}$/;
-const activations = new Set(['live', 'reload_palette', 'reload_grid', 'restart', 'gateway_restart', 'none']);
+const activations = new Set(['live', 'hot', 'reload_palette', 'reload_grid', 'restart', 'gateway_restart', 'none']);
 
 export async function loadKinds(root) {
   let table;

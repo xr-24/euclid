@@ -24,6 +24,8 @@ const WorldToolBridge = preload("res://scripts/agents/world_tool_bridge.gd")
 const EnvironmentLibrary = preload("res://scripts/zones/environment_library.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
+const HotLoad = preload("res://scripts/extensions/hot_load.gd")
+const SoftRestart = preload("res://scripts/extensions/soft_restart.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -136,7 +138,7 @@ func _ready() -> void:
 	add_child(_dev)
 	manifest = ZoneCatalog.read("res://data/world.json")
 	var args := OS.get_cmdline_user_args()
-	var water_check := "--water-check" in args or "--coast-check" in args
+	var water_check := "--water-check" in args or "--coast-check" in args or "--hot-check" in args
 	var benchmark := "--benchmark" in args
 	smoke_mode = "--smoke" in args or "--capture" in args or water_check or benchmark
 	if not smoke_mode and "--workbench-preview" not in args:
@@ -175,6 +177,8 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	if "--draft-view" in args:
 		call_deferred("_run_diagnostic", "draft_views.gd")
+	elif "--hot-check" in args:
+		call_deferred("_run_diagnostic", "hot_check.gd")
 	elif water_check:
 		var diagnostic := "coast_check.gd" if "--coast-check" in args else "water_check.gd"
 		var check: Node = load("res://scripts/diagnostics/" + diagnostic).new()
@@ -493,6 +497,15 @@ func _register_live_extensions() -> void:
 	context["workshop"] = func() -> Variant: return world_tools if _is_workshop(zone_id) else null
 	context["catalog"] = _workshop_action_catalog
 	context["run_action"] = _run_palette_action
+	context["hot"] = _hot_host()
+	var watch := Timer.new()
+	watch.wait_time = 0.5
+	add_child(watch)
+	watch.timeout.connect(func() -> void:
+		var rolled_back: String = await HotLoad.poll(_hot_host())
+		if not rolled_back.is_empty():
+			_console_notice(rolled_back))
+	watch.start()
 	LiveKinds.register_all(_live, {"palette": _palette_host, "shoreline": _shoreline, "grid": _grid_scenery,
 		"workshop_actions": _workshop_actions, "behaviors": behavior_runtime}, context)
 
@@ -500,22 +513,59 @@ func _preview_live_change(candidate: Dictionary) -> Dictionary:
 	await get_tree().process_frame
 	if shifting or building:
 		return {"ok": false, "message": "Wait for the environment to finish loading before starting a live preview."}
-	return _live.preview(candidate)
+	return await _live.preview(candidate)
 
-func _live_change_status(draft_id: String) -> String:
+## What hot loading may do to the world (extensions/hot_load.gd).
+func _hot_host() -> Dictionary:
+	return {"rebuild_zone": _rebuild_zone, "soft_restart": func(between: Callable) -> void: SoftRestart.run(self, between),
+		"busy": func() -> bool: return shifting or building}
+
+## Build the current environment again where you stand, after a change to what it is built from.
+func _rebuild_zone() -> void:
+	if shifting or not is_instance_valid(zone_root):
+		return
+	var at := player.global_transform
+	var look := pitch
+	var built := await _build_zone_async(zone_id)
+	zone_root.free()
+	_commit_zone(built)
+	WorldArt.apply_environment(self, zone_id, atmosphere.lighting_values(zone_id))
+	player.global_transform = at
+	pitch = look
+	_update_agent_labels()
+
+## version: the draft version on show. A hot load of an older version counts as not live, so the
+## newer one can be loaded.
+func _live_change_status(draft_id: String, version := "") -> String:
+	var held := HotLoad.held(draft_id)
+	if not held.is_empty() and not version.is_empty() and held.version != version and held.status == "active":
+		return ""
 	return _live.status(draft_id)
 
-func _finish_live_change(action: String, draft_id: String) -> Dictionary:
+## files: what a commit or a revert changed on disk. Whatever was not already live is hot loaded
+## from disk, so committed changes take effect without a restart.
+func _finish_live_change(action: String, draft_id: String, files: Array = []) -> Dictionary:
 	if action == "stop_palette":
 		return {"live": _palette_host.finish(draft_id, false)}
 	if action == "restore":
 		_live.reload_committed()
+		_load_from_disk(files)
 		return {"live": false}
 	if action == "apply":
 		_live.reload_committed(true)
 	if _dev.client:
 		_dev.client.forget(draft_id)
-	return _live.finish(draft_id, action == "apply")
+	var finished := _live.finish(draft_id, action == "apply")
+	if action == "apply" and not finished.get("live", false):
+		_load_from_disk(files)
+	return finished
+
+func _load_from_disk(files: Array) -> void:
+	if files.is_empty():
+		return
+	var loaded: Dictionary = await HotLoad.apply_disk(files, _hot_host())
+	if not str(loaded.get("message", "")).is_empty():
+		_console_notice(loaded.message)
 
 func _save_for_restart() -> Error:
 	return _write_state(SAVE_PATH)

@@ -14,6 +14,10 @@ static var agent_activity := "full"
 static var show_code := true
 ## Whether agents' chat replies are spoken aloud while the chat window is closed (voice must be on).
 static var speak_replies := true
+## Which agents' drafts load into the world as soon as they are submitted: local agents (yours,
+## running on this machine with your permissions), all agents, or none (you press Preview).
+const LIVE_EDITS := ["local", "all", "off"]
+static var live_edits := "local"
 
 static func configure(viewport: Viewport, automated: bool) -> void:
 	current = "balanced"
@@ -24,6 +28,9 @@ static func configure(viewport: Viewport, automated: bool) -> void:
 			agent_activity = str(config.get_value("agents", "activity", "full"))
 			show_code = bool(config.get_value("agents", "show_code", true))
 			speak_replies = bool(config.get_value("agents", "speak_replies", true))
+			live_edits = str(config.get_value("agents", "live_edits", "local"))
+	if live_edits not in LIVE_EDITS:
+		live_edits = "local"
 	if agent_activity not in AGENT_ACTIVITY:
 		agent_activity = "full"
 	for arg in OS.get_cmdline_user_args():
@@ -67,6 +74,11 @@ static func select(profile: String, viewport: Viewport) -> void:
 	apply(viewport)
 	_save()
 
+static func set_live_edits(mode: String) -> void:
+	if mode in LIVE_EDITS:
+		live_edits = mode
+		_save()
+
 ## Speak agents' chat replies while the chat window is closed, or only inside chat.
 static func set_speak_replies(on: bool) -> void:
 	speak_replies = on
@@ -86,6 +98,7 @@ static func _save() -> void:
 	config.set_value("agents", "activity", agent_activity)
 	config.set_value("agents", "show_code", show_code)
 	config.set_value("agents", "speak_replies", speak_replies)
+	config.set_value("agents", "live_edits", live_edits)
 	config.save(PATH)
 
 static func label() -> String:

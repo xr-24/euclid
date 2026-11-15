@@ -59,3 +59,12 @@ func _post(body: Dictionary) -> Dictionary:
 ## Panels need the feed, and so do spoken replies while the panels are off.
 func _wanted() -> bool:
 	return Graphics.agent_activity != "off" or Graphics.speak_replies
+
+## A hot reload of this script ends the polling loop's pending request; start it again.
+func _hot_reload() -> void:
+	for child in get_children():
+		if child is HTTPRequest:
+			child.queue_free()
+	_running = false
+	if not _url.is_empty():
+		_run()

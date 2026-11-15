@@ -60,8 +60,8 @@ test('checked palette-only revisions expose the exact source for live preview', 
     grid_palette: { source: changed, digest: fingerprint(changed) } });
   await call('revise', { ...identity, prompt: 'Fix the palette error', live_preview_output: 'Fixture palette error' });
   const broader = await until('staged');
-  assert.equal(broader.activation, 'restart');
-  assert.equal(broader.live, false);
+  assert.equal(broader.activation, 'hot');
+  assert.equal(broader.live, true);
   await assert.rejects(call('live', identity), /current source draft version/);
   await call('discard', { id: broader.id, version: broader.version });
 });
@@ -187,7 +187,12 @@ test('workbench checks and commits an isolated two-file Git draft, and reverts i
   const accept = { id, message: 'Update value and label' };
   assert.equal((await call('apply', accept)).code, 400);
   assert.equal((await call('play', { id })).code, 400);
-  assert.equal((await call('live', { id })).code, 400);
+  // A draft of world text files hot loads before its checks: they gate the commit, not the preview.
+  const early = await call('live', { id });
+  assert.equal(early.code, 200, JSON.stringify(early.body));
+  assert.deepEqual(Object.keys(early.body.live.hot).sort(), [name, other].sort());
+  assert.match(early.body.live.hot[name], /VALUE := 2/);
+  assert.equal(recovered.activation, 'hot');
   async function checks() {
     await call('check', { id });
     for (let tries = 0; tries < 30; tries++) {

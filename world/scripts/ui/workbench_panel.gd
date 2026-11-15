@@ -801,7 +801,10 @@ func _command(action: String, arguments := {}) -> void:
 			# Cancelling a revision keeps the same draft. Another open draft may come into view instead.
 			if action == "discard" and result.get("draft") is Dictionary and result.draft.id == arguments.get("id", ""):
 				return
-			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""))
+			# A commit or revert also hot loads what it changed, unless it was already live.
+			var changed: Array = result.get("files", draft.get("files", []) if draft is Dictionary and action == "apply" else [])
+			var finished: Dictionary = _finish_behavior.call(action, arguments.get("id", ""), changed) \
+				if _finish_behavior.get_argument_count() > 2 else _finish_behavior.call(action, arguments.get("id", ""))
 			var subjects := {"shoreline": "shoreline look", "grid": "Grid scenery", "behavior": "behavior",
 				"workshop_tool": "workshop action", "grid_palette": "Grid palette"}
 			var live_subject: String = subjects.get(draft.get("subject"), "preview") if draft is Dictionary else "preview"
@@ -815,6 +818,8 @@ func _command(action: String, arguments := {}) -> void:
 				commit_recorded.emit(result.commit)
 			var activation: String = draft.get("activation", "") if draft is Dictionary else ""
 			var applied := "Committed %s. Restart Euclid to load it here." % short
+			if activation == "hot":
+				applied = "Committed %s. It is loaded here." % short
 			if finished.get("live", false):
 				applied = "Committed %s. The %s stays active." % [short, live_subject]
 			elif activation == "gateway_restart":
@@ -822,7 +827,7 @@ func _command(action: String, arguments := {}) -> void:
 			elif activation == "none":
 				applied = "Committed %s. Nothing needs a restart." % short
 			var messages := {"discard": "Discarded the Git draft.", "apply": applied,
-				"restore": "Created revert %s. Restart Euclid for changes outside live previews." % short}
+				"restore": "Created revert %s. Hot-loadable files are loaded here; anything else needs Restart Euclid." % short}
 			_status.text = messages[action]
 			if not result.get("warning", "").is_empty():
 				_status.text += " " + result.warning
@@ -908,7 +913,7 @@ func _show_state(result: Dictionary) -> void:
 		var messages := {"authoring": "Codex is working in a separate source workspace.", "staged": "Review the Git diff before running the edited code.",
 			"revising": "Codex is revising a copy of the active draft.",
 			"checking": "Checking the disposable project…", "passed": "Checks passed. Play the preview or commit the draft."}
-		var activation := {"live": "Live swap", "reload_grid": "Grid scenery reload",
+		var activation := {"live": "Live swap", "hot": "Hot load", "reload_grid": "Grid scenery reload",
 			"reload_palette": "Grid palette reload", "restart": "Restart Euclid", "gateway_restart": "Gateway reload",
 			"none": "No restart"}
 		_status.text = "%s  ·  %s  ·  %s" % [draft.name, activation.get(draft.get("activation"), "Restart Euclid"),
@@ -1076,6 +1081,8 @@ func _sync_controls() -> void:
 		_buttons.live.text = "Preview tool"
 	if staged and draft.get("subject") == "grid_palette":
 		_buttons.live.text = "Preview palette"
+	if staged and draft.get("activation") == "hot":
+		_buttons.live.text = "Load live"
 	_buttons.live.disabled = blocked or not staged or not draft.get("live", false) or live == "active" \
 		or (draft.get("checked_preview", false) and draft.status != "passed")
 	var passed: bool = staged and draft.status == "passed"
@@ -1101,4 +1108,8 @@ func _sync_controls() -> void:
 
 func _live_status() -> String:
 	var draft: Variant = _state.get("draft")
-	return _behavior_status.call(draft.id) if draft is Dictionary else ""
+	if not draft is Dictionary:
+		return ""
+	# The world's status also takes the draft version; simpler hosts take only the id.
+	return _behavior_status.call(draft.id, str(draft.get("version", ""))) if _behavior_status.get_argument_count() > 1 \
+		else _behavior_status.call(draft.id)

@@ -454,7 +454,62 @@ func _client_changed() -> void:
 			_announce(draft, status)
 		if status == "staged" and draft.get("hot", false) and _loads_on_its_own(draft):
 			_console_action.call_deferred("live")
+		_ask_about(draft, status)
 	refresh_actions()
+
+## Approvals in the world: questions about the draft in view, answered with Y or N.
+func _ask_about(draft: Dictionary, status: String) -> void:
+	var hud: Control = _world.live_hud
+	if hud == null:
+		return
+	var id: String = draft.get("id", "")
+	var who: String = str(draft.get("owner", "")) if not str(draft.get("owner", "")).is_empty() else "Your draft"
+	var what: String = str(draft.get("summary", "")).left(120) if not str(draft.get("summary", "")).is_empty() else "%d file(s)" % draft.get("files", []).size()
+	var load_id := "load:%s:%s" % [id, draft.get("version", "")]
+	var commit_id := "commit:%s:%s" % [id, draft.get("version", "")]
+	hud.withdraw_prefix("load:", load_id)
+	hud.withdraw_prefix("commit:", commit_id)
+	if id.is_empty():
+		return
+	var live: bool = _world._live_change_status(id, str(draft.get("version", ""))) == "active"
+	if status == "staged" and draft.get("hot", false) and not live and not _loads_on_its_own(draft) and not hud.asking(load_id):
+		hud.ask(load_id, "%s wants to load a change live: %s" % [who, what], func() -> void: _console_action("live"))
+	if status == "passed" and draft.get("hot", false) and live and not hud.asking(commit_id):
+		hud.ask(commit_id, "Checks passed for %s's live change: %s\nCommit it to the project?" % [who, what], _commit_in_view)
+	if status != "staged":
+		hud.withdraw(load_id)
+	if status != "passed":
+		hud.withdraw(commit_id)
+
+func _commit_in_view() -> void:
+	if not client or client.draft.is_empty() or _action_busy:
+		return
+	var draft := client.draft
+	var summary := str(draft.get("summary", "")).split("\n")[0].strip_edges()
+	var message := RegEx.create_from_string("[\\x00-\\x1f\\x7f]").sub(summary if not summary.is_empty() else "Live change from %s" % draft.get("owner", "the Workbench"), "", true).left(100)
+	_action_busy = true
+	var result := await client.commit(message)
+	_action_busy = false
+	if result.has("error"):
+		notice(str(result.error))
+		return
+	_world._finish_live_change("apply", str(draft.id), draft.get("files", []))
+	notice("Committed %s: %s" % [str(result.get("commit", "")).left(7), message])
+	refresh_actions()
+
+## The strip's Workbench part: a check running, or a draft waiting to be looked at.
+func workbench_strip() -> PackedStringArray:
+	var parts := PackedStringArray()
+	if client and not client.draft.is_empty():
+		var status: String = client.draft.get("status", "")
+		var owner: String = client.draft.get("owner", "")
+		if status == "checking":
+			parts.append("CHECKING" + (" · " + owner if not owner.is_empty() else ""))
+		elif status in ["authoring", "revising"]:
+			parts.append(status.to_upper() + (" · " + owner if not owner.is_empty() else ""))
+		elif status == "failed":
+			parts.append("CHECKS FAILED")
+	return parts
 
 ## Whether a draft hot loads as soon as it arrives (Live agent edits on the wrist's System page).
 ## Local agents run on this machine with your permissions already; connected agents do not.

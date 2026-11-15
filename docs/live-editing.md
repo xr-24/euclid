@@ -159,14 +159,15 @@ You look at something and press a key. Your next message to an agent then
 carries what you are looking at: the node's path, its piece or asset ID, its
 material and where you stand. "Make this warmer" then needs no searching.
 
-## C. Approvals in the world (planned)
+## C. Approvals in the world (done)
 
 When something needs your yes, a card appears by the agent (or in front of
 you) with a one-key answer: loading a connected agent's draft live,
-committing a draft whose checks passed, or restarting the world in place. F4
-remains for reading diffs.
+committing a draft whose checks passed. F4 remains for reading diffs. A soft
+restart still happens on its own, with a notice; asking first would leave a
+half-loaded change waiting on you.
 
-## D. Status strip (planned)
+## D. Status strip (done)
 
 A thin line at the edge of your view shows what is live, which checks are
 running, which approvals wait and the last rollback.

@@ -57,6 +57,12 @@ func report_live(id: String, version: String, report: Dictionary) -> void:
 func submit(request: String, summary: String, files: Array) -> Dictionary:
 	return await _send("submit", {"request": request, "summary": summary, "files": files})
 
+## Commit the draft in view with a one-line message.
+func commit(message: String) -> Dictionary:
+	if draft.is_empty():
+		return {"error": "There is no draft to commit."}
+	return await _send("apply", {"id": draft.id, "version": draft.version, "message": message})
+
 func command(action: String) -> Dictionary:
 	if draft.is_empty():
 		return {"error": "There is no development draft to review."}

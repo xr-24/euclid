@@ -32,6 +32,7 @@ const RuntimeAssets = preload("res://scripts/assets/runtime_assets.gd")
 const RuntimeMaterials = preload("res://scripts/assets/runtime_materials.gd")
 const AssetLibrary = preload("res://scripts/assets/asset_library.gd")
 const AgentVision = preload("res://scripts/agents/agent_vision.gd")
+const LiveHud = preload("res://scripts/ui/live_hud.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -72,6 +73,8 @@ var camera: Camera3D
 var vision: Node
 ## What you last pointed at with T, for your next message to an agent (and pointed_at).
 var pointed := {}
+## Approvals and the live status strip (ui/live_hud.gd).
+var live_hud: Control
 var player_avatar: PlayerAvatar
 var grabber: PropGrabber
 ## Drag handles on the selected prop while the build palette is open.
@@ -331,6 +334,9 @@ func _setup_ui() -> void:
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.theme = TerminalTheme.make_theme()
 	canvas.add_child(ui)
+	live_hud = LiveHud.new()
+	ui.add_child(live_hud)
+	live_hud.workbench_status = Callable(_dev, "workbench_strip")
 	hud = _ui_label(ui, Vector2(36, 30), 22)
 	hud.modulate.a = 0.0
 	gateway_label = _ui_label(ui, Vector2(36, 62), 13)
@@ -1313,6 +1319,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not overlay.visible and not wrist.is_open and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _scene_ready() and grabber.handle(event):
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_Y, KEY_N] \
+			and not overlay.visible and not wrist.typing and live_hud.pending() > 0:
+		live_hud.answer(event.physical_keycode == KEY_Y)
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_T:

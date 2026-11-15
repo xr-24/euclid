@@ -162,3 +162,13 @@ static func ground_height(tri: TriangleMesh, x: float, z: float) -> float:
 		return 0.0
 	var hit: Dictionary = tri.call("intersect_ray", Vector3(x, 80, z), Vector3.DOWN)
 	return hit.position.y if not hit.is_empty() else 0.0
+
+## Drop a texture set and the materials built from it. Nodes already built keep theirs until the
+## environment rebuilds.
+static func forget(id: String) -> void:
+	_cache.erase(id)
+	_runtime_texture_order.erase(id)
+	var prefix := str([id]).trim_suffix("]")
+	for key in _materials.keys():
+		if str(key).begins_with(prefix + ","):
+			_materials.erase(key)

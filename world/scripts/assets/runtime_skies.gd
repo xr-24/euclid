@@ -78,3 +78,7 @@ static func remember(key: String, image: Image) -> Texture2D:
 	var loaded := ImageTexture.create_from_image(image)
 	_textures[key] = loaded
 	return loaded
+
+## Drop a sky's texture, so the next use reads it from disk again.
+static func forget(key: String) -> void:
+	_textures.erase(key)

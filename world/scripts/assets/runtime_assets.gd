@@ -42,3 +42,7 @@ static func scene(id: String) -> PackedScene:
 		return null
 	_scenes[id] = packed
 	return packed
+
+## Drop a model from the cache, so the next use loads it from disk again.
+static func forget(id: String) -> void:
+	_scenes.erase(id)

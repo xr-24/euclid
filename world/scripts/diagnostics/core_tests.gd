@@ -274,6 +274,7 @@ func _run() -> void:
 	_check_agent_activity()
 	_check_tweaks()
 	_check_environment_export()
+	_check_asset_refresh()
 	_check_wrist_computer()
 	_check_desktop_focus()
 	_check_spring_follow()
@@ -1944,3 +1945,15 @@ func _check_environment_export() -> void:
 		and is_equal_approx(float(result.environment.sun_energy), 3.5) and text.contains(untouched_span),
 		"an edited environment changes only its edited pieces and settings, in the package's own style")
 	_check(EnvironmentExport.package_text("not json", pieces, {}).has("error"), "refuse a package that cannot be read")
+
+func _check_asset_refresh() -> void:
+	var before := Assets.pbr("marble_01", 3.0)
+	_check(Assets.pbr("marble_01", 3.0) == before, "materials are cached")
+	Assets.forget("marble_01")
+	_check(Assets.pbr("marble_01", 3.0) != before, "forgetting a texture set rebuilds its materials on next use")
+	var runtime = preload("res://scripts/assets/runtime_assets.gd")
+	runtime._scenes["fixture-model"] = PackedScene.new()
+	runtime.forget("fixture-model")
+	_check(not runtime._scenes.has("fixture-model"), "forgetting a model drops its cached scene")
+	_check(Commands.command("refresh_asset").fields.has("asset_id") and Commands.command("save_environment").effect == "draft",
+		"refresh_asset and save_environment are registered commands")

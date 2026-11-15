@@ -28,6 +28,9 @@ const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 const SoftRestart = preload("res://scripts/extensions/soft_restart.gd")
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
 const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
+const RuntimeAssets = preload("res://scripts/assets/runtime_assets.gd")
+const RuntimeMaterials = preload("res://scripts/assets/runtime_materials.gd")
+const AssetLibrary = preload("res://scripts/assets/asset_library.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -617,6 +620,21 @@ func _save_environment() -> Dictionary:
 	if result.has("error"):
 		return {"ok": false, "message": str(result.error)}
 	return {"ok": true, "message": "Saved %s as a Workbench draft. Commit it to make them part of the project." % what}
+
+## refresh_asset: a model or material is loaded again from its files, wherever it is used.
+func _refresh_asset(plan: Dictionary) -> Dictionary:
+	var id := str(plan.get("asset_id", plan.get("material", "")))
+	if plan.has("asset_id") == plan.has("material") or id.is_empty():
+		return {"ok": false, "message": "Give either asset_id for a model or material for a material."}
+	if plan.has("asset_id"):
+		RuntimeAssets.forget(id)
+	else:
+		RuntimeMaterials.forget(id)
+		AssetLibrary.forget(id)
+	var used := JSON.stringify(pieces.saved_pieces()).contains('"%s"' % id)
+	if used:
+		await _rebuild_zone()
+	return {"ok": true, "message": "Reloaded %s%s." % [id, " and rebuilt this environment" if used else "; it is not used here, so it loads fresh where it is used next"]}
 
 func _load_from_disk(files: Array) -> void:
 	if files.is_empty():

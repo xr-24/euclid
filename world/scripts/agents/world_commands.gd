@@ -182,3 +182,6 @@ func _discard_tweaks(_plan: Dictionary) -> Dictionary:
 
 func _save_environment(_plan: Dictionary) -> Dictionary:
 	return await _world._save_environment()
+
+func _refresh_asset(plan: Dictionary) -> Dictionary:
+	return await _world._refresh_asset(plan)

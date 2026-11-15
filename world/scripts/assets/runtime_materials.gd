@@ -84,3 +84,9 @@ static func remember(id: String, decoded: Array[Image]) -> void:
 		_images.erase(_images.keys()[0])
 	_images[id] = decoded
 	_mutex.unlock()
+
+## Drop a material's decoded maps, so the next use reads them from disk again.
+static func forget(id: String) -> void:
+	_mutex.lock()
+	_images.erase(id)
+	_mutex.unlock()

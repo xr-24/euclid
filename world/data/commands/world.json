@@ -452,6 +452,25 @@
       "undo": "none",
       "scope": "session",
       "mutates_world": false
+    },
+    {
+      "name": "refresh_asset",
+      "description": "Load a model or material again from its files on disk, everywhere it is used: its caches are cleared and the environment rebuilds if it uses it. Give asset_id for a model or material for a material. Use it after an asset's files were replaced.",
+      "service": "world",
+      "handler": "_refresh_asset",
+      "effect": "write",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "asset_id": "asset_id",
+        "material": "terrain_paint"
+      },
+      "required": [],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": true
     }
   ]
 }

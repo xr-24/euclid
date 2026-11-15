@@ -200,3 +200,14 @@ static func _load_locals() -> Dictionary:
 				continue
 			entries[definition.local] = definition
 	return entries
+
+## Hot loading: changed command sets or schema reload the registry. The world's next sync hands the
+## new snapshot to the gateway, so agents see the new tools.
+static func _hot_changed(paths: PackedStringArray) -> void:
+	if not Array(paths).any(func(path: String) -> bool: return path.begins_with("res://data/commands/")):
+		return
+	_schema = _load_schema()
+	_patterns = {}
+	_commands = _load_commands()
+	_locals = _load_locals()
+	_snapshot = {"version": 1, "schema": _schema, "commands": _commands.values()}

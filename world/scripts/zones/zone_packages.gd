@@ -165,3 +165,12 @@ static func _load_packages() -> Dictionary:
 			continue
 		result[value.id] = value
 	return result
+
+## Hot loading: a changed package file is read again, so the next build of that environment uses it.
+static func _hot_changed(paths: PackedStringArray) -> void:
+	for path in paths:
+		if not path.begins_with(DIRECTORY + "/") or path.get_file() != "zone.json":
+			continue
+		var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+		if valid(value) and value.id == path.get_base_dir().get_file():
+			_packages[value.id] = value

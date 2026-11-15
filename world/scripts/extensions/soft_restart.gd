@@ -13,7 +13,9 @@ static func _swap(world: Node, scene: String, capability: String, between: Calla
 	var tree := world.get_tree()
 	var parent := world.get_parent()
 	parent.remove_child(world)
-	world.free()
+	# Deleted at the end of the frame, once nothing is calling into it; then scripts reload.
+	world.queue_free()
+	await tree.process_frame
 	between.call()
 	# The new world reads the Workbench credential the launcher gave the first one.
 	if not capability.is_empty():

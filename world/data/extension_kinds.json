@@ -49,18 +49,20 @@
     {
       "id": "environment",
       "name": "Environment package",
-      "description": "A zone's reviewed builder, spawn, bounds, lighting, water, views and capabilities.",
+      "description": "A zone's reviewed builder, spawn, bounds, lighting, water, views and capabilities. A change hot loads: the environment rebuilds around you.",
       "files": "^world/data/zones/[a-z0-9_-]+/zone\\.json$",
-      "live": false,
-      "activation": "restart"
+      "live": true,
+      "candidate": "hot",
+      "activation": "hot"
     },
     {
       "id": "command",
       "name": "Command set",
-      "description": "Commands shared by MCP, F2, the palette and Godot, with their argument schemas.",
+      "description": "Commands shared by MCP, F2, the palette and Godot, with their argument schemas. A change hot loads: the registry reloads and agents see the new tools on the world's next sync.",
       "files": "^world/data/commands/(world|scene|development)\\.json$",
-      "live": false,
-      "activation": "restart"
+      "live": true,
+      "candidate": "hot",
+      "activation": "hot"
     },
     {
       "id": "hot",

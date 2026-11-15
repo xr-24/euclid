@@ -15,6 +15,9 @@ const ART := "res://scripts/world_art.gd"
 const HOST := "res://scripts/agents/development_host.gd"
 const MOTIONS := "res://data/agents/activity_motions.json"
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
+const Packages = preload("res://scripts/zones/zone_packages.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 
 class Recorder extends RefCounted:
 	var reports: Array = []
@@ -105,6 +108,27 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 		return _fail(tree, "hot-load kept tweaks: %s" % kept)
 	await HotLoad.finish("tweaks", false, host)
 	world.player.floor_max_angle = angle
+	# Saving an environment with no edits reproduces its package exactly; edits change only their lines.
+	var package_path := "res://data/zones/%s/zone.json" % world.zone_id
+	var package := FileAccess.get_file_as_string(package_path)
+	var same: Dictionary = EnvironmentExport.package_text(package, world.pieces.saved_pieces(), {})
+	if same.get("text") != package or same.pieces != 0:
+		return _fail(tree, "an unedited environment did not export unchanged: %s" % [same.get("error", "%d pieces differ" % same.get("pieces", -1))])
+	# A changed command set reloads the registry; a changed package is read again and rebuilds.
+	var commands_path := "res://data/commands/world.json"
+	var described := FileAccess.get_file_as_string(commands_path).replace("List environment names and IDs and the current environment.", "List every environment.")
+	var reloaded_commands: Dictionary = await HotLoad.apply("commands", "1", {commands_path: described}, host)
+	if not reloaded_commands.ok or Commands.command("list_environments").description != "List every environment.":
+		return _fail(tree, "hot-load a command set: %s" % reloaded_commands)
+	await HotLoad.finish("commands", false, host)
+	var spawn_yaw := float(Packages.definition(world.zone_id).spawn.yaw)
+	var turned := package.replace('"yaw": %s' % EnvironmentExport.compact(spawn_yaw), '"yaw": 1.25')
+	var rebuilt_package: Dictionary = await HotLoad.apply("package", "1", {package_path: turned}, host)
+	if not rebuilt_package.ok or rebuilt_package.tier != "zone" or not is_equal_approx(float(Packages.definition(world.zone_id).spawn.yaw), 1.25):
+		return _fail(tree, "hot-load an environment package: %s" % rebuilt_package)
+	await HotLoad.finish("package", false, host)
+	if not is_equal_approx(float(Packages.definition(world.zone_id).spawn.yaw), spawn_yaw):
+		return _fail(tree, "discarding the package draft did not restore it")
 	# The quick gate refuses data that does not parse, before anything changes.
 	var refused: Dictionary = await HotLoad.apply("bad", "1", {MOTIONS: "{ not json"}, host)
 	if refused.ok or not str(refused.message).begins_with("Not loaded:"):

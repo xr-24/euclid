@@ -179,3 +179,6 @@ func _keep_tweaks(_plan: Dictionary) -> Dictionary:
 
 func _discard_tweaks(_plan: Dictionary) -> Dictionary:
 	return TweakLayer.discard()
+
+func _save_environment(_plan: Dictionary) -> Dictionary:
+	return await _world._save_environment()

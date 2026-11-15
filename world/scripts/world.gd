@@ -27,6 +27,7 @@ const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
 const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 const SoftRestart = preload("res://scripts/extensions/soft_restart.gd")
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -594,6 +595,28 @@ func _keep_tweaks() -> Dictionary:
 		return {"ok": false, "message": str(result.error)}
 	TweakLayer.forget_session()
 	return {"ok": true, "message": "Kept %d tweak%s as a Workbench draft. Commit it to make them part of the project." % [count, "" if count == 1 else "s"]}
+
+## save_environment: this environment's in-world edits become a draft of its package file.
+func _save_environment() -> Dictionary:
+	var path := "res://data/zones/%s/zone.json" % zone_id
+	if not FileAccess.file_exists(path):
+		return {"ok": false, "message": "This environment was made in Euclid and lives in your user data, so it has no package to save into."}
+	if atmosphere.previewing(zone_id):
+		return {"ok": false, "message": "Save or discard the atmosphere preview first."}
+	if not is_instance_valid(_dev) or _dev.client == null:
+		return {"ok": false, "message": "The Workbench is offline, so the environment cannot be saved into the project."}
+	var exported := EnvironmentExport.package_text(FileAccess.get_file_as_string(path), pieces.saved_pieces(), atmosphere.values_for(zone_id))
+	if exported.has("error"):
+		return {"ok": false, "message": str(exported.error)}
+	if exported.pieces == 0 and exported.atmosphere == 0:
+		return {"ok": false, "message": "This environment has no in-world edits that differ from the project."}
+	var what := "%d piece change%s and %d atmosphere setting%s" % [exported.pieces, "" if exported.pieces == 1 else "s",
+		exported.atmosphere, "" if exported.atmosphere == 1 else "s"]
+	var result: Dictionary = await _dev.client.submit("Save the %s environment's in-world edits into the project" % zone_id,
+		"In-world edits to %s: %s." % [zone_id, what], [{"path": "world/data/zones/%s/zone.json" % zone_id, "content": exported.text}])
+	if result.has("error"):
+		return {"ok": false, "message": str(result.error)}
+	return {"ok": true, "message": "Saved %s as a Workbench draft. Commit it to make them part of the project." % what}
 
 func _load_from_disk(files: Array) -> void:
 	if files.is_empty():

@@ -21,6 +21,10 @@ var bounds: AABB
 var revision := 0
 var _editable := false
 
+## The environment's pieces as saved, edits included.
+func saved_pieces() -> Array:
+	return _document.pieces.duplicate(true) if _document != null else []
+
 func attach(layer: Node3D, document: Document, can_edit: bool, area: AABB, displayed: Variant = null) -> void:
 	_layer = layer
 	_document = document

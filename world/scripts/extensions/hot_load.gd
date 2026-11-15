@@ -443,6 +443,9 @@ static func _scripts_reading(paths: Array) -> Array[String]:
 		needles.append(path.trim_prefix("res://"))
 	var found: Array[String] = []
 	for path in _project_scripts():
+		# Diagnostics name files to test them; they are not the world's readers.
+		if path.begins_with("res://scripts/diagnostics/"):
+			continue
 		var text := FileAccess.get_file_as_string(path)
 		if needles.any(func(needle: String) -> bool: return text.contains(needle)):
 			found.append(path)

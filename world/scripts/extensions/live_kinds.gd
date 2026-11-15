@@ -14,7 +14,9 @@ static func register_all(live: RefCounted, services: Dictionary, world: Dictiona
 	live.register(Appearance.new("grid", services.get("grid")))
 	live.register(WorkshopAction.new(services.get("workshop_actions"), world))
 	live.register(Behavior.new(services.get("behaviors"), world))
-	live.register(Hot.new(world.get("hot", {})))
+	# Environment packages and command sets hot load too; they keep their own kinds in the table.
+	for kind in ["environment", "command", "hot"]:
+		live.register(Hot.new(world.get("hot", {}), kind))
 
 ## The replaceable Grid palette. It previews only inside a Grid space.
 class Palette extends "res://scripts/extensions/live_kind.gd":
@@ -154,12 +156,14 @@ class Behavior extends "res://scripts/extensions/live_kind.gd":
 class Hot extends "res://scripts/extensions/live_kind.gd":
 	const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 	var _host: Dictionary
+	var _id: String
 
-	func _init(host: Dictionary) -> void:
+	func _init(host: Dictionary, kind := "hot") -> void:
 		_host = host
+		_id = kind
 
 	func id() -> String:
-		return "hot"
+		return _id
 
 	func accepts(candidate: Dictionary) -> bool:
 		return candidate.get("hot") is Dictionary

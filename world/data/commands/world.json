@@ -436,6 +436,22 @@
       "undo": "none",
       "scope": "scene",
       "mutates_world": true
+    },
+    {
+      "name": "save_environment",
+      "description": "Save this environment's in-world edits (its pieces, placed props and terrain, and its atmosphere) into the project as a Workbench draft of its package. Commit the draft to make them part of Euclid for everyone.",
+      "service": "world",
+      "handler": "_save_environment",
+      "effect": "draft",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
     }
   ]
 }

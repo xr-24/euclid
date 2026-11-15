@@ -17,6 +17,7 @@ const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const ActivityView = preload("res://scripts/agents/activity_view.gd")
 const SpeechPlayerScript = preload("res://scripts/agents/speech_player.gd")
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
@@ -272,6 +273,7 @@ func _run() -> void:
 	_check_agents_panel()
 	_check_agent_activity()
 	_check_tweaks()
+	_check_environment_export()
 	_check_wrist_computer()
 	_check_desktop_focus()
 	_check_spring_follow()
@@ -1917,3 +1919,28 @@ func _check_tweaks() -> void:
 		and not Commands.valid_plan(Commands.command("tweak_property"), plan.merged({"property": "Bad Name"}, true)), "the tweak command's arguments are validated")
 	TweakLayer.attach(null)
 	world.free()
+
+func _check_environment_export() -> void:
+	var original := FileAccess.get_file_as_string("res://data/zones/construct/zone.json")
+	var package: Dictionary = JSON.parse_string(original)
+	var pieces: Array = package.pieces
+	var same := EnvironmentExport.package_text(original, pieces, {})
+	_check(same.get("text") == original and same.get("pieces") == 0 and same.get("atmosphere") == 0, "an unedited environment exports unchanged")
+	var edited: Array = pieces.duplicate(true)
+	var moved: Dictionary = edited[0]
+	moved["name"] = "Moved in the world"
+	var removed: Dictionary = edited.pop_back()
+	var added: Dictionary = pieces[0].duplicate(true)
+	added["id"] = "f".repeat(32)
+	edited.append(added)
+	var saved := EnvironmentExport.package_text(original, edited, {"sun_energy": 3.5})
+	var text := str(saved.get("text", ""))
+	var result: Variant = JSON.parse_string(text) if not text.is_empty() else null
+	var ids: Array = result.pieces.map(func(piece: Dictionary) -> String: return piece.id) if result is Dictionary else []
+	var untouched := JSON.parse_string(original).pieces[1] as Dictionary
+	var untouched_span := original.substr(original.find('"id": "%s"' % untouched.id) - 6, 40)
+	_check(saved.get("pieces") == 3 and saved.get("atmosphere") == 1 and ids == [pieces[0].id, pieces[1].id, "f".repeat(32)]
+		and result.pieces[0].name == "Moved in the world" and int(result.piece_revision) == int(package.get("piece_revision", 0)) + 1
+		and is_equal_approx(float(result.environment.sun_energy), 3.5) and text.contains(untouched_span),
+		"an edited environment changes only its edited pieces and settings, in the package's own style")
+	_check(EnvironmentExport.package_text("not json", pieces, {}).has("error"), "refuse a package that cannot be read")

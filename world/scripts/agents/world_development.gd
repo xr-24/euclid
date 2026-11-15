@@ -53,6 +53,10 @@ func report_live(id: String, version: String, report: Dictionary) -> void:
 	await sender.send("livereport", body)
 	sender.queue_free()
 
+## Submit files as a new Workbench draft (kept tweaks, a saved environment).
+func submit(request: String, summary: String, files: Array) -> Dictionary:
+	return await _send("submit", {"request": request, "summary": summary, "files": files})
+
 func command(action: String) -> Dictionary:
 	if draft.is_empty():
 		return {"error": "There is no development draft to review."}

@@ -14,6 +14,12 @@ const VIEW := "res://scripts/agents/activity_view.gd"
 const ART := "res://scripts/world_art.gd"
 const HOST := "res://scripts/agents/development_host.gd"
 const MOTIONS := "res://data/agents/activity_motions.json"
+const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+
+class Recorder extends RefCounted:
+	var reports: Array = []
+	func record(draft: String, _version: String, report: Dictionary) -> void:
+		reports.append([draft, report.status])
 
 static func run(world: Node3D) -> void:
 	var tree := world.get_tree()
@@ -64,9 +70,9 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 	if ActivityView.duration({"kind": "unknown"}) != 2.0 or HotLoad.status("view") != "":
 		return _fail(tree, "discard did not restore the script")
 	# Two live drafts on one file: discarding the lower one keeps the upper one's text.
-	var reports: Array = []
+	var recorder := Recorder.new()
 	var told := HotLoad.reporter
-	HotLoad.reporter = func(draft: String, version: String, report: Dictionary) -> void: reports.append([draft, report.status])
+	HotLoad.reporter = Callable(recorder, "record")
 	var base := FileAccess.get_file_as_string(VIEW)
 	await HotLoad.apply("lower", "1", {VIEW: base.replace("\treturn 2.0\n", "\treturn 3.0\n")}, host, {"label": "Lower"})
 	await HotLoad.apply("upper", "1", {VIEW: base.replace("\treturn 2.0\n", "\treturn 4.0\n")}, host, {"label": "Upper"})
@@ -83,9 +89,22 @@ static func _first(world: Node3D, tree: SceneTree) -> void:
 	await HotLoad.finish("upper", false, host)
 	if ActivityView.duration({"kind": "unknown"}) != 2.0:
 		return _fail(tree, "discarding the last draft did not restore the file")
-	if reports != [["lower", "active"], ["upper", "active"], ["upper", "unloaded"], ["upper", "active"]]:
-		return _fail(tree, "load reports: %s" % [reports])
+	if recorder.reports != [["lower", "active"], ["upper", "active"], ["upper", "unloaded"], ["upper", "active"]]:
+		return _fail(tree, "load reports: %s" % [recorder.reports])
 	HotLoad.reporter = told
+	# Live tweaks reach real nodes, and a hot-loaded tweaks file applies at once, in place.
+	var target := str(world.get_path_to(world.player))
+	var angle: float = world.player.floor_max_angle
+	if not TweakLayer.set_value(target, "floor_max_angle", 0.5).ok or not is_equal_approx(world.player.floor_max_angle, 0.5):
+		return _fail(tree, "tweak a real node")
+	TweakLayer.discard()
+	var tweaks := JSON.stringify({"schema_version": 1, "tweaks": [{"node": target, "property": "floor_max_angle", "value": 0.6}]})
+	var zone_now: Node = world.zone_root
+	var kept: Dictionary = await HotLoad.apply("tweaks", "1", {"res://data/tweaks.json": tweaks}, host)
+	if not kept.ok or kept.tier != "in_place" or not is_equal_approx(world.player.floor_max_angle, 0.6) or world.zone_root != zone_now:
+		return _fail(tree, "hot-load kept tweaks: %s" % kept)
+	await HotLoad.finish("tweaks", false, host)
+	world.player.floor_max_angle = angle
 	# The quick gate refuses data that does not parse, before anything changes.
 	var refused: Dictionary = await HotLoad.apply("bad", "1", {MOTIONS: "{ not json"}, host)
 	if refused.ok or not str(refused.message).begins_with("Not loaded:"):

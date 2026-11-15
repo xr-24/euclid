@@ -6,6 +6,7 @@ const Packages = preload("res://scripts/zones/zone_packages.gd")
 const Commands = preload("res://scripts/workshop/command_registry.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
+const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
 
 var _world: Node3D
 
@@ -166,3 +167,15 @@ func _companion_mode(plan: Dictionary) -> Dictionary:
 
 func _unsupported_command(_plan: Dictionary) -> Dictionary:
 	return {"ok": false, "message": "I couldn’t match that request to an available Euclid command."}
+
+func _inspect_scene(plan: Dictionary) -> Dictionary:
+	return TweakLayer.inspect(str(plan.get("target", "")))
+
+func _tweak_property(plan: Dictionary) -> Dictionary:
+	return TweakLayer.set_value(str(plan.target), str(plan.property), plan.value)
+
+func _keep_tweaks(_plan: Dictionary) -> Dictionary:
+	return await _world._keep_tweaks()
+
+func _discard_tweaks(_plan: Dictionary) -> Dictionary:
+	return TweakLayer.discard()

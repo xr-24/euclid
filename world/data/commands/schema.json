@@ -281,6 +281,25 @@
       "maxLength": 120,
       "pattern": "\\S"
     },
+    "node_path": {
+      "type": "string",
+      "description": "A node's path from the world root, such as Zone_villa/Pieces/Piece_12. Empty means the world itself. inspect_scene lists children to walk down.",
+      "pattern": "^[A-Za-z0-9_@ .:/-]{0,240}$"
+    },
+    "property_name": {
+      "type": "string",
+      "description": "A property of that node, as inspect_scene lists it. Use a colon for a property of a resource it holds, such as material_override:albedo_color.",
+      "pattern": "^[a-z_][a-z0-9_]{0,63}(:[a-z_][a-z0-9_]{0,63}){0,3}$"
+    },
+    "property_value": {
+      "description": "The new value: a number, true or false, text, or a list of numbers for a vector or a color ([r, g, b] or [r, g, b, a], 0 to 1). Text like #ff8800 also works for a color.",
+      "anyOf": [
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "string", "pattern": "^.{0,240}$"},
+        {"type": "array", "items": {"type": "number"}}
+      ]
+    },
     "asset_id": {
       "type": "string",
       "description": "Exact downloadable model ID",

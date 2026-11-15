@@ -26,6 +26,7 @@ const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
 const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 const SoftRestart = preload("res://scripts/extensions/soft_restart.gd")
+const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
 const TerminalTheme = preload("res://scripts/ui/terminal_theme.gd")
 const DesktopPanel = preload("res://scripts/ui/desktop_panel.gd")
 const AgentPresence = preload("res://scripts/agents/agent_presence.gd")
@@ -162,6 +163,7 @@ func _ready() -> void:
 		prefab_library, behavior_runtime, Packages.bounds(workshop))
 	world_tools = scene_tools[workshop]
 	_register_live_extensions()
+	TweakLayer.attach(self)
 	add_child(agent_presence)
 	scene_animations = SceneAnimations.new("" if smoke_mode else "user://companion-animation.json", null)
 	ActivityMotions.use_overrides("" if smoke_mode else "user://activity-motions.json")
@@ -498,9 +500,8 @@ func _register_live_extensions() -> void:
 	context["catalog"] = _workshop_action_catalog
 	context["run_action"] = _run_palette_action
 	context["hot"] = _hot_host()
-	HotLoad.reporter = func(draft: String, version: String, report: Dictionary) -> void:
-		if is_instance_valid(_dev) and _dev.client:
-			_dev.client.report_live(draft, version, report)
+	# A method, not a lambda: a static holding a lambda outlives the code it points to at exit.
+	HotLoad.reporter = Callable(self, "_report_live")
 	var watch := Timer.new()
 	watch.wait_time = 0.5
 	add_child(watch)
@@ -563,6 +564,10 @@ func _finish_live_change(action: String, draft_id: String, files: Array = []) ->
 		_load_from_disk(files)
 	return finished
 
+func _report_live(draft: String, version: String, report: Dictionary) -> void:
+	if is_instance_valid(_dev) and _dev.client:
+		_dev.client.report_live(draft, version, report)
+
 ## The wrist's Live page: unload a change loaded live, or load it again.
 func _toggle_live_change(draft: String) -> void:
 	var on := HotLoad.status(draft) == "active"
@@ -574,6 +579,21 @@ func _toggle_live_change(draft: String) -> void:
 	_console_notice(str(result.get("message", "")))
 	if is_instance_valid(_dev):
 		_dev.refresh_actions()
+
+## keep_tweaks: this session's tweaks become a Workbench draft of data/tweaks.json.
+func _keep_tweaks() -> Dictionary:
+	if TweakLayer.session().is_empty():
+		return {"ok": false, "message": "Nothing has been tweaked this session."}
+	if not is_instance_valid(_dev) or _dev.client == null:
+		return {"ok": false, "message": "The Workbench is offline, so tweaks cannot be kept. They last this session."}
+	var count := TweakLayer.session().size()
+	var result: Dictionary = await _dev.client.submit("Keep %d tweaked value%s" % [count, "" if count == 1 else "s"],
+		"Property values set live in the world, kept in world/data/tweaks.json.",
+		[{"path": "world/data/tweaks.json", "content": TweakLayer.kept_text()}])
+	if result.has("error"):
+		return {"ok": false, "message": str(result.error)}
+	TweakLayer.forget_session()
+	return {"ok": true, "message": "Kept %d tweak%s as a Workbench draft. Commit it to make them part of the project." % [count, "" if count == 1 else "s"]}
 
 func _load_from_disk(files: Array) -> void:
 	if files.is_empty():
@@ -927,6 +947,7 @@ func _commit_zone(built: Dictionary, side := 0.0) -> void:
 	interactables = built.interactables
 	agent_labels = built.agent_labels
 	nearest = {}
+	TweakLayer.apply_kept()
 
 func _refresh_piece_interactions() -> void:
 	var enabled := pieces.summaries().any(func(entry: Dictionary) -> bool:

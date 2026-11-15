@@ -65,6 +65,7 @@ static var _watch: Watch
 static var _watch_draft := ""
 static var _watch_until := 0
 ## Told about every load, failure, rollback and unload: reporter.call(draft, version, report).
+## Set it to an object's method, never a lambda: statics outlive lambdas' code at exit.
 static var reporter := Callable()
 ## Whether a project path (world/...) can be hot loaded: a text file the project reads, other than
 ## the engine settings, which only a full restart applies.
@@ -139,6 +140,11 @@ static func plan(files: Dictionary) -> Dictionary:
 				why = "%s keeps its own copy of %s" % [str(readers[0]).get_file(), path.get_file()]
 		var local := path.trim_prefix("res://")
 		for rule: Dictionary in rules:
+			# An exact rule settles the tier: for files whose readers refresh themselves.
+			if rule.get("exact", false) and local.match(str(rule.get("files", ""))):
+				need = str(rule.tier)
+				why = ""
+				break
 			if local.match(str(rule.get("files", ""))) and TIERS.find(str(rule.get("tier"))) > TIERS.find(need):
 				need = str(rule.tier)
 				why = "%s is built when the environment loads" % path.get_file() if need == "zone" else "%s needs the world restarted" % path.get_file()

@@ -362,6 +362,80 @@
       "undo": "none",
       "scope": "session",
       "mutates_world": false
+    },
+    {
+      "name": "inspect_scene",
+      "description": "Look inside the running world: a node's type, its children and the values of its editable properties. Start with no path for the world itself.",
+      "service": "world",
+      "handler": "_inspect_scene",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "node_path"
+      },
+      "required": [],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": false
+    },
+    {
+      "name": "tweak_property",
+      "description": "Set any property of any node in the running world now, such as a light's energy or a material's color. Tweaks last this session; keep_tweaks saves them into the project.",
+      "service": "world",
+      "handler": "_tweak_property",
+      "effect": "preview",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "target": "node_path",
+        "property": "property_name",
+        "value": "property_value"
+      },
+      "required": [
+        "target",
+        "property",
+        "value"
+      ],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": true
+    },
+    {
+      "name": "keep_tweaks",
+      "description": "Save this session's tweaks into the project as a Workbench draft of world/data/tweaks.json. They apply whenever the world or an environment loads.",
+      "service": "world",
+      "handler": "_keep_tweaks",
+      "effect": "draft",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
+    },
+    {
+      "name": "discard_tweaks",
+      "description": "Put every property tweaked this session back as it was.",
+      "service": "world",
+      "handler": "_discard_tweaks",
+      "effect": "preview",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {},
+      "required": [],
+      "undo": "none",
+      "scope": "scene",
+      "mutates_world": true
     }
   ]
 }

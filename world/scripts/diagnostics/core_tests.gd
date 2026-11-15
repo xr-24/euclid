@@ -16,6 +16,8 @@ const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const ActivityView = preload("res://scripts/agents/activity_view.gd")
 const SpeechPlayerScript = preload("res://scripts/agents/speech_player.gd")
+const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+const Commands = preload("res://scripts/workshop/command_registry.gd")
 const ToolRegistry = preload("res://scripts/workshop/tool_registry.gd")
 const PrefabLibrary = preload("res://scripts/workshop/prefab_library.gd")
 const BehaviorRuntime = preload("res://scripts/plugins/behavior_runtime.gd")
@@ -269,6 +271,7 @@ func _run() -> void:
 	_check_terminal_keys()
 	_check_agents_panel()
 	_check_agent_activity()
+	_check_tweaks()
 	_check_wrist_computer()
 	_check_desktop_focus()
 	_check_spring_follow()
@@ -1880,3 +1883,37 @@ func _check_agent_activity() -> void:
 	speech.say("Not spoken while voice is off.")
 	_check(speech._pending.is_empty() and not is_instance_valid(speech._speech), "replies stay silent while voice is off")
 	speech.free()
+
+func _check_tweaks() -> void:
+	var world := Node3D.new()
+	var lamp := OmniLight3D.new()
+	lamp.name = "Lamp"
+	var box := MeshInstance3D.new()
+	box.name = "Box"
+	var material := StandardMaterial3D.new()
+	box.material_override = material
+	world.add_child(lamp)
+	world.add_child(box)
+	TweakLayer.attach(world)
+	var looked := TweakLayer.inspect("")
+	_check(looked.ok and looked.children.size() == 2 and looked.children[0].name == "Lamp", "inspect the world's children")
+	var lamp_values: Dictionary = TweakLayer.inspect("Lamp").get("values", {})
+	_check(lamp_values.has("light_energy") and lamp_values.has("light_color"), "inspect a node's editable values")
+	_check(TweakLayer.inspect("Box").values.has("material_override:albedo_color"), "inspect into a node's material")
+	_check(TweakLayer.set_value("Lamp", "light_energy", 3).ok and is_equal_approx(lamp.light_energy, 3.0), "tweak a number")
+	_check(TweakLayer.set_value("Lamp", "light_color", "#ff8800").ok and lamp.light_color.is_equal_approx(Color("ff8800")), "tweak a color from text")
+	_check(TweakLayer.set_value("Box", "material_override:albedo_color", [0, 1, 0]).ok and material.albedo_color.is_equal_approx(Color(0, 1, 0)),
+		"tweak a property inside a material")
+	_check(TweakLayer.set_value("Box", "position", [1, 2, 3]).ok and box.position == Vector3(1, 2, 3), "tweak a vector")
+	_check(not TweakLayer.set_value("Lamp", "light_energy", "bright").ok and not TweakLayer.set_value("Ghost", "visible", true).ok
+		and not TweakLayer.set_value("Lamp", "no_such_thing", 1).ok, "refuse values of the wrong type and unknown nodes or properties")
+	var kept: Variant = JSON.parse_string(TweakLayer.kept_text())
+	_check(kept is Dictionary and kept.tweaks.size() == 4 and kept.tweaks.any(func(tweak: Dictionary) -> bool:
+		return tweak.node == "Lamp" and tweak.property == "light_energy" and is_equal_approx(float(tweak.value), 3.0)), "keep tweaks as data")
+	_check(TweakLayer.discard().ok and is_equal_approx(lamp.light_energy, 1.0) and material.albedo_color.is_equal_approx(Color.WHITE)
+		and box.position == Vector3.ZERO, "discard puts tweaked values back")
+	var plan := {"tool": "tweak_property", "target": "Zone_villa/Pieces/Piece_3", "property": "material_override:albedo_color", "value": [1, 0.5, 0]}
+	_check(Commands.valid_plan(Commands.command("tweak_property"), plan)
+		and not Commands.valid_plan(Commands.command("tweak_property"), plan.merged({"property": "Bad Name"}, true)), "the tweak command's arguments are validated")
+	TweakLayer.attach(null)
+	world.free()

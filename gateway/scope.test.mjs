@@ -21,11 +21,14 @@ test('drafts reach the gateway and docs but never the kernel or launcher', async
     assert.equal(isAgentSourcePath(name), false, name);
   }
   for (const name of ['gateway/server.mjs', 'gateway/agents/claude.mjs', 'gateway/server.test.mjs', 'gateway/grid-plan.schema.json',
+    'gateway/generators/column.py', 'gateway/generators/nested/arch.py',
+    'world/surfaces/panel.html', 'world/surfaces/app.js', 'world/surfaces/style.css', 'world/surfaces/icon.svg',
     'docs/architecture.md', 'README.md', 'world/scripts/world.gd', 'world/scripts/diagnostics/core_tests.gd', 'world/data/world.json']) {
     assert.equal(isAgentSourcePath(name), true, name);
   }
   for (const name of ['AGENTS.md', 'package.json', '.gitignore', 'Start Euclid.cmd', 'scripts/start.ps1', 'scripts/recovery.mjs',
-    'scripts/check.ps1', 'scripts/stop-gateway.ps1', 'world/project.godot', 'gateway/../scripts/start.ps1', 'gateway/.env',
+    'scripts/check.ps1', 'scripts/stop-gateway.ps1', 'scripts/blender/build_villa.py', 'world/project.godot', 'gateway/../scripts/start.ps1', 'gateway/.env',
+    'gateway/foo.py', 'gateway/generators/bad.sh', 'world/surfaces/bad.exe',
     'gateway/node_modules/x/index.js', 'docs/../package.json', 'docs/nested/guide.md', '.local/gateway.json', 'gateway/workbench-source.mjs ']) {
     assert.equal(isAgentSourcePath(name), false, name);
   }

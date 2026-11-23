@@ -68,7 +68,7 @@
       "id": "hot",
       "name": "Project source",
       "description": "Any other script, shader, data file or scene under world/. It hot loads into the running world: shaders swap, scripts reload keeping their state, and the environment rebuilds or the world restarts in place only when a change needs it.",
-      "files": "^world/(?!project\\.godot$).+\\.(gd|gdshader|gdshaderinc|json|tscn|tres|cfg|txt|md|csv)$",
+      "files": "^world/(?!project\\.godot$).+\\.(gd|gdshader|gdshaderinc|json|tscn|tres|cfg|txt|md|csv|html|css|js|svg)$",
       "live": true,
       "candidate": "hot",
       "activation": "hot"

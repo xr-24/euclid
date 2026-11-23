@@ -3,6 +3,7 @@
   "about": "How a changed file reaches the running world without a restart (scripts/extensions/hot_load.gd). Each file gets the least disruptive tier that covers it: instant (shader code swaps), in_place (the file is overlaid and scripts that use it reload, keeping their state), zone (the current environment rebuilds around the player), restart (an in-process soft restart of the world; the window stays open). A script whose variables change always needs a restart, because objects already running cannot take new variables. Rules raise the tier for files whose effect is built once, when an environment loads. Agents may add rules here; the highest tier any matching glob names wins, unless a rule marked exact matches first, which settles the tier (for files whose readers refresh themselves through static _hot_changed).",
   "rules": [
     {"files": "data/tweaks.json", "tier": "in_place", "exact": true},
+    {"files": "surfaces/**", "tier": "in_place", "exact": true},
     {"files": "main.tscn", "tier": "restart"},
     {"files": "scripts/world.gd", "tier": "restart"},
     {"files": "data/world.json", "tier": "restart"},

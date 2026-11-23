@@ -6,7 +6,7 @@ import path from 'node:path';
 // itself to refresh. Checks still gate the commit, not the preview.
 
 export const hotLimit = 4 * 1024 * 1024;
-const text = /\.(gd|gdshader|gdshaderinc|json|tscn|tres|cfg|txt|md|csv)$/;
+const text = /\.(gd|gdshader|gdshaderinc|json|tscn|tres|cfg|txt|md|csv|html|css|js|svg)$/;
 
 // The draft's files the world can hot load, or null when one of its world files cannot be: a
 // binary asset, the engine settings, or a kind the table marks as needing a restart. Files

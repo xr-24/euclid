@@ -13,7 +13,7 @@ extends RefCounted
 
 const RULES := "res://data/hot_reload.json"
 const TIERS := ["instant", "in_place", "zone", "restart"]
-const TEXT := ["gd", "gdshader", "gdshaderinc", "json", "tscn", "tres", "cfg", "txt", "md", "csv"]
+const TEXT := ["gd", "gdshader", "gdshaderinc", "json", "tscn", "tres", "cfg", "txt", "md", "csv", "html", "css", "js", "svg"]
 const MAX_BYTES := 4 * 1024 * 1024
 ## Seconds after a change during which errors from its scripts roll it back.
 const WATCH := 6.0

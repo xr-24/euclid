@@ -7,7 +7,7 @@ const editable = /^world\/(?:scripts\/(?!diagnostics\/)(?:[\w-]+\/)*[\w.-]+\.gd|
 const decode = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const fingerprint = text => createHash('sha256').update(text).digest('hex');
 export const isSourcePath = name => typeof name === 'string' && editable.test(name) && !isKernelPath(name);
-const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scenes\/(?:[\w-]+\/)*[\w.-]+\.tscn)$/;
+const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scenes\/(?:[\w-]+\/)*[\w.-]+\.tscn|surfaces\/(?:[\w-]+\/)*[\w.-]+\.(?:html|css|js|svg))$/;
 // The kernel decides what a draft may change, verifies and commits it, isolates its
 // checks, and replaces the running gateway. No draft may change it. The launcher,
 // check and recovery scripts under scripts/ and the files in the project root are
@@ -17,7 +17,7 @@ export const kernel = Object.freeze(['gateway/handoff.mjs', 'gateway/preview-bas
   'world/scripts/extensions/hot_load.gd', 'world/scripts/extensions/soft_restart.gd']);
 export const isKernelPath = name => kernel.includes(name);
 export const isGatewayPath = name => typeof name === 'string' && name.startsWith('gateway/');
-const harness = /^(?:gateway\/(?:[\w-]+\/)*[\w.-]+\.(?:mjs|json)|docs\/[\w.-]+\.md|README\.md)$/;
+const harness = /^(?:gateway\/(?:[\w-]+\/)*[\w.-]+\.(?:mjs|json)|gateway\/generators\/(?:[\w-]+\/)*[\w.-]+\.py|docs\/[\w.-]+\.md|README\.md)$/;
 export const isAgentSourcePath = name => isSourcePath(name) ||
   (typeof name === 'string' && !isKernelPath(name) && (agentSource.test(name) || harness.test(name)));
 
@@ -72,7 +72,7 @@ export async function listAgentSources(root) {
         (await lstat(path.join(root, name))).size <= agentFileLimit) files.push(name);
     }
   }
-  for (const directory of ['docs', 'gateway', 'scripts', 'world/scripts', 'world/shaders', 'world/data', 'world/scenes']) await scan(directory);
+  for (const directory of ['docs', 'gateway', 'scripts', 'world/scripts', 'world/shaders', 'world/data', 'world/scenes', 'world/surfaces']) await scan(directory);
   for (const name of ['README.md', 'AGENTS.md', 'package.json', 'world/main.tscn']) {
     const info = await lstat(path.join(root, name)).catch(error => { if (error.code !== 'ENOENT') throw error; });
     if (info?.isFile() && info.size <= agentFileLimit) files.push(name);

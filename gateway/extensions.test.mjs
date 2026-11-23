@@ -74,6 +74,8 @@ test('hot loading takes text files under world/ that no restart-only kind claims
   assert.equal(hotFiles(kinds, ['world/scripts/a.gd', 'world/assets/rock.glb']), null, 'binary assets need an import');
   assert.deepEqual(hotFiles(kinds, ['world/data/zones/villa/zone.json', 'world/data/commands/world.json']),
     ['world/data/zones/villa/zone.json', 'world/data/commands/world.json'], 'environment packages and command sets hot load');
+  assert.deepEqual(hotFiles(kinds, ['world/surfaces/panel.html', 'world/surfaces/app.js']),
+    ['world/surfaces/panel.html', 'world/surfaces/app.js'], 'web surfaces hot load');
   const files = await readHotFiles(project, ['world/data/hot_reload.json']);
   assert.match(files['world/data/hot_reload.json'], /"rules"/);
   await assert.rejects(readHotFiles(project, ['world/scripts/missing.gd']), /removed in this draft/);

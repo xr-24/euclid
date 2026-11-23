@@ -96,6 +96,7 @@ const PieceEditor = preload("res://scripts/pieces/piece_editor.gd")
 const PieceDocument = preload("res://scripts/persistence/piece_document.gd")
 const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
 const TerrainData = preload("res://scripts/pieces/terrain_data.gd")
+const RuntimeLog = preload("res://scripts/diagnostics/runtime_log.gd")
 
 class FixtureKind extends "res://scripts/extensions/live_kind.gd":
 	var name := ""
@@ -181,7 +182,79 @@ func _check(condition: bool, label: String) -> void:
 		push_error("CORE_TEST_FAILED: " + label)
 
 func _run() -> void:
+	var filter := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--filter="):
+			filter = arg.substr(9).strip_edges().to_lower()
 	var manifest := Catalog.read("res://data/world.json")
+	var path := "user://module-test-%d.json" % Time.get_ticks_usec()
+	var sections: Array = [
+		{"name": "core_catalog_and_assets", "run": func() -> void: _check_core_catalog_and_assets(manifest, path)},
+		{"name": "world_tools", "run": func() -> void: _check_world_tools(path)},
+		{"name": "stretch", "run": func() -> void: _check_stretch(path + ".stretch")},
+		{"name": "scene_edits", "run": func() -> void: _check_scene_edits(path)},
+		{"name": "authored_dressing", "run": func() -> void: _check_authored_dressing(path + ".dressing")},
+		{"name": "registered_props", "run": _check_registered_props},
+		{"name": "grab_release", "run": _check_grab_release},
+		{"name": "scanner_physics", "run": _check_scanner_physics},
+		{"name": "zone_packages", "run": func() -> void: _check_zone_packages(path + ".packages", manifest)},
+		{"name": "pieces", "run": func() -> void: _check_pieces(manifest)},
+		{"name": "piece_edits", "run": func() -> void: _check_piece_edits(manifest)},
+		{"name": "building", "run": _check_building},
+		{"name": "pool_basin", "run": _check_pool_basin},
+		{"name": "houses", "run": _check_houses},
+		{"name": "youtube_links", "run": _check_youtube_links},
+		{"name": "prop_migration", "run": func() -> void: _check_prop_migration(path + ".piece-migration")},
+		{"name": "piece_upgrade", "run": _check_piece_upgrade},
+		{"name": "terrain", "run": _check_terrain},
+		{"name": "data_entity_type", "run": _check_data_entity_type},
+		{"name": "workshop_actions", "run": func() -> void: _check_workshop_actions(path)},
+		{"name": "prefabs", "run": func() -> void: _check_prefabs(path)},
+		{"name": "live_behaviors", "run": func() -> void: _check_live_behaviors(path)},
+		{"name": "linked_plugin", "run": func() -> void: _check_linked_plugin(path)},
+		{"name": "shoreline_look", "run": _check_shoreline_look},
+		{"name": "text_tools", "run": _check_text_tools},
+		{"name": "development_session", "run": _check_development_session},
+		{"name": "development_refresh", "run": _check_development_refresh},
+		{"name": "workbench_drafts", "run": _check_workbench_drafts},
+		{"name": "live_extensions", "run": _check_live_extensions},
+		{"name": "hot_load_unload_all", "run": _check_hot_load_unload_all},
+		{"name": "palette_reload", "run": _check_palette_reload},
+		{"name": "panel_swap", "run": _check_panel_swap},
+		{"name": "terminal_keys", "run": _check_terminal_keys},
+		{"name": "agents_panel", "run": _check_agents_panel},
+		{"name": "agent_activity", "run": _check_agent_activity},
+		{"name": "tweaks", "run": _check_tweaks},
+		{"name": "environment_export", "run": _check_environment_export},
+		{"name": "asset_refresh", "run": _check_asset_refresh},
+		{"name": "agent_vision", "run": _check_agent_vision},
+		{"name": "live_hud", "run": _check_live_hud},
+		{"name": "wrist_computer", "run": _check_wrist_computer},
+		{"name": "desktop_focus", "run": _check_desktop_focus},
+		{"name": "spring_follow", "run": _check_spring_follow},
+		{"name": "atmosphere", "run": _check_atmosphere},
+		{"name": "environment_library_and_gizmo", "run": func() -> void: _check_environment_library_and_gizmo(path, manifest)},
+		{"name": "runtime_log", "run": _check_runtime_log},
+	]
+	var matched := 0
+	for section in sections:
+		if filter.is_empty() or section.name.to_lower().contains(filter):
+			matched += 1
+			await section.run.call()
+	DirAccess.remove_absolute(path)
+	if filter.is_empty():
+		print("CONSTRUCT_CORE_TESTS: %d checks, %d failures" % [_checks, _failures])
+		if _failures == 0:
+			print("CONSTRUCT_CORE_TESTS_OK")
+	else:
+		if matched == 0:
+			_check(false, "no core test matched filter: " + filter)
+		print("CONSTRUCT_TARGETED_TESTS: %d checks, %d failures" % [_checks, _failures])
+		if _failures == 0:
+			print("CONSTRUCT_TARGETED_TESTS_OK")
+	quit(0 if _failures == 0 else 1)
+
+func _check_core_catalog_and_assets(manifest: Dictionary, path: String) -> void:
 	_check(not manifest.is_empty(), "real manifest conforms to the content contract")
 	var changed: Dictionary = manifest.duplicate(true)
 	changed.anchors[0].zone = "missing"
@@ -195,7 +268,6 @@ func _run() -> void:
 	changed = manifest.duplicate(true)
 	changed.anchors[0].kind = "shell.execute"
 	_check(not Catalog.validate(changed).is_empty(), "reject executable anchor kinds")
-	var path := "user://module-test-%d.json" % Time.get_ticks_usec()
 	_check(Store.write(path,"villa",Vector3(4,0.1,2),0.6,0.2) == OK, "write state")
 	var saved := Store.read(path,manifest.zones)
 	var restored: Array = saved.get("position", [0,0,0])
@@ -246,49 +318,8 @@ func _run() -> void:
 	var ramp_j := int((0.0-float(pool.x0))/float(pool.dx))
 	var ramp_y := pool_bottom[(ramp_j*int(pool.n)+ramp_i)*4]+float(pool.water_y)
 	_check(ramp_y > -0.22 and ramp_y < -0.15,"pool bathymetry matches the sloped entry rather than a flat floor")
-	_check_world_tools(path)
-	_check_stretch(path + ".stretch")
-	_check_scene_edits(path)
-	_check_authored_dressing(path + ".dressing")
-	_check_registered_props()
-	await _check_grab_release()
-	await _check_scanner_physics()
-	_check_zone_packages(path + ".packages", manifest)
-	_check_pieces(manifest)
-	_check_piece_edits(manifest)
-	_check_building()
-	_check_pool_basin()
-	_check_houses()
-	_check_youtube_links()
-	_check_prop_migration(path + ".piece-migration")
-	_check_piece_upgrade()
-	await _check_terrain()
-	_check_data_entity_type()
-	_check_workshop_actions(path)
-	_check_prefabs(path)
-	_check_live_behaviors(path)
-	_check_linked_plugin(path)
-	_check_shoreline_look()
-	_check_text_tools()
-	_check_development_session()
-	await _check_development_refresh()
-	await _check_workbench_drafts()
-	await _check_live_extensions()
-	await _check_hot_load_unload_all()
-	_check_palette_reload()
-	_check_panel_swap()
-	_check_terminal_keys()
-	_check_agents_panel()
-	_check_agent_activity()
-	_check_tweaks()
-	_check_environment_export()
-	_check_asset_refresh()
-	await _check_agent_vision()
-	_check_live_hud()
-	_check_wrist_computer()
-	_check_desktop_focus()
-	_check_spring_follow()
-	_check_atmosphere()
+
+func _check_environment_library_and_gizmo(path: String, manifest: Dictionary) -> void:
 	_check(is_equal_approx(TransformGizmo._segment_distance(Vector2(5, 3), Vector2.ZERO, Vector2(10, 0)), 3.0)
 		and is_equal_approx(TransformGizmo._segment_distance(Vector2(14, 0), Vector2.ZERO, Vector2(10, 0)), 4.0),
 		"measure how far the pointer is from a gizmo handle on screen")
@@ -299,9 +330,36 @@ func _run() -> void:
 	_check(EnvironmentLibrary.new(path).environments() == library.environments(), "reload custom environments with stable IDs")
 	DirAccess.remove_absolute(path.get_base_dir().path_join(PieceDocument.filename(created.zone.id)))
 	DirAccess.remove_absolute(path)
-	print("CONSTRUCT_CORE_TESTS: %d checks, %d failures" % [_checks,_failures])
-	if _failures == 0: print("CONSTRUCT_CORE_TESTS_OK")
-	quit(0 if _failures == 0 else 1)
+
+func _check_runtime_log() -> void:
+	RuntimeLog.clear()
+	RuntimeLog.install()
+	RuntimeLog.install()
+	for index in range(215):
+		var level := "error" if index % 3 == 0 else ("warning" if index % 3 == 1 else "info")
+		RuntimeLog.record(level, "entry %d" % index, "res://scripts/test.gd", index)
+	var all_entries := RuntimeLog.tail(200, "all")
+	_check(all_entries.size() == RuntimeLog.MAX_ENTRIES, "runtime log buffer caps at MAX_ENTRIES")
+	_check(all_entries[0].message == "entry 15" and all_entries[all_entries.size() - 1].message == "entry 214",
+		"runtime log keeps newest entries in oldest-to-newest order")
+	_check(all_entries[0].file == "scripts/test.gd" and all_entries[0].line == 15,
+		"runtime log trims res:// prefix from file paths")
+	var error_entries := RuntimeLog.tail(10, "error")
+	var only_errors := error_entries.size() == 10
+	for entry in error_entries:
+		only_errors = only_errors and entry.level == "error"
+	_check(only_errors and error_entries[error_entries.size() - 1].message == "entry 213",
+		"runtime log tail filters by level and returns newest-last")
+	var cmd := Commands.command("read_runtime_log")
+	_check(not cmd.is_empty() and cmd.get("handler") == "_read_runtime_log",
+		"read_runtime_log command is registered")
+	_check(Commands.valid_plan(cmd, {"tool": "read_runtime_log"})
+		and Commands.valid_plan(cmd, {"tool": "read_runtime_log", "limit": 25, "level": "warning"})
+		and not Commands.valid_plan(cmd, {"tool": "read_runtime_log", "limit": 999})
+		and not Commands.valid_plan(cmd, {"tool": "read_runtime_log", "level": "debug"}),
+		"read_runtime_log validates optional limit and level arguments")
+	RuntimeLog.clear()
+	_check(RuntimeLog.tail(50, "all").is_empty(), "runtime log clear empties the buffer")
 
 func _check_live_behaviors(path: String) -> void:
 	var zone := Node3D.new()

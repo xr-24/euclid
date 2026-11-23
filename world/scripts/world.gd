@@ -62,6 +62,7 @@ const WorldStateStore = preload("res://scripts/persistence/world_state_store.gd"
 const DevelopmentHost = preload("res://scripts/agents/development_host.gd")
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
+const RuntimeLog = preload("res://scripts/diagnostics/runtime_log.gd")
 var manifest: Dictionary
 var asset_client: Node
 var material_client: MaterialClient
@@ -147,6 +148,7 @@ var _world_commands := WorldCommands.new(self)
 var _development_commands := DevelopmentCommands.new(self)
 
 func _ready() -> void:
+	RuntimeLog.install()
 	add_child(_dev)
 	manifest = ZoneCatalog.read("res://data/world.json")
 	var args := OS.get_cmdline_user_args()

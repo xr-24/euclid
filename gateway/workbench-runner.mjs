@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { access, cp, lstat, mkdir, open, statfs, writeFile, readFile, rm } from 'node:fs/promises';
+import { access, cp, lstat, mkdir, open, readFile, realpath, rm, statfs, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assertSeparateBase, linkBase, syncBase } from './preview-base.mjs';
 import { fingerprint, isGatewayPath } from './workbench-source.mjs';
@@ -34,6 +34,7 @@ function childEnvironment(godot) {
   for (const name of Object.keys(env)) {
     if (/^(?:CONSTRUCT_|EUCLID_|SKETCHFAB_|OPENAI_|CODEX_|ELEVENLABS_)/i.test(name)) delete env[name];
   }
+  delete env.NODE_TEST_CONTEXT;
   return env;
 }
 
@@ -83,7 +84,7 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
     baseTurn = turn.catch(() => {});
     return turn;
   }
-  async function prepare({ directory, worktree, id }, onOutput, signal) {
+  async function prepare({ directory, worktree, id, diff }, onOutput, signal) {
     const tree = path.join(directory, 'preview');
     await rm(tree, { recursive: true, force: true });
     const disk = await statfs(directory);
@@ -120,6 +121,9 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
       },
     });
     if (importCode !== 0 || importFailed) throw new Error('Godot could not import the preview.');
+    if (typeof diff === 'string') {
+      await writeFile(path.join(tree, '.euclid-preview-version'), fingerprint(diff));
+    }
     return tree;
   }
 
@@ -167,6 +171,62 @@ export function createPreviewRunner(root, { benchmarkWindowId = 0, base = path.j
         }
       }
       return { scope, captures };
+    },
+
+    async runTargeted(draft, { kind, target = '', filter = '' } = {}, signal = new AbortController().signal) {
+      const started = Date.now();
+      let output = '';
+      const onOutput = chunk => { output += chunk; };
+      if (kind === 'node') {
+        if (typeof target !== 'string' || !/^(?:gateway\/(?:terminal\/)?|scripts\/)[a-z0-9_.-]+\.test\.mjs$/.test(target) || target.includes('..')) {
+          throw new Error('Target must be a .test.mjs file under gateway/ or scripts/.');
+        }
+        if (typeof filter !== 'string' || filter.length > 120 || filter.includes('\0')) {
+          throw new Error('Filter must be a string of at most 120 characters without NUL bytes.');
+        }
+        const worktreeRoot = await realpath(draft.worktree);
+        const targetReal = await realpath(path.join(worktreeRoot, target)).catch(error => {
+          if (error.code === 'ENOENT') throw new Error(`Target test file does not exist: ${target}`);
+          throw error;
+        });
+        const rel = path.relative(worktreeRoot, targetReal);
+        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+          throw new Error('Target test file must stay inside the draft worktree.');
+        }
+        if (!(await lstat(targetReal)).isFile()) throw new Error('Target test path must be a file.');
+        const args = ['--test', ...(filter ? ['--test-name-pattern', filter] : []), target];
+        const code = await run(process.execPath, args, {
+          cwd: draft.worktree, env, timeout: 60000, phase: 'Targeted node test', signal, onOutput,
+        });
+        return { ok: code === 0, kind, target, filter, duration_ms: Date.now() - started, output: output.slice(-12000) };
+      }
+      if (kind === 'godot_core') {
+        if (typeof filter !== 'string' || filter.length > 80 || !/^[A-Za-z0-9_.-]*$/.test(filter)) {
+          throw new Error('Filter must be at most 80 characters matching [A-Za-z0-9_.-].');
+        }
+        const previewDir = path.join(draft.directory, 'preview');
+        const version = typeof draft.diff === 'string' ? fingerprint(draft.diff) : '';
+        let tree = '';
+        if (version && existsSync(path.join(previewDir, 'world/project.godot'))) {
+          const cached = await readFile(path.join(previewDir, '.euclid-preview-version'), 'utf8').catch(() => '');
+          if (cached === version) tree = previewDir;
+        }
+        if (!tree) tree = await prepare(draft, onOutput, signal);
+        let godotOut = '';
+        const args = [
+          '--headless', '--path', path.join(tree, 'world'),
+          '--script', 'res://scripts/diagnostics/core_tests.gd', '--quit-after', '1800',
+          ...(filter ? ['--', `--filter=${filter}`] : []),
+        ];
+        const code = await run(godot, args, {
+          cwd: tree, env: { ...env }, timeout: 90000, phase: 'Targeted Godot test', signal,
+          onOutput: chunk => { godotOut += chunk; output += chunk; },
+        });
+        const marker = filter ? 'CONSTRUCT_TARGETED_TESTS_OK' : 'CONSTRUCT_CORE_TESTS_OK';
+        const ok = code === 0 && !/^(?:SCRIPT ERROR|ERROR):/m.test(godotOut) && godotOut.includes(marker);
+        return { ok, kind, target: 'core_tests.gd', filter, duration_ms: Date.now() - started, output: output.slice(-12000) };
+      }
+      throw new Error(`Unknown targeted test kind: ${kind}`);
     },
 
     async benchmark(source, output, settings, onOutput, signal) {

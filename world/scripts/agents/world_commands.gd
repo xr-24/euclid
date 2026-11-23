@@ -7,6 +7,7 @@ const Commands = preload("res://scripts/workshop/command_registry.gd")
 const Atmosphere = preload("res://scripts/rendering/atmosphere.gd")
 const TerrainTools = preload("res://scripts/pieces/terrain_tools.gd")
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
+const RuntimeLog = preload("res://scripts/diagnostics/runtime_log.gd")
 
 var _world: Node3D
 
@@ -202,3 +203,9 @@ func _pointed_at(_plan: Dictionary) -> Dictionary:
 
 func _undo_agent(plan: Dictionary) -> Dictionary:
 	return await _world._undo_agent(str(plan.agent))
+
+func _read_runtime_log(plan: Dictionary) -> Dictionary:
+	var limit := clampi(int(plan.get("limit", 50)), 1, 200)
+	var level := str(plan.get("level", "all"))
+	var entries := RuntimeLog.tail(limit, level)
+	return {"ok": true, "entries": entries, "count": entries.size(), "message": "%d runtime log entries." % entries.size()}

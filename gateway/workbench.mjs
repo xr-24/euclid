@@ -3,7 +3,7 @@ import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { agentId, structuredAgent } from './agents/index.mjs';
-import { createStreamTracker } from './agent-activity.mjs';
+import { createStreamTracker, redact } from './agent-activity.mjs';
 import { createWorkbenchGit } from './workbench-git.mjs';
 import { livePlugin, pluginContext, pluginFiles, proposePlugin } from './workbench-plugin.mjs';
 import { shorelineAppearance } from './workbench-shoreline.mjs';
@@ -249,6 +249,28 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
 
   async function readPreviewLog(change) {
     return change && runner.previewLog ? runner.previewLog(change).catch(() => '') : '';
+  }
+
+  async function readLogs(change, limit = 8000) {
+    const cap = Math.min(Math.max(Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : 8000, 1), 12000);
+    const dataDir = path.dirname(storage);
+    const sanitize = text => {
+      const clean = redact(String(text ?? '').replace(/\b(Bearer\s+)[^\s"',;]{6,}/gi, '$1[redacted]'));
+      return clean.length > cap ? clean.slice(-cap) : clean;
+    };
+    const tailLog = async name => {
+      const text = await readFile(path.join(dataDir, name), 'utf8').catch(error => {
+        if (error.code === 'ENOENT') return '';
+        throw error;
+      });
+      return sanitize(text);
+    };
+    const [gateway_reload, gateway_reload_error, preview_log] = await Promise.all([
+      tailLog('gateway-reload.log'),
+      tailLog('gateway-reload-error.log'),
+      readPreviewLog(change).then(sanitize),
+    ]);
+    return { ok: true, gateway_reload, gateway_reload_error, preview_log };
   }
 
   function requireDraft(id, version) {
@@ -678,6 +700,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const id = typeof body?.draft === 'string' && body.draft ? body.draft : undefined;
       return { entries: await journal.read({ limit, draft: id }) };
     }
+    if (action === 'logs') return await readLogs(viewOf(view), body?.limit);
     // An empty id clears the focus, so the person can work on their own files beside agents' drafts.
     if (action === 'focus') {
       if (body.id !== '' && !drafts.has(body.id)) throw new Error('There is no draft with that id.');
@@ -721,6 +744,18 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     }
     if (operation && !(action === 'discard' && operation === 'checking')) throw new Error('The workbench is busy.');
     if (action === 'check') { runChecks(body.id, body.version); return state(); }
+    if (action === 'targeted') {
+      if (!runner.runTargeted) throw new Error('Targeted tests are unavailable.');
+      const change = requireDraft(body.id, body.version);
+      if (ownerKey(change.owner) !== ownerKey(view)) throw new Error('A connected agent can only test its own draft.');
+      operation = 'testing';
+      try {
+        await verifyReview(change);
+        return await runner.runTargeted(change, { kind: body.kind, target: body.target, filter: body.filter }, signal);
+      } finally {
+        if (operation === 'testing') operation = '';
+      }
+    }
     operation = action;
     let revision;
     let warning = '';

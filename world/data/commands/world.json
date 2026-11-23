@@ -556,6 +556,25 @@
       "undo": "none",
       "scope": "session",
       "mutates_world": true
+    },
+    {
+      "name": "read_runtime_log",
+      "description": "Read recent Godot runtime warnings and errors from the running world's bounded log buffer.",
+      "service": "world",
+      "handler": "_read_runtime_log",
+      "effect": "read",
+      "surfaces": [
+        "f2",
+        "mcp"
+      ],
+      "fields": {
+        "limit": "log_limit",
+        "level": "log_level"
+      },
+      "required": [],
+      "undo": "none",
+      "scope": "session",
+      "mutates_world": false
     }
   ]
 }

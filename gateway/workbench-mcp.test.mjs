@@ -85,7 +85,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'search_source', 'draft_status', 'list_extensions', 'task_history', 'submit_draft', 'patch_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'search_source', 'draft_status', 'list_extensions', 'task_history', 'read_gateway_log', 'submit_draft', 'patch_draft', 'run_checks', 'run_targeted_test', 'rebase_draft', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -354,4 +354,91 @@ test('search_source and patch_draft perform surgical searches and edits', async 
   assert.match((await tool('read_source', { path: created })).content, /NEW_PART := true/);
   assert.equal((await tool('read_source', { path: obsolete })).isError, true);
   assert.equal((await tool('discard_draft', { version: second.draft.version })).isError, false);
+});
+
+test('run_targeted_test and read_gateway_log work over MCP without bypassing run_checks', async t => {
+  const [{ createWorkbench }, { createDevelopmentBridge }, { createPreviewRunner }] = await Promise.all([
+    import('./workbench.mjs'),
+    import('./workbench-mcp.mjs'),
+    import('./workbench-runner.mjs'),
+  ]);
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-targeted-mcp-'));
+  t.after(() => rm(area, { recursive: true, force: true }));
+  const root = path.join(area, 'project');
+  const dataDir = path.join(area, 'data');
+  await mkdir(path.join(root, 'gateway'), { recursive: true });
+  await mkdir(path.join(root, 'world'), { recursive: true });
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(path.join(root, 'gateway/unit.test.mjs'), [
+    "import assert from 'node:assert/strict';",
+    "import test from 'node:test';",
+    "test('unit ok', () => { assert.equal(1, 1); });",
+    '',
+  ].join('\n'));
+  const git = (...args) => execFileSync('git', args, { cwd: root, windowsHide: true, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  for (const [key, value] of [['core.autocrlf', 'false'], ['user.name', 'Fixture'], ['user.email', 'fixture@example.invalid']]) git('config', key, value);
+  git('add', '.');
+  git('commit', '-qm', 'Fixture');
+
+  const runner = createPreviewRunner(root, { base: path.join(dataDir, 'preview-base') });
+  const workbench = createWorkbench(root, path.join(dataDir, 'workbench'), { runner });
+  const bridge = createDevelopmentBridge(workbench);
+  const rpc = (method, params, agent = 'claude', policy = {}) =>
+    bridge.rpc(agent, { jsonrpc: '2.0', id: 1, method, params }, new AbortController().signal, policy);
+  const tool = async (name, args = {}, agent = 'claude', policy = {}) => {
+    const answer = await rpc('tools/call', { name, arguments: args }, agent, policy);
+    assert.ok(answer.result, JSON.stringify(answer.error));
+    return { ...JSON.parse(answer.result.content[0].text), isError: answer.result.isError };
+  };
+
+  // policy.checks === false hides run_targeted_test as well as run_checks.
+  const restricted = (await rpc('tools/list', {}, 'cloud', { checks: false })).result.tools.map(item => item.name);
+  assert.equal(restricted.includes('run_checks'), false);
+  assert.equal(restricted.includes('run_targeted_test'), false);
+  assert.ok(restricted.includes('read_gateway_log'));
+
+  // Create a draft changing a gateway test file.
+  const created = await tool('submit_draft', {
+    request: 'Update unit test',
+    files: [{ path: 'gateway/unit.test.mjs', content: [
+      "import assert from 'node:assert/strict';",
+      "import test from 'node:test';",
+      "test('unit ok', () => { assert.equal(2, 2); });",
+      '',
+    ].join('\n') }],
+  });
+  assert.equal(created.isError, false, created.message);
+  const draft = created.draft;
+
+  // Invalid enum and invalid paths are rejected cleanly.
+  assert.equal((await rpc('tools/call', { name: 'run_targeted_test', arguments: { version: draft.version, kind: 'python' } })).error.code, -32602);
+  for (const bad of ['../x.test.mjs', 'gateway/server.mjs']) {
+    const rejected = await tool('run_targeted_test', { version: draft.version, kind: 'node', target: bad });
+    assert.equal(rejected.isError, true, bad);
+  }
+
+  // Targeted test runs in the draft worktree, succeeds, and does NOT mark check_status as passed.
+  const targeted = await tool('run_targeted_test', { version: draft.version, kind: 'node', target: 'gateway/unit.test.mjs' });
+  assert.equal(targeted.isError, false, targeted.message);
+  assert.equal(targeted.ok, true);
+  assert.match(targeted.output, /unit ok/);
+  const status = (await tool('draft_status')).draft;
+  assert.notEqual(status.check_status, 'passed');
+  assert.equal(status.status, 'staged');
+  await assert.rejects(workbench('apply', { id: draft.id, version: draft.version, message: 'Should fail' }, new AbortController().signal),
+    /pass the project checks before committing/);
+
+  // read_gateway_log redacts token-like strings and bearer tokens.
+  await writeFile(path.join(dataDir, 'gateway-reload.log'), 'Gateway started cleanly\n');
+  await writeFile(path.join(dataDir, 'gateway-reload-error.log'), 'Failed with key sk-1234567890abcdef1234 and header Bearer secret123\n');
+  const logs = await tool('read_gateway_log', { limit: 2000 });
+  assert.equal(logs.isError, false, logs.message);
+  assert.equal(logs.ok, true);
+  assert.match(logs.gateway_reload, /Gateway started cleanly/);
+  assert.doesNotMatch(logs.gateway_reload_error, /sk-1234567890abcdef1234/);
+  assert.doesNotMatch(logs.gateway_reload_error, /secret123/);
+  assert.match(logs.gateway_reload_error, /\[redacted\]/);
+
+  await tool('discard_draft', { version: draft.version });
 });

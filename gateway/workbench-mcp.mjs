@@ -36,6 +36,10 @@ export const developmentTools = [
       'commits, discards, reverts and live loads. Each entry names the draft, its owner and files. Pass draft to see one draft’s history.',
     inputSchema: { type: 'object', properties: { draft: { type: 'string', pattern: '^[a-f0-9-]{36}$', description: 'A draft id from draft_status or an earlier entry.' } },
       additionalProperties: false }, ...read },
+  { name: 'read_gateway_log', description: 'Read the redacted tail of the gateway reload logs and your draft’s preview log.',
+    inputSchema: { type: 'object', properties: {
+      limit: { type: 'integer', minimum: 200, maximum: 12000, description: 'Maximum characters from the end of each log (default 8000).' },
+    }, required: [], additionalProperties: false }, ...read },
   { name: 'submit_draft', description: 'Create your source draft, or revise it by sending changes on top of its current version. ' +
       'Send complete file contents. Euclid validates the paths and builds the reviewed Git diff. Each agent has at most one draft, ' +
       'and other agents may hold drafts at the same time; draft_status lists theirs under other_drafts.',
@@ -62,6 +66,13 @@ export const developmentTools = [
     }, required: ['request'], additionalProperties: false } },
   { name: 'run_checks', description: 'Start the isolated project checks for your draft. They take a few minutes; poll draft_status for the result.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
+  { name: 'run_targeted_test', description: 'Run a single fast Node test file or Godot core_tests.gd against your draft without waiting for full checks. Does not mark checks as passed.',
+    inputSchema: { type: 'object', properties: {
+      version,
+      kind: { type: 'string', enum: ['node', 'godot_core'], description: 'Test runner to use: node or godot_core.' },
+      target: { type: 'string', maxLength: 160, description: 'For kind="node", a .test.mjs file under gateway/ or scripts/.' },
+      filter: { type: 'string', maxLength: 120, description: 'Optional test name pattern (node) or test filter (godot_core).' },
+    }, required: ['version', 'kind'], additionalProperties: false } },
   { name: 'rebase_draft', description: 'Replay your draft onto the current tip of the main branch after it moved. ' +
       'The draft keeps its id and needs fresh checks. A conflict names the files and leaves the draft unchanged.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
@@ -75,6 +86,7 @@ const clip = (value, limit) => typeof value !== 'string' || value.length <= limi
 const tail = (value, limit) => typeof value === 'string' && value.length > limit ? value.slice(-limit) : value ?? '';
 
 function validValue(rule, value) {
+  if (rule.enum && !rule.enum.includes(value)) return false;
   if (rule.type === 'object') {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
     const { properties = {}, required = [], additionalProperties } = rule;
@@ -190,11 +202,16 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
       }
       case 'list_extensions': return { ok: true, ...await workbench('extensions', {}, signal) };
       case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
+      case 'read_gateway_log': return await workbench('logs', { owner: agent, limit: args.limit }, signal);
       case 'submit_draft': return submit(agent, args, signal, 'submit');
       case 'patch_draft': return submit(agent, args, signal, 'patch');
       case 'run_checks': {
         const draft = await own(agent, args.version);
         return report(await workbench('check', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
+      }
+      case 'run_targeted_test': {
+        const draft = await own(agent, args.version);
+        return await workbench('targeted', { id: draft.id, version: draft.version, owner: agent, kind: args.kind, target: args.target, filter: args.filter }, signal);
       }
       case 'discard_draft': {
         const draft = await own(agent, args.version);
@@ -203,9 +220,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
     }
   }
 
-  // policy.checks === false hides run_checks, for agents that must not run code on this machine.
+  // policy.checks === false hides run_checks and run_targeted_test, for agents that must not run code on this machine.
   async function rpc(agent, message, signal, policy = {}) {
-    const offered = tools.filter(tool => (policy.checks !== false || tool.name !== 'run_checks') &&
+    const offered = tools.filter(tool => (policy.checks !== false || !['run_checks', 'run_targeted_test'].includes(tool.name)) &&
       (policy.tools?.(tool.name) ?? true));
     const id = message?.id ?? null;
     const reply = result => ({ jsonrpc: '2.0', id, result });

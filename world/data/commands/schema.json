@@ -600,6 +600,22 @@
     "reset_atmosphere": {
       "type": "boolean",
       "description": "Clear this environment's atmosphere edits before applying any others"
+    },
+    "log_limit": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 200,
+      "description": "Maximum log entries to return (default 50)"
+    },
+    "log_level": {
+      "type": "string",
+      "enum": [
+        "all",
+        "error",
+        "warning",
+        "info"
+      ],
+      "description": "Filter log level"
     }
   },
   "authored_properties": [

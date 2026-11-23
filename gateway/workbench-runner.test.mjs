@@ -115,3 +115,52 @@ test('a documentation draft runs nothing', async t => {
   assert.deepEqual(await setup.calls(), []);
   await assert.rejects(stat(path.join(setup.area, 'draft/preview')), { code: 'ENOENT' });
 });
+
+test('runTargeted runs a node test file inside the draft worktree and rejects invalid paths', async t => {
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-targeted-'));
+  t.after(() => rm(area, { recursive: true, force: true }));
+  const root = path.join(area, 'project');
+  const worktree = path.join(area, 'draft/worktree');
+  await mkdir(path.join(root, 'world'), { recursive: true });
+  await mkdir(path.join(worktree, 'gateway/terminal'), { recursive: true });
+  await writeFile(path.join(worktree, 'gateway/sample.test.mjs'), [
+    "import assert from 'node:assert/strict';",
+    "import test from 'node:test';",
+    "test('alpha passes', () => { assert.equal(1 + 1, 2); });",
+    "test('beta passes', () => { assert.equal(2 + 2, 4); });",
+    '',
+  ].join('\n'));
+  await writeFile(path.join(worktree, 'gateway/terminal/failing.test.mjs'), [
+    "import assert from 'node:assert/strict';",
+    "import test from 'node:test';",
+    "test('always fails', () => { assert.equal(1, 2); });",
+    '',
+  ].join('\n'));
+  await writeFile(path.join(worktree, 'gateway/server.mjs'), 'export {};\n');
+
+  const runner = createPreviewRunner(root, { base: path.join(area, 'storage/preview-base') });
+  const draft = { directory: path.join(area, 'draft'), worktree, id: 't1', names: ['gateway/sample.test.mjs'] };
+
+  const passed = await runner.runTargeted(draft, { kind: 'node', target: 'gateway/sample.test.mjs' });
+  assert.equal(passed.ok, true);
+  assert.equal(passed.kind, 'node');
+  assert.equal(passed.target, 'gateway/sample.test.mjs');
+  assert.match(passed.output, /alpha passes/);
+  assert.match(passed.output, /beta passes/);
+
+  const filtered = await runner.runTargeted(draft, { kind: 'node', target: 'gateway/sample.test.mjs', filter: 'alpha' });
+  assert.equal(filtered.ok, true);
+  assert.equal(filtered.filter, 'alpha');
+  assert.match(filtered.output, /alpha passes/);
+  assert.doesNotMatch(filtered.output, /not ok/);
+
+  const failed = await runner.runTargeted(draft, { kind: 'node', target: 'gateway/terminal/failing.test.mjs' });
+  assert.equal(failed.ok, false);
+  assert.match(failed.output, /always fails/);
+
+  for (const bad of ['../x.test.mjs', 'gateway/server.mjs', 'world/test.test.mjs', 'gateway/missing.test.mjs']) {
+    await assert.rejects(runner.runTargeted(draft, { kind: 'node', target: bad }));
+  }
+  await assert.rejects(runner.runTargeted(draft, { kind: 'unknown' }), /Unknown targeted test kind/);
+  await assert.rejects(runner.runTargeted(draft, { kind: 'godot_core', filter: 'bad filter!' }), /Filter/);
+});

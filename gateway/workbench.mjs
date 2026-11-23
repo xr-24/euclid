@@ -14,8 +14,8 @@ import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
 import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
 import { hotFiles, readHotFiles } from './workbench-hot.mjs';
-import { fingerprint, inspectCheckRisk, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
-import { sourceSubmission } from './workbench-submission.mjs';
+import { fingerprint, inspectCheckRisk, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource, searchAgentSources } from './workbench-source.mjs';
+import { patchSubmission, sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
 import { authorSource } from './workbench-source-agent.mjs';
 
@@ -691,6 +691,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       const own = viewOf(view);
       return { ...await readAgentSource(own?.worktree ?? root, body.name), draft: own?.id ?? '' };
     }
+    if (action === 'search') return await searchAgentSources(viewOf(view)?.worktree ?? root, body);
     if (action === 'propose') return ask(body, signal);
     // The world reports what happened when it loaded a draft live, so the draft's agent can see it.
     if (action === 'livereport') return liveReport(body);
@@ -731,8 +732,9 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         case 'benchmark': operation = 'diagnosing'; await startBenchmark(body); break;
         case 'source': operation = 'authoring'; await startSource(body); break;
         case 'revise': operation = 'revising'; await reviseSource(body); break;
-        case 'submit': {
-          const submitted = sourceSubmission(body);
+        case 'submit':
+        case 'patch': {
+          const submitted = (action === 'patch' ? patchSubmission : sourceSubmission)(body);
           // A connected agent revises only its own draft. Without an id it starts a new one.
           if (body.id !== undefined && ownerKey(requireDraft(body.id, body.version).owner) !== ownerKey(view)) {
             throw new Error('A connected agent can only revise its own draft.');

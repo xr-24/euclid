@@ -206,15 +206,35 @@ const toolTitle = (name, args = {}) => {
   return `${String(name).replace(/^mcp__[^_]+__/, '').replace(/_/g, ' ')}${detail ? ` · ${sentence(detail, 80)}` : ''}`;
 };
 
+function applyEditsInMemory(before, edits) {
+  let current = String(before ?? '');
+  for (const edit of edits) {
+    const crlf = current.includes('\r\n');
+    const haystack = current.replace(/\r\n/g, '\n');
+    const oldNorm = String(edit.old_text ?? '').replace(/\r\n/g, '\n');
+    const newNorm = String(edit.new_text ?? '').replace(/\r\n/g, '\n');
+    if (!oldNorm) continue;
+    const replaced = edit.replace_all ? haystack.split(oldNorm).join(newNorm) : haystack.replace(oldNorm, () => newNorm);
+    current = crlf ? replaced.replace(/\n/g, '\r\n') : replaced;
+  }
+  return current;
+}
+
 // Calls an agent makes through Euclid's MCP tools. `before` returns the context `after` needs,
 // such as a file's previous text so a submitted draft can be shown as a diff.
 export function createToolObserver(feed, { readDraftFile = async () => '' } = {}) {
   return {
     async before(agent, name, args) {
-      if (name !== 'submit_draft' || !Array.isArray(args?.files)) return {};
+      const entries = name === 'submit_draft' ? args?.files
+        : name === 'patch_draft' ? [...(args?.edits ?? []), ...(args?.create ?? [])]
+        : null;
+      if (!Array.isArray(entries) || !entries.length) return {};
       const previous = {};
-      for (const file of args.files.slice(0, 24)) {
-        if (typeof file?.path === 'string' && !isHiddenPath(file.path)) previous[file.path] = await readDraftFile(agent, file.path).catch(() => '');
+      for (const entry of entries.slice(0, 48)) {
+        const target = entry?.path;
+        if (typeof target === 'string' && !Object.hasOwn(previous, target) && !isHiddenPath(target)) {
+          previous[target] = await readDraftFile(agent, target).catch(() => '');
+        }
       }
       return { previous };
     },
@@ -227,6 +247,9 @@ export function createToolObserver(feed, { readDraftFile = async () => '' } = {}
         case 'list_source':
           return feed.record(agent, { kind: 'search', source: 'mcp', title: 'Listing source files',
             results: (result.files ?? []).slice(0, 12).map(file => typeof file === 'string' ? file : file?.path ?? ''), ok });
+        case 'search_source':
+          return feed.record(agent, { kind: 'search', source: 'mcp', title: `Searching for ${sentence(args.query, 60)}`,
+            results: (result.matches ?? []).slice(0, 12).map(match => `${match.path}:${match.line} ${match.text}`), ok });
         case 'submit_draft': {
           const events = [];
           for (const file of (args.files ?? []).slice(0, 8)) {
@@ -236,6 +259,29 @@ export function createToolObserver(feed, { readDraftFile = async () => '' } = {}
               title: `${before ? 'Editing' : 'Writing'} ${file.path}`, hunks, ok }));
           }
           for (const gone of (args.delete ?? []).slice(0, 8)) events.push(feed.record(agent, { kind: 'delete', source: 'mcp', path: gone, title: `Deleting ${gone}`, ok }));
+          return events;
+        }
+        case 'patch_draft': {
+          const events = [];
+          const byPath = new Map();
+          for (const edit of args.edits ?? []) {
+            if (typeof edit?.path !== 'string') continue;
+            if (!byPath.has(edit.path)) byPath.set(edit.path, []);
+            byPath.get(edit.path).push(edit);
+          }
+          for (const [target, edits] of [...byPath.entries()].slice(0, 8)) {
+            const before = context.previous?.[target] ?? '';
+            const hunks = diffLines(before, applyEditsInMemory(before, edits));
+            events.push(feed.record(agent, { kind: 'edit', source: 'mcp', path: target, title: `Editing ${target}`, hunks, ok }));
+          }
+          for (const file of (args.create ?? []).slice(0, 8)) {
+            const before = context.previous?.[file.path] ?? '';
+            const hunks = diffLines(before, file.content ?? '');
+            events.push(feed.record(agent, { kind: 'write', source: 'mcp', path: file.path, title: `Writing ${file.path}`, hunks, ok }));
+          }
+          for (const gone of (args.delete ?? []).slice(0, 8)) {
+            events.push(feed.record(agent, { kind: 'delete', source: 'mcp', path: gone, title: `Deleting ${gone}`, ok }));
+          }
           return events;
         }
         case 'run_checks':

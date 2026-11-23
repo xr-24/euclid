@@ -3,7 +3,7 @@ import { agentPrimer } from './agent-primer.mjs';
 import { taskTools } from './agent-tasks.mjs';
 
 const text = (description, maxLength) => ({ type: 'string', description, minLength: 1, maxLength });
-const version = { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'The draft version from draft_status or submit_draft.' };
+const version = { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'The draft version from draft_status, submit_draft or patch_draft.' };
 const read = { annotations: { readOnlyHint: true } };
 const sourcePath = { type: 'string', maxLength: 200, description: 'A path from list_source, such as world/scripts/world.gd.' };
 
@@ -15,6 +15,13 @@ export const developmentTools = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, ...read },
   { name: 'read_source', description: 'Read one file. While a draft is active this returns the draft’s version of the file.',
     inputSchema: { type: 'object', properties: { path: sourcePath }, required: ['path'], additionalProperties: false }, ...read },
+  { name: 'search_source', description: 'Search source files for text or a regex. While a draft is active this searches the draft’s files.',
+    inputSchema: { type: 'object', properties: {
+      query: text('Literal text or regular expression to search for.', 200),
+      path_prefix: { type: 'string', maxLength: 160, description: 'Optional path prefix filter, such as world/scripts/.' },
+      regex: { type: 'boolean', description: 'Treat query as a case-insensitive regular expression.' },
+      max_results: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum matching lines to return (default 60).' },
+    }, required: ['query'], additionalProperties: false }, ...read },
   { name: 'draft_status', description: 'Report your source draft: its version, files, diff, check status and output, ' +
       'and whether the main branch has moved past its base. other_drafts lists the drafts other agents hold, their files and ' +
       'whether each is live in the world; avoid editing those files. ' +
@@ -40,6 +47,19 @@ export const developmentTools = [
       delete: { type: 'array', maxItems: 24, items: sourcePath },
       version: { ...version, description: 'Required when revising: the current version of your draft.' },
     }, required: ['request'], additionalProperties: false } },
+  { name: 'patch_draft', description: 'Create your source draft, or revise it with targeted text edits, new files and deletions. ' +
+      'Prefer patch_draft over submit_draft when modifying existing files.',
+    inputSchema: { type: 'object', properties: {
+      request: text('What this change is for, in one or two sentences.', 600),
+      summary: text('What changed, for the reviewer.', 320),
+      edits: { type: 'array', maxItems: 48, items: { type: 'object', properties: {
+        path: sourcePath, old_text: { type: 'string', minLength: 1 }, new_text: { type: 'string' }, replace_all: { type: 'boolean' },
+      }, required: ['path', 'old_text', 'new_text'], additionalProperties: false } },
+      create: { type: 'array', maxItems: 24, items: { type: 'object', properties: { path: sourcePath, content: { type: 'string' } },
+        required: ['path', 'content'], additionalProperties: false } },
+      delete: { type: 'array', maxItems: 24, items: sourcePath },
+      version: { ...version, description: 'Required when revising: the current version of your draft.' },
+    }, required: ['request'], additionalProperties: false } },
   { name: 'run_checks', description: 'Start the isolated project checks for your draft. They take a few minutes; poll draft_status for the result.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
   { name: 'rebase_draft', description: 'Replay your draft onto the current tip of the main branch after it moved. ' +
@@ -54,17 +74,28 @@ const clip = (value, limit) => typeof value !== 'string' || value.length <= limi
   : `${value.slice(0, limit)}\n[truncated: ${value.length - limit} more characters]`;
 const tail = (value, limit) => typeof value === 'string' && value.length > limit ? value.slice(-limit) : value ?? '';
 
-function validArguments(tool, args) {
-  if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
-  const { properties, required = [] } = tool.inputSchema;
-  if (Object.keys(args).some(key => !Object.hasOwn(properties, key)) || required.some(key => !Object.hasOwn(args, key))) return false;
-  return Object.entries(args).every(([key, value]) => {
-    const rule = properties[key];
-    if (rule.type === 'array') return Array.isArray(value) && value.length <= rule.maxItems;
-    return typeof value === 'string' && value.length >= (rule.minLength ?? 0) && value.length <= (rule.maxLength ?? Infinity) &&
-      (!rule.pattern || new RegExp(rule.pattern).test(value));
-  });
+function validValue(rule, value) {
+  if (rule.type === 'object') {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    const { properties = {}, required = [], additionalProperties } = rule;
+    if (additionalProperties === false && Object.keys(value).some(key => !Object.hasOwn(properties, key))) return false;
+    if (required.some(key => !Object.hasOwn(value, key))) return false;
+    return Object.entries(value).every(([key, item]) => !Object.hasOwn(properties, key) || validValue(properties[key], item));
+  }
+  if (rule.type === 'array') {
+    if (!Array.isArray(value) || value.length < (rule.minItems ?? 0) || value.length > (rule.maxItems ?? Infinity)) return false;
+    return !rule.items || value.every(item => validValue(rule.items, item));
+  }
+  if (rule.type === 'boolean') return typeof value === 'boolean';
+  if (rule.type === 'integer' || rule.type === 'number') {
+    const ok = rule.type === 'integer' ? Number.isInteger(value) : (typeof value === 'number' && Number.isFinite(value));
+    return ok && value >= (rule.minimum ?? -Infinity) && value <= (rule.maximum ?? Infinity);
+  }
+  return typeof value === 'string' && value.length >= (rule.minLength ?? 0) && value.length <= (rule.maxLength ?? Infinity) &&
+    (!rule.pattern || new RegExp(rule.pattern).test(value));
 }
+
+const validArguments = (tool, args) => validValue(tool.inputSchema, args);
 
 // observer, when given, sees each tool call before and after it runs (agent-activity.mjs createToolObserver).
 export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extraTools = [], callExtra, observer } = {}) {
@@ -102,7 +133,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
     return draft;
   }
 
-  async function submit(agent, args, signal) {
+  async function submit(agent, args, signal, action = 'submit') {
     const { draft, drafts = [] } = await workbench('state', { owner: agent }, live());
     let identity = {};
     if (draft) {
@@ -113,7 +144,10 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
       const other = drafts.find(item => item.version === args.version);
       throw new Error(other ? belongsTo(other.owner) : 'There is no active draft to revise. Omit version to create one.');
     }
-    await workbench('submit', { ...identity, owner: agent, prompt: args.request, summary: args.summary, files: args.files ?? [], delete: args.delete ?? [] }, signal);
+    const payload = action === 'patch'
+      ? { edits: args.edits ?? [], create: args.create ?? [], delete: args.delete ?? [] }
+      : { files: args.files ?? [], delete: args.delete ?? [] };
+    await workbench(action, { ...identity, owner: agent, prompt: args.request, summary: args.summary, ...payload }, signal);
     const deadline = Date.now() + settle;
     let state = await workbench('state', { owner: agent }, live());
     while (['authoring', 'revising'].includes(state.draft?.status) && Date.now() < deadline) {
@@ -139,6 +173,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
         const { text: content, draft } = await workbench('file', { name: args.path, owner: agent }, signal);
         return { ok: true, path: args.path, draft, content };
       }
+      case 'search_source': return { ok: true, ...await workbench('search', {
+        owner: agent, query: args.query, pathPrefix: args.path_prefix, regex: args.regex === true, maxResults: args.max_results,
+      }, signal) };
       case 'draft_status': {
         const result = report(await workbench('state', { owner: agent }, signal), agent);
         if (result.draft) {
@@ -153,7 +190,8 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
       }
       case 'list_extensions': return { ok: true, ...await workbench('extensions', {}, signal) };
       case 'task_history': return { ok: true, ...await workbench('history', { limit: 50, draft: args.draft }, signal) };
-      case 'submit_draft': return submit(agent, args, signal);
+      case 'submit_draft': return submit(agent, args, signal, 'submit');
+      case 'patch_draft': return submit(agent, args, signal, 'patch');
       case 'run_checks': {
         const draft = await own(agent, args.version);
         return report(await workbench('check', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
@@ -179,7 +217,7 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
         return reply({
           protocolVersion: '2025-03-26', capabilities: { tools: {} },
           serverInfo: { name: 'euclid-workbench', version: '0.1.0' },
-          instructions: 'Read Euclid source with list_source and read_source. Propose a change with submit_draft, start its checks with ' +
+          instructions: 'Read Euclid source with list_source, read_source and search_source. Propose a change with patch_draft or submit_draft, start its checks with ' +
             'run_checks, and read the result with draft_status. If the main branch moved, rebase_draft replays your draft onto it. ' +
             'task_history shows what happened to earlier drafts. ' +
             'A person reviews and commits the draft in Euclid’s Workbench.\n\n' + agentPrimer(),

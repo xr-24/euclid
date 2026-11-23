@@ -92,6 +92,45 @@ export async function readAgentSource(root, name) {
   return { text, hash: fingerprint(text) };
 }
 
+const nestedQuantifier = /\([^)]*[+*][^)]*\)[+*{]/;
+
+export async function searchAgentSources(root, { query, pathPrefix = '', regex = false, maxResults = 60 } = {}) {
+  if (typeof query !== 'string' || query.length === 0 || query.length > 200) {
+    throw new Error('query must be a string between 1 and 200 characters.');
+  }
+  const limit = Number.isInteger(maxResults) ? Math.min(100, Math.max(1, maxResults)) : 60;
+  const prefix = typeof pathPrefix === 'string' ? pathPrefix.replace(/\\/g, '/').replace(/^\.\//, '') : '';
+  let matcher = null;
+  if (regex === true) {
+    if (nestedQuantifier.test(query)) throw new Error('Regex pattern cannot contain nested quantifiers.');
+    try { matcher = new RegExp(query, 'i'); }
+    catch (error) { throw new Error(`Invalid regex: ${error.message}`); }
+  }
+  const needle = matcher ? '' : query.toLowerCase();
+  const files = (await listAgentSources(root)).filter(name => prefix ? name.startsWith(prefix) : true);
+  const matches = [];
+  let truncated = false;
+  let searched = 0;
+  outer: for (const name of files) {
+    let text;
+    try { ({ text } = await readAgentSource(root, name)); }
+    catch { continue; }
+    searched++;
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const hit = matcher ? matcher.test(line) : line.toLowerCase().includes(needle);
+      if (!hit) continue;
+      if (matches.length >= limit) {
+        truncated = true;
+        break outer;
+      }
+      matches.push({ path: name, line: i + 1, text: line.slice(0, 200) });
+    }
+  }
+  return { matches, truncated, searched };
+}
+
 const removedAssertion = /\b(?:test|_check)\s*\(|\bassert\.[a-z]+|\bMinimumFps\b|\bMaximumP95Ms\b/;
 
 export function inspectCheckRisk(names = [], diff = '') {

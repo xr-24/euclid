@@ -48,15 +48,24 @@ test('MCP tool calls become read, edit and tool events', async () => {
   const feed = createActivityFeed();
   const observer = createToolObserver(feed, { readDraftFile: async () => 'a\nb\nc' });
   observer.after('scout', 'read_source', { path: 'world/a.gd' }, { ok: true, content: 'extends Node\nfunc go():\n\tpass' });
+  observer.after('scout', 'search_source', { query: 'func go' }, { ok: true, matches: [{ path: 'world/a.gd', line: 2, text: 'func go():' }] });
   const context = await observer.before('scout', 'submit_draft', { files: [{ path: 'world/a.gd', content: 'a\nB\nc' }] });
   observer.after('scout', 'submit_draft', { request: 'x', files: [{ path: 'world/a.gd', content: 'a\nB\nc' }] }, { ok: true }, context);
+  const patchContext = await observer.before('scout', 'patch_draft', { edits: [{ path: 'world/a.gd', old_text: 'b', new_text: '$$&' }], create: [{ path: 'world/new.gd', content: 'x\n' }] });
+  observer.after('scout', 'patch_draft', { request: 'y', edits: [{ path: 'world/a.gd', old_text: 'b', new_text: '$$&' }], create: [{ path: 'world/new.gd', content: 'x\n' }], delete: ['world/old.gd'] }, { ok: true }, patchContext);
   observer.after('scout', 'add_piece', { target: 'house' }, { ok: true });
-  const [read, edit, tool] = feed.since(0).events;
+  const [read, search, edit, patched, created, deleted, tool] = feed.since(0).events;
   assert.equal(read.kind, 'read');
   assert.deepEqual(read.lines.map(line => line.n), [1, 2, 3]);
+  assert.equal(search.kind, 'search');
+  assert.deepEqual(search.results, ['world/a.gd:2 func go():']);
   assert.equal(edit.kind, 'edit');
   assert.equal(edit.added, 1);
   assert.equal(edit.removed, 1);
+  assert.equal(patched.kind, 'edit');
+  assert.deepEqual(patched.hunks[0].lines.filter(line => line.t !== ' ').map(line => line.t + line.text), ['-b', '+$$&']);
+  assert.equal(created.kind, 'write');
+  assert.equal(deleted.kind, 'delete');
   assert.equal(tool.title, 'add piece · house');
 });
 

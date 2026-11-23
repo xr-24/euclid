@@ -85,7 +85,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'draft_status', 'list_extensions', 'task_history', 'submit_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'search_source', 'draft_status', 'list_extensions', 'task_history', 'submit_draft', 'patch_draft', 'run_checks', 'rebase_draft', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -261,4 +261,97 @@ test('a submitted draft keeps its owner across a gateway restart', async t => {
   const revised = await staged(first);
   assert.deepEqual([revised.owner, revised.id], ['grok', draft.id]);
   assert.notEqual(revised.version, draft.version);
+});
+
+test('search_source and patch_draft perform surgical searches and edits', async t => {
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-patch-mcp-test-'));
+  const root = path.join(area, 'project');
+  const script = 'world/scripts/example.gd';
+  const helper = 'world/scripts/helper.gd';
+  const created = 'world/scripts/new_part.gd';
+  const obsolete = 'world/scripts/old.gd';
+  await mkdir(path.join(root, 'world/scripts'), { recursive: true });
+  await mkdir(path.join(root, 'docs'));
+  await writeFile(path.join(root, script), 'extends Node\nconst READY := false\nvar count := 1\nvar limit := 1\n');
+  await writeFile(path.join(root, helper), 'extends Node\nfunc helper():\n\treturn 42\n');
+  await writeFile(path.join(root, obsolete), 'extends Node\n');
+  await writeFile(path.join(root, 'docs/architecture.md'), 'Architecture note READY\n');
+  const git = (...args) => execFileSync('git', args, { cwd: root, windowsHide: true, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.name', 'Euclid Test');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  git('add', '.');
+  git('commit', '-qm', 'Fixture');
+  const capability = 'a'.repeat(64);
+  const { server } = await createGateway({ dataDir: path.join(area, 'data'), token: 'patch-test-secret',
+    developmentToken: capability, workbenchRoot: root, workbenchOptions: { runner: { async check() {}, playing: () => false, async stop() {} } } });
+  t.after(async () => {
+    server.closeAllConnections();
+    if (server.listening) await new Promise(resolve => server.close(resolve));
+    await rm(area, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Authorization: 'Bearer patch-test-secret', 'Content-Type': 'application/json' };
+  const rpc = async (method, params, agent = 'claude') =>
+    (await fetch(`${origin}/mcp/dev/${capability}/${agent}`, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })).json();
+  const tool = async (name, args = {}, agent) => {
+    const answer = await rpc('tools/call', { name, arguments: args }, agent);
+    assert.ok(answer.result, JSON.stringify(answer.error));
+    return { ...JSON.parse(answer.result.content[0].text), isError: answer.result.isError };
+  };
+
+  // Schema checks for new typed arguments.
+  assert.equal((await rpc('tools/call', { name: 'search_source', arguments: { query: 'READY', max_results: 0 } })).error.code, -32602);
+  assert.equal((await rpc('tools/call', { name: 'search_source', arguments: { query: 'READY', regex: 'yes' } })).error.code, -32602);
+  assert.equal((await rpc('tools/call', { name: 'patch_draft', arguments: { request: 'Bad', edits: [{ path: script, old_text: '', new_text: 'x' }] } })).error.code, -32602);
+
+  // Literal, path_prefix, regex, and invalid regex handling.
+  const literal = await tool('search_source', { query: 'ready' });
+  assert.equal(literal.isError, false);
+  assert.deepEqual(literal.matches.map(m => [m.path, m.line]), [['docs/architecture.md', 1], [script, 2]]);
+  const scoped = await tool('search_source', { query: 'ready', path_prefix: 'world/scripts/' });
+  assert.deepEqual(scoped.matches.map(m => m.path), [script]);
+  const rx = await tool('search_source', { query: 'return\\s+\\d+', regex: true });
+  assert.deepEqual(rx.matches, [{ path: helper, line: 3, text: '\treturn 42' }]);
+  assert.equal((await tool('search_source', { query: '(a+)+', regex: true })).isError, true);
+
+  // Reject kernel paths, missing old_text, and ambiguous old_text without replace_all.
+  assert.match((await tool('patch_draft', { request: 'Kernel', edits: [{ path: 'gateway/workbench-git.mjs', old_text: 'a', new_text: 'b' }] })).message, /cannot change gateway\/workbench-git\.mjs/);
+  assert.match((await tool('patch_draft', { request: 'Missing', edits: [{ path: script, old_text: 'NO_SUCH_TEXT', new_text: 'x' }] })).message, /old_text not found/);
+  assert.match((await tool('patch_draft', { request: 'Ambiguous', edits: [{ path: script, old_text: ':= 1', new_text: ':= 2' }] })).message, /matched 2 times/);
+  assert.equal((await tool('draft_status')).draft, null);
+
+  // Create a draft with patch_draft including replace_all and literal dollar signs (no $&/$1 corruption).
+  const first = await tool('patch_draft', {
+    request: 'Patch script constants and tag',
+    summary: 'Updates constants safely.',
+    edits: [
+      { path: script, old_text: 'const READY := false', new_text: 'const READY := true # $$&' },
+      { path: script, old_text: ':= 1', new_text: ':= 2', replace_all: true },
+    ],
+  });
+  assert.equal(first.isError, false, first.message);
+  const patchedText = (await tool('read_source', { path: script })).content;
+  assert.equal(patchedText, 'extends Node\nconst READY := true # $$&\nvar count := 2\nvar limit := 2\n');
+
+  // search_source searches inside the active draft's modified files.
+  const inDraft = await tool('search_source', { query: '$$&' });
+  assert.deepEqual(inDraft.matches, [{ path: script, line: 2, text: 'const READY := true # $$&' }]);
+
+  // Revise the active draft with edits + create + delete.
+  const second = await tool('patch_draft', {
+    request: 'Add new script and drop old script',
+    version: first.draft.version,
+    edits: [{ path: helper, old_text: 'return 42', new_text: 'return 99' }],
+    create: [{ path: created, content: 'extends Node\nconst NEW_PART := true\n' }],
+    delete: [obsolete],
+  });
+  assert.equal(second.isError, false, second.message);
+  assert.notEqual(second.draft.version, first.draft.version);
+  assert.deepEqual(second.draft.files, [helper, created, obsolete, script].sort());
+  assert.match((await tool('read_source', { path: created })).content, /NEW_PART := true/);
+  assert.equal((await tool('read_source', { path: obsolete })).isError, true);
+  assert.equal((await tool('discard_draft', { version: second.draft.version })).isError, false);
 });

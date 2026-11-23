@@ -255,6 +255,53 @@ static func unload(draft: String, host: Dictionary) -> Dictionary:
 	record.status = "unloaded"
 	return _told(draft, record.version, {"ok": true, "status": "unloaded", "message": "Unloaded %s." % _name(record)})
 
+## Emergency rollback: unload every active and held live draft, restore base files once, and clear timeline state.
+static func unload_all(host_or_zone: Variant = {}, on_restart := Callable()) -> Dictionary:
+	if _order.is_empty() and _held.is_empty():
+		return {"ok": true, "unloaded": 0, "message": "No live drafts are loaded."}
+	var host: Dictionary = host_or_zone if host_or_zone is Dictionary else {}
+	if host_or_zone is Callable:
+		if host_or_zone.is_valid():
+			host["rebuild_zone"] = host_or_zone
+		if on_restart.is_valid():
+			host["soft_restart"] = on_restart
+	var ids: Array[String] = []
+	for index in range(_order.size() - 1, -1, -1):
+		var draft := _order[index]
+		if draft not in ids:
+			ids.append(draft)
+	for draft in _held.keys():
+		var key := str(draft)
+		if key not in ids:
+			ids.append(key)
+	var versions := {}
+	var affected: Array = []
+	var seen_paths := {}
+	for path in _layers.keys():
+		seen_paths[path] = true
+		affected.append(path)
+	for draft: String in ids:
+		var record: Dictionary = _held.get(draft, {})
+		versions[draft] = str(record.get("version", ""))
+		for path in record.get("files", {}).keys():
+			if not seen_paths.has(path):
+				seen_paths[path] = true
+				affected.append(path)
+	var before := _showing(affected)
+	_stop_watch()
+	_layers.clear()
+	_held.clear()
+	_order.clear()
+	var changed := _changes(before)
+	var tier := ""
+	if not changed.is_empty():
+		tier = plan(changed).tier
+		await _install(changed, tier, host)
+	for draft: String in ids:
+		_told(draft, versions[draft], {"status": "unloaded", "message": "Unloaded by emergency rollback."})
+	var count := ids.size()
+	return {"ok": true, "unloaded": count, "tier": tier, "message": "Emergency rollback unloaded %d live draft(s)." % count}
+
 ## Load an unloaded change from the timeline again.
 static func reload(draft: String, host: Dictionary) -> Dictionary:
 	var record: Dictionary = _held.get(draft, {})

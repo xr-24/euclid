@@ -75,6 +75,7 @@ class RefreshFixtureClient extends "res://scripts/agents/workbench_client.gd":
 			revised = true
 		return {}
 
+const HotLoad = preload("res://scripts/extensions/hot_load.gd")
 const LiveExtensions = preload("res://scripts/extensions/live_extensions.gd")
 const LiveKinds = preload("res://scripts/extensions/live_kinds.gd")
 const TerminalView = preload("res://scripts/ui/terminal_view.gd")
@@ -163,6 +164,12 @@ class FocusFixtureClient extends "res://scripts/agents/workbench_client.gd":
 		if action == "focus":
 			focused = str(arguments.get("id", ""))
 		return answer
+
+class HotLoadRecorder extends RefCounted:
+	var reports: Array = []
+
+	func record(draft: String, version: String, report: Dictionary) -> void:
+		reports.append([draft, version, report.get("status", ""), report.get("message", "")])
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -267,6 +274,7 @@ func _run() -> void:
 	await _check_development_refresh()
 	await _check_workbench_drafts()
 	await _check_live_extensions()
+	await _check_hot_load_unload_all()
 	_check_palette_reload()
 	_check_panel_swap()
 	_check_terminal_keys()
@@ -1550,6 +1558,36 @@ func _check_live_extensions() -> void:
 	var world_kinds := LiveExtensions.new()
 	LiveKinds.register_all(world_kinds, {}, {})
 	_check(not listed.is_empty() and world_kinds.kind_ids() == listed, "register the live kinds the shared extension table lists")
+
+func _check_hot_load_unload_all() -> void:
+	var empty_result: Dictionary = await HotLoad.unload_all()
+	_check(empty_result.get("ok", false) and empty_result.get("unloaded", -1) == 0,
+		"HotLoad.unload_all returns unloaded == 0 when empty")
+	var fixture_path := "res://data/hot_unload_all_fixture.json"
+	var prior_reporter := HotLoad.reporter
+	var recorder := HotLoadRecorder.new()
+	HotLoad.reporter = Callable(recorder, "record")
+	HotLoad._base[fixture_path] = "{}"
+	HotLoad._layers[fixture_path] = [["draft-a", "{\"a\":1}"], ["draft-b", "{\"b\":2}"]]
+	HotLoad._held["draft-a"] = {"version": "v1", "files": {fixture_path: "{\"a\":1}"},
+		"tier": "in_place", "status": "active", "error": "", "label": "A", "owner": "codex", "at": 1.0}
+	HotLoad._held["draft-b"] = {"version": "v2", "files": {fixture_path: "{\"b\":2}"},
+		"tier": "in_place", "status": "active", "error": "", "label": "B", "owner": "claude", "at": 2.0}
+	HotLoad._order = ["draft-a", "draft-b"]
+	var result: Dictionary = await HotLoad.unload_all()
+	HotLoad._base.erase(fixture_path)
+	HotLoad.reporter = prior_reporter
+	_check(result.get("ok", false) and result.get("unloaded", 0) == 2 and result.get("tier", "") == "in_place",
+		"HotLoad.unload_all reports unloaded count and tier")
+	_check(HotLoad._layers.is_empty() and HotLoad._held.is_empty() and HotLoad._order.is_empty() and HotLoad.timeline().is_empty(),
+		"HotLoad.unload_all clears layers, held drafts, and timeline order")
+	_check(recorder.reports == [
+		["draft-b", "v2", "unloaded", "Unloaded by emergency rollback."],
+		["draft-a", "v1", "unloaded", "Unloaded by emergency rollback."]],
+		"HotLoad.unload_all reports each unloaded draft newest-first")
+	var after_empty: Dictionary = await HotLoad.unload_all()
+	_check(after_empty.get("ok", false) and after_empty.get("unloaded", -1) == 0,
+		"HotLoad.unload_all is idempotent once cleared")
 
 func _check_workbench_drafts() -> void:
 	_check(WorkbenchPanel.draft_label({"owner": "grok", "files": ["a", "b"], "status": "passed", "behind_main": true})

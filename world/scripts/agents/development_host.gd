@@ -481,7 +481,12 @@ func _ask_about(draft: Dictionary, status: String) -> void:
 	if status == "staged" and draft.get("hot", false) and not live and not _loads_on_its_own(draft) and not hud.asking(load_id):
 		hud.ask(load_id, "%s wants to load a change live: %s" % [who, what], func() -> void: _console_action("live"))
 	if status == "passed" and draft.get("hot", false) and live and not hud.asking(commit_id):
-		hud.ask(commit_id, "Checks passed for %s's live change: %s\nCommit it to the project?" % [who, what], _commit_in_view)
+		var prompt := "Checks passed for %s's live change: %s\nCommit it to the project?" % [who, what]
+		if draft.get("touches_checks", false):
+			var warning := str(draft.get("check_warning", "")).strip_edges()
+			var banner := "⚠ MODIFIES CHECKS (%s)" % warning if not warning.is_empty() else "⚠ MODIFIES CHECKS"
+			prompt = "%s\n%s" % [banner, prompt]
+		hud.ask(commit_id, prompt, _commit_in_view)
 	if status != "staged":
 		hud.withdraw(load_id)
 	if status != "passed":
@@ -493,6 +498,8 @@ func _auto_commit() -> void:
 	if Graphics.auto_commit <= 0 or not client or client.draft.is_empty() or _action_busy:
 		return
 	var draft := client.draft
+	if draft.get("touches_checks", false):
+		return
 	var held := HotLoad.held(str(draft.id))
 	if draft.status != "passed" or not draft.get("hot", false) or held.is_empty() or held.status != "active" \
 			or held.version != draft.get("version", ""):

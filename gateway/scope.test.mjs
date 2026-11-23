@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
+import http from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { handoffVariable, inheritedHandoff } from './handoff.mjs';
+import { handoffVariable, inheritedHandoff, verifySurvival } from './handoff.mjs';
+import { createGateway } from './server.mjs';
 import { createWorkbench } from './workbench.mjs';
-import { isAgentSourcePath, isSourcePath, kernel } from './workbench-source.mjs';
+import { inspectCheckRisk, isAgentSourcePath, isSourcePath, kernel, listAgentSources, readAgentSource } from './workbench-source.mjs';
 
 const project = fileURLToPath(new URL('../', import.meta.url));
 
@@ -29,6 +31,79 @@ test('drafts reach the gateway and docs but never the kernel or launcher', async
   }
   // The in-world editor keeps its Godot-only catalog.
   assert.equal(isSourcePath('gateway/server.mjs'), false);
+  // Godot extension kernel scripts are locked from edits, while remaining agent-readable.
+  const readable = await listAgentSources(project);
+  for (const name of ['world/scripts/extensions/hot_load.gd', 'world/scripts/extensions/soft_restart.gd']) {
+    assert.equal(kernel.includes(name), true, name);
+    assert.equal(isSourcePath(name), false, name);
+    assert.equal(isAgentSourcePath(name), false, name);
+    assert.equal(readable.includes(name), true, name);
+    const loaded = await readAgentSource(project, name);
+    assert.ok(loaded.text.length > 0 && loaded.hash.length === 64, name);
+  }
+});
+
+test('inspectCheckRisk detects edits to tests, diagnostics, hot-reload rules, and removed assertions', () => {
+  assert.deepEqual(inspectCheckRisk(['world/scripts/world.gd'], '--- a/world/scripts/world.gd\n+++ b/world/scripts/world.gd\n-var speed := 1\n+var speed := 2\n'), {
+    touchesChecks: false,
+    reasons: [],
+    warning: '',
+  });
+  const gatewayTests = inspectCheckRisk(['gateway/scope.test.mjs', 'gateway/other.test.mjs'], '');
+  assert.deepEqual(gatewayTests, {
+    touchesChecks: true,
+    reasons: ['edits gateway tests'],
+    warning: 'Modifies checks: edits gateway tests',
+  });
+  const diagnostics = inspectCheckRisk(['world/scripts/diagnostics/core_tests.gd'], '');
+  assert.equal(diagnostics.touchesChecks, true);
+  assert.deepEqual(diagnostics.reasons, ['edits Godot diagnostics/tests']);
+  const hotReload = inspectCheckRisk(['world/data/hot_reload.json'], '');
+  assert.equal(hotReload.touchesChecks, true);
+  assert.deepEqual(hotReload.reasons, ['edits hot-reload tier rules']);
+  for (const removed of [
+    '-  _check(value > 0, "ok")\n',
+    '-  test("keeps invariant", () => {})\n',
+    '-  assert.equal(a, b)\n',
+    '-  const MinimumFps = 60\n',
+    '-  const MaximumP95Ms = 16.67\n',
+  ]) {
+    const risk = inspectCheckRisk(['world/scripts/world.gd'], `--- a/world/scripts/world.gd\n${removed}`);
+    assert.equal(risk.touchesChecks, true, removed);
+    assert.deepEqual(risk.reasons, ['removes or alters existing assertions/budgets'], removed);
+  }
+});
+
+test('verifySurvival passes on a live gateway and fails when an invariant breaks', async t => {
+  const area = await mkdtemp(path.join(os.tmpdir(), 'euclid-survival-test-'));
+  t.after(() => rm(area, { recursive: true, force: true }));
+  const { server, token, workbenchToken, developmentToken } = await createGateway({ dataDir: area });
+  t.after(() => new Promise(resolve => {
+    server.closeAllConnections();
+    if (server.listening) server.close(resolve); else resolve();
+  }));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const credentials = { token, workbench_token: workbenchToken, development_token: developmentToken };
+  assert.deepEqual(await verifySurvival(server.address().port, credentials), { ok: true });
+
+  // A server that drops X-Euclid-Workbench enforcement on restore must fail survival.
+  const broken = http.createServer((req, res) => {
+    const json = (code, value) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
+    if (req.url === '/health') return json(200, { service: 'construct-gateway' });
+    if (req.headers.authorization !== `Bearer ${token}`) return json(401, { error: 'Unauthorized' });
+    if (req.url === '/v1/world') return json(200, {});
+    if (req.url === '/v1/workbench/restore') return json(200, { broken: true });
+    if (req.headers['x-euclid-workbench'] !== workbenchToken) return json(403, { error: 'Forbidden' });
+    return json(200, {});
+  });
+  t.after(() => new Promise(resolve => {
+    broken.closeAllConnections();
+    if (broken.listening) broken.close(resolve); else resolve();
+  }));
+  await new Promise(resolve => broken.listen(0, '127.0.0.1', resolve));
+  const result = await verifySurvival(broken.address().port, credentials);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /restore/);
 });
 
 test('committing or reverting gateway source asks the gateway to reload', async t => {
@@ -171,7 +246,7 @@ test('a replacement gateway adopts the credentials and port it is handed', async
   const { url, ...saved } = await config();
   assert.deepEqual({ ...saved, port }, handed);
   assert.equal(url, `http://127.0.0.1:${port}`);
-  assert.equal(Number(await read('gateway.pid')), child.pid);
+  assert.equal(Number(await eventually(() => read('gateway.pid'), 'the replacement to record its pid')), child.pid);
 });
 
 test('reload replaces the gateway process and keeps its credentials', async t => {

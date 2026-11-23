@@ -18,7 +18,7 @@ import { createAgentCredentials } from './agent-credentials.mjs';
 import { createRemoteEndpoint, createRemoteServer } from './remote.mjs';
 import { createRelayLink } from './relay-link.mjs';
 import { createTerminalSessions } from './terminal/sessions.mjs';
-import { createHandoff, inheritedHandoff, listen } from './handoff.mjs';
+import { createHandoff, inheritedHandoff, listen, verifySurvival } from './handoff.mjs';
 import { createActivityFeed, createToolObserver, replyFromBoard } from './agent-activity.mjs';
 import { createSpeechService, SpeechError } from './speech.mjs';
 
@@ -467,14 +467,19 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (process.argv.includes('--preflight')) {
     // Proves this code can build and serve a gateway, using throwaway data and a free port.
     const dataDir = await mkdtemp(path.join(os.tmpdir(), 'euclid-preflight-'));
+    let server;
     try {
-      const { server } = await createGateway({ dataDir });
+      const gateway = await createGateway({ dataDir });
+      server = gateway.server;
       await listen(server, 0);
-      const health = await fetch(`http://127.0.0.1:${server.address().port}/health`);
-      if (!health.ok || (await health.json()).service !== 'construct-gateway') throw new Error('The gateway did not report its identity.');
-      server.closeAllConnections();
-      await new Promise(resolve => server.close(resolve));
+      const result = await verifySurvival(server.address().port,
+        { token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken });
+      if (!result.ok) throw new Error(result.reason || 'The gateway failed its survival check.');
     } finally {
+      if (server) {
+        server.closeAllConnections();
+        if (server.listening) await new Promise(resolve => server.close(resolve));
+      }
       await rm(dataDir, { recursive: true, force: true });
     }
     process.exit(0);

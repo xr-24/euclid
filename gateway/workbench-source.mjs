@@ -6,19 +6,20 @@ export const sourceLimit = 64 * 1024;
 const editable = /^world\/(?:scripts\/(?!diagnostics\/)(?:[\w-]+\/)*[\w.-]+\.gd|shaders\/(?:[\w-]+\/)*[\w.-]+\.gdshader(?:inc)?|data\/(?:[\w-]+\/)*[\w.-]+\.json|main\.tscn)$/;
 const decode = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const fingerprint = text => createHash('sha256').update(text).digest('hex');
-export const isSourcePath = name => typeof name === 'string' && editable.test(name);
+export const isSourcePath = name => typeof name === 'string' && editable.test(name) && !isKernelPath(name);
 const agentSource = /^world\/(?:scripts\/(?:[\w-]+\/)*[\w.-]+\.gd(?:\.uid)?|scenes\/(?:[\w-]+\/)*[\w.-]+\.tscn)$/;
 // The kernel decides what a draft may change, verifies and commits it, isolates its
 // checks, and replaces the running gateway. No draft may change it. The launcher,
 // check and recovery scripts under scripts/ and the files in the project root are
 // outside every draft as well, so a bad change can always be reviewed and undone.
 export const kernel = Object.freeze(['gateway/handoff.mjs', 'gateway/preview-base.mjs', 'gateway/workbench-git.mjs',
-  'gateway/workbench-runner.mjs', 'gateway/workbench-source.mjs']);
+  'gateway/workbench-runner.mjs', 'gateway/workbench-source.mjs',
+  'world/scripts/extensions/hot_load.gd', 'world/scripts/extensions/soft_restart.gd']);
 export const isKernelPath = name => kernel.includes(name);
 export const isGatewayPath = name => typeof name === 'string' && name.startsWith('gateway/');
 const harness = /^(?:gateway\/(?:[\w-]+\/)*[\w.-]+\.(?:mjs|json)|docs\/[\w.-]+\.md|README\.md)$/;
 export const isAgentSourcePath = name => isSourcePath(name) ||
-  (typeof name === 'string' && (agentSource.test(name) || (harness.test(name) && !isKernelPath(name))));
+  (typeof name === 'string' && !isKernelPath(name) && (agentSource.test(name) || harness.test(name)));
 
 export async function listSources(root) {
   const files = ['world/main.tscn'];
@@ -26,7 +27,7 @@ export async function listSources(root) {
     for (const item of await readdir(path.join(root, directory), { withFileTypes: true })) {
       const name = `${directory}/${item.name}`;
       if (item.isDirectory()) await scan(name);
-      else if (item.isFile() && editable.test(name) && (await lstat(path.join(root, name))).size <= sourceLimit) files.push(name);
+      else if (item.isFile() && isSourcePath(name) && (await lstat(path.join(root, name))).size <= sourceLimit) files.push(name);
     }
   }
   for (const directory of ['world/scripts', 'world/shaders', 'world/data']) await scan(directory);
@@ -89,4 +90,31 @@ export async function readAgentSource(root, name) {
   const text = decode.decode(await readFile(file));
   if (text.includes('\0')) throw new Error('Choose a UTF-8 text file.');
   return { text, hash: fingerprint(text) };
+}
+
+const removedAssertion = /\b(?:test|_check)\s*\(|\bassert\.[a-z]+|\bMinimumFps\b|\bMaximumP95Ms\b/;
+
+export function inspectCheckRisk(names = [], diff = '') {
+  const files = Array.isArray(names) ? names : [];
+  const reasons = new Set();
+  for (const name of files) {
+    if (typeof name !== 'string') continue;
+    if (/\.test\.mjs$/.test(name)) reasons.add('edits gateway tests');
+    if (name.startsWith('world/scripts/diagnostics/')) reasons.add('edits Godot diagnostics/tests');
+    if (name === 'world/data/hot_reload.json') reasons.add('edits hot-reload tier rules');
+  }
+  if (typeof diff === 'string' && diff) {
+    for (const line of diff.split(/\r?\n/)) {
+      if (/^-(?!--)/.test(line) && removedAssertion.test(line)) {
+        reasons.add('removes or alters existing assertions/budgets');
+        break;
+      }
+    }
+  }
+  const list = [...reasons];
+  return {
+    touchesChecks: list.length > 0,
+    reasons: list,
+    warning: list.length ? 'Modifies checks: ' + list.join(', ') : '',
+  };
 }

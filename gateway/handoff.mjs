@@ -34,13 +34,58 @@ function finished(child, timeout) {
   });
 }
 
-async function answers(port, token, child, timeout) {
+export async function verifySurvival(port, credentials, { signal } = {}) {
+  const origin = `http://127.0.0.1:${port}`;
+  const bearer = { Authorization: `Bearer ${credentials?.token ?? ''}` };
+  const workbench = { ...bearer, 'X-Euclid-Workbench': credentials?.workbench_token ?? '' };
+  const json = { 'Content-Type': 'application/json' };
+  const probeSignal = () => (signal ? AbortSignal.any([signal, AbortSignal.timeout(2000)]) : AbortSignal.timeout(2000));
+  const checks = [
+    ['GET /health', '/health', { method: 'GET' }, 200,
+      data => (data?.service === 'construct-gateway' ? '' : 'unexpected service identity')],
+    ['GET /v1/world (unauthenticated)', '/v1/world', { method: 'GET' }, 401],
+    ['GET /v1/world (authenticated)', '/v1/world', { method: 'GET', headers: bearer }, 200],
+    ['POST /v1/workbench/state (no workbench token)', '/v1/workbench/state',
+      { method: 'POST', headers: { ...bearer, ...json }, body: '{}' }, 403],
+    ['POST /v1/workbench/state (authenticated)', '/v1/workbench/state',
+      { method: 'POST', headers: { ...workbench, ...json }, body: '{}' }, 200],
+    ['POST /v1/workbench/history (authenticated)', '/v1/workbench/history',
+      { method: 'POST', headers: { ...workbench, ...json }, body: '{}' }, 200],
+    ['POST /v1/workbench/restore (no workbench token)', '/v1/workbench/restore',
+      { method: 'POST', headers: { ...bearer, ...json }, body: '{}' }, 403],
+    ['POST /v1/workbench/reload (no workbench token)', '/v1/workbench/reload',
+      { method: 'POST', headers: { ...bearer, ...json }, body: '{}' }, 403],
+  ];
+  for (const [label, url, options, expectedStatus, validate] of checks) {
+    let response;
+    try {
+      response = await fetch(origin + url, { ...options, signal: probeSignal() });
+    } catch (error) {
+      return { ok: false, reason: `${label}: ${error.message}` };
+    }
+    if (response.status !== expectedStatus) {
+      await response.body?.cancel().catch(() => {});
+      return { ok: false, reason: `${label}: expected ${expectedStatus}, got ${response.status}` };
+    }
+    if (validate) {
+      try {
+        const problem = validate(await response.json());
+        if (problem) return { ok: false, reason: `${label}: ${problem}` };
+      } catch (error) {
+        return { ok: false, reason: `${label}: invalid JSON (${error.message})` };
+      }
+    } else {
+      await response.body?.cancel().catch(() => {});
+    }
+  }
+  return { ok: true };
+}
+
+async function answers(port, credentials, child, timeout) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline && child.exitCode === null && child.signalCode === null) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/v1/world`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1000) });
-      if (response.ok) return true;
-    } catch {}
+    const result = await verifySurvival(port, credentials, { signal: AbortSignal.timeout(1000) });
+    if (result.ok) return true;
     await delay(100);
   }
   return false;
@@ -82,7 +127,7 @@ export function createHandoff({ entry, cwd, port, credentials, server, logDirect
       env: { ...env, [handoffVariable]: JSON.stringify({ ...credentials, port }) } });
     for (const handle of stdio) if (typeof handle === 'number') closeSync(handle);
     child.once('error', () => {});
-    if (await answers(port, credentials.token, child, startTimeout)) {
+    if (await answers(port, credentials, child, startTimeout)) {
       child.unref();
       return exit();
     }

@@ -14,7 +14,7 @@ import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
 import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
 import { hotFiles, readHotFiles } from './workbench-hot.mjs';
-import { fingerprint, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
+import { fingerprint, inspectCheckRisk, isAgentSourcePath, isGatewayPath, isSourcePath, listAgentSources, listSources, normalizeEdit, readAgentSource, readSource } from './workbench-source.mjs';
 import { sourceSubmission } from './workbench-submission.mjs';
 import { sourceDraftLimit, writeAgentDraft } from './workbench-agent-draft.mjs';
 import { authorSource } from './workbench-source-agent.mjs';
@@ -191,23 +191,27 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const state = { ...pending, revision, diagnostic, preview_log: previewLog, focus: focusId ?? '',
       drafts: [...drafts.values()].map(item => ({ id: item.id, owner: item.owner ?? '', status: item.status, files: item.names,
         live: item.liveResult?.status === 'active',
+        touches_checks: inspectCheckRisk(item.names, item.diff).touchesChecks,
         version: fingerprint(item.diff), base: item.base, summary: item.summary ?? '', behind_main: behind(item) })) };
     if (authoring && !authoring.revising) {
       const { id, status, error, log } = authoring;
       return { ...state, draft: { id, status, error, log, diff: '', files: [], owner: authoring.owner ?? '',
         name: 'Source workspace', summary: '', subject: 'source', activation: 'restart', live: false,
+        touches_checks: false, check_warning: '',
         preview_zone: '', checked_preview: true, from_world: true, agent_source: true } };
     }
     const appearance = change && !change.agentSource && appearanceFor(change.names);
     const tool = change && !change.agentSource && workshopToolFile(change.names);
     const palette = change && isPalette(change.names);
     const hot = change && !appearance && !tool && !palette && !(change.plugin && !change.agentSource) && hotFiles(table, change.names);
+    const checkRisk = change ? inspectCheckRisk(change.names, change.diff) : null;
     return { ...state, draft: change && {
       id: change.id, name: change.names.length === 1 ? change.names[0] : `${change.names.length} files`, files: change.names,
       diff: change.diff, status: authoring?.revising ? 'revising' : change.status,
       log: authoring?.revising ? authoring.log : change.log, error: change.error,
       check_status: change.check?.status ?? '', check_scope: change.check?.scope ?? '',
       check_captures: change.check?.captures ?? [],
+      touches_checks: Boolean(checkRisk?.touchesChecks), check_warning: checkRisk?.warning ?? '',
       version, can_revise: change.agentSource === true,
       revision_diff: change.revisionDiff ?? '', revision_notice: change.revisionNotice ?? '', has_previous: Boolean(change.previous),
       live: Boolean(change.plugin || appearance || tool || palette || hot), hot: Boolean(hot),

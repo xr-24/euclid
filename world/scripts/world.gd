@@ -671,6 +671,15 @@ func _revert_commit(revision: String) -> void:
 	_finish_live_change("restore", "", result.get("files", []))
 	_console_notice("Reverted %s with %s." % [revision.left(7), str(result.get("commit", "")).left(7)])
 
+## Panic rollback chord (Ctrl+Shift+Backspace): unload every live draft and restore base files.
+func _emergency_unload_live() -> void:
+	var result: Dictionary = await HotLoad.unload_all(_hot_host())
+	if is_instance_valid(live_hud):
+		live_hud.refresh_strip()
+	if is_instance_valid(_dev):
+		_dev.notice(str(result.get("message", "")))
+		_dev.refresh_actions()
+
 ## The wrist's Live page: unload a change loaded live, or load it again.
 func _toggle_live_change(draft: String) -> void:
 	var on := HotLoad.status(draft) == "active"
@@ -1327,7 +1336,13 @@ func _update_interaction_hint() -> void:
 	hint.text = "E: " + str(nearest.label) if not nearest.is_empty() else wrist.idle_hint()
 
 func _input(event: InputEvent) -> void:
-	if smoke_mode or not is_instance_valid(overlay) or not event is InputEventKey or not event.pressed or event.echo:
+	if smoke_mode or not event is InputEventKey or not event.pressed or event.echo:
+		return
+	if event.keycode == KEY_BACKSPACE and event.ctrl_pressed and event.shift_pressed:
+		_emergency_unload_live()
+		get_viewport().set_input_as_handled()
+		return
+	if not is_instance_valid(overlay):
 		return
 	match event.keycode:
 		KEY_F2: _dev.open_console()

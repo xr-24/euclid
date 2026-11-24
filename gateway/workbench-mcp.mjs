@@ -73,6 +73,15 @@ export const developmentTools = [
       target: { type: 'string', maxLength: 160, description: 'For kind="node", a .test.mjs file under gateway/ or scripts/.' },
       filter: { type: 'string', maxLength: 120, description: 'Optional test name pattern (node) or test filter (godot_core).' },
     }, required: ['version', 'kind'], additionalProperties: false } },
+  { name: 'preview_gateway', description: 'Start, query, inspect or stop an ephemeral shadow gateway running your gateway/ draft before commit.',
+    inputSchema: { type: 'object', properties: {
+      version,
+      action: { type: 'string', enum: ['start', 'call', 'stop', 'status'], description: 'Shadow gateway action.' },
+      method: { type: 'string', enum: ['GET', 'POST'], description: 'HTTP method for action="call" (default GET).' },
+      path: { type: 'string', maxLength: 240, description: 'Gateway path for action="call" (/health, /v1/..., /mcp/dev, /mcp/agent).' },
+      body: { type: 'object', additionalProperties: true, description: 'Optional JSON body for POST calls.' },
+      auth: { type: 'string', enum: ['bearer', 'workbench', 'none'], description: 'Auth headers to attach (default bearer).' },
+    }, required: ['version', 'action'], additionalProperties: false } },
   { name: 'rebase_draft', description: 'Replay your draft onto the current tip of the main branch after it moved. ' +
       'The draft keeps its id and needs fresh checks. A conflict names the files and leaves the draft unchanged.',
     inputSchema: { type: 'object', properties: { version }, required: ['version'], additionalProperties: false } },
@@ -89,6 +98,7 @@ function validValue(rule, value) {
   if (rule.enum && !rule.enum.includes(value)) return false;
   if (rule.type === 'object') {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (!rule.properties && rule.additionalProperties !== false) return true;
     const { properties = {}, required = [], additionalProperties } = rule;
     if (additionalProperties === false && Object.keys(value).some(key => !Object.hasOwn(properties, key))) return false;
     if (required.some(key => !Object.hasOwn(value, key))) return false;
@@ -213,6 +223,13 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
         const draft = await own(agent, args.version);
         return await workbench('targeted', { id: draft.id, version: draft.version, owner: agent, kind: args.kind, target: args.target, filter: args.filter }, signal);
       }
+      case 'preview_gateway': {
+        const draft = await own(agent, args.version);
+        return await workbench('shadow', {
+          id: draft.id, version: draft.version, owner: agent,
+          action: args.action, method: args.method, path: args.path, body: args.body, auth: args.auth,
+        }, signal);
+      }
       case 'discard_draft': {
         const draft = await own(agent, args.version);
         return report(await workbench('discard', { id: draft.id, version: draft.version, owner: agent }, signal), agent, false);
@@ -220,9 +237,9 @@ export function createDevelopmentBridge(workbench, { settle = 15000, tasks, extr
     }
   }
 
-  // policy.checks === false hides run_checks and run_targeted_test, for agents that must not run code on this machine.
+  // policy.checks === false hides run_checks, run_targeted_test and preview_gateway, for agents that must not run code on this machine.
   async function rpc(agent, message, signal, policy = {}) {
-    const offered = tools.filter(tool => (policy.checks !== false || !['run_checks', 'run_targeted_test'].includes(tool.name)) &&
+    const offered = tools.filter(tool => (policy.checks !== false || !['run_checks', 'run_targeted_test', 'preview_gateway'].includes(tool.name)) &&
       (policy.tools?.(tool.name) ?? true));
     const id = message?.id ?? null;
     const reply = result => ({ jsonrpc: '2.0', id, result });

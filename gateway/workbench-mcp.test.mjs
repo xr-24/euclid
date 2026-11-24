@@ -85,7 +85,7 @@ test('a connected agent reads source, submits and revises a draft, and runs its 
 
   // No tool can commit, preview, revert or run arbitrary workbench actions.
   const listed = (await rpc('tools/list')).result.tools.map(item => item.name);
-  assert.deepEqual(listed, ['list_source', 'read_source', 'search_source', 'draft_status', 'list_extensions', 'task_history', 'read_gateway_log', 'submit_draft', 'patch_draft', 'run_checks', 'run_targeted_test', 'rebase_draft', 'discard_draft']);
+  assert.deepEqual(listed, ['list_source', 'read_source', 'search_source', 'draft_status', 'list_extensions', 'task_history', 'read_gateway_log', 'submit_draft', 'patch_draft', 'run_checks', 'run_targeted_test', 'preview_gateway', 'rebase_draft', 'discard_draft']);
   assert.deepEqual(listed, developmentTools.map(item => item.name));
   for (const name of ['apply', 'play', 'live', 'restore', 'stage']) {
     assert.equal((await rpc('tools/call', { name, arguments: {} })).error.code, -32602);
@@ -392,10 +392,11 @@ test('run_targeted_test and read_gateway_log work over MCP without bypassing run
     return { ...JSON.parse(answer.result.content[0].text), isError: answer.result.isError };
   };
 
-  // policy.checks === false hides run_targeted_test as well as run_checks.
+  // policy.checks === false hides preview_gateway, run_targeted_test and run_checks.
   const restricted = (await rpc('tools/list', {}, 'cloud', { checks: false })).result.tools.map(item => item.name);
   assert.equal(restricted.includes('run_checks'), false);
   assert.equal(restricted.includes('run_targeted_test'), false);
+  assert.equal(restricted.includes('preview_gateway'), false);
   assert.ok(restricted.includes('read_gateway_log'));
 
   // Create a draft changing a gateway test file.

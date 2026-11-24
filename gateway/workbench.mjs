@@ -10,6 +10,7 @@ import { shorelineAppearance } from './workbench-shoreline.mjs';
 import { gridAppearance } from './workbench-grid.mjs';
 import { proposeWorkshopTool, readWorkshopTool, workshopToolContext, workshopToolFile, workshopToolPackage } from './workbench-tool.mjs';
 import { createPreviewRunner, validCheckView } from './workbench-runner.mjs';
+import { createShadowPreview } from './workbench-shadow.mjs';
 import { createWorkbenchDiagnostics } from './workbench-diagnostics.mjs';
 import { createJournal } from './workbench-journal.mjs';
 import { draftKinds, listExtensions, loadKinds } from './extensions.mjs';
@@ -75,6 +76,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   journal = createJournal(path.join(storage, 'journal.jsonl'), { onError: error => console.error(`Workbench journal: ${error.message}`) }) } = {}) {
   const git = createWorkbenchGit(root);
   const diagnostics = createWorkbenchDiagnostics(storage, git, runner);
+  const shadow = createShadowPreview();
   // The source agent's file reads and edits, for the activity feed, attributed to its local worker.
   const sourceActor = () => { try { return `local-${agentId('author')}`; } catch { return 'local-codex'; } };
   const tracking = (submitted, request) => {
@@ -420,6 +422,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         controller.signal.throwIfAborted();
         job.publishing = true;
         await runner.stop();
+        await shadow.stop(change.id);
         await registerDraft(candidate, job.log);
         if (change.previous) await git.remove(checkoutPath(directory, change.previous.checkout)).catch(() => {});
       } catch (error) {
@@ -459,6 +462,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       if (names.length > limit || !names.every(allowed)) throw new Error('The rebased draft reaches files this draft may not change.');
       await verifyReview(change);
       await runner.stop();
+      await shadow.stop(change.id);
       // Earlier versions were reviewed against the old base, so they cannot be restored after this.
       await registerDraft({ ...change, base: head, worktree, names, previous: undefined, revisionDiff: '', revisionNotice: '' }, '', 'rebased');
     } catch (error) {
@@ -479,6 +483,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
     const earlier = await readPrevious(change.directory, change.worktree, change.base, change.previous);
     const revisionDiff = await versionDiff(change, earlier);
     await runner.stop();
+    await shadow.stop(change.id);
     await registerDraft({ ...change, ...earlier, previous: checkpoint(change), revisionDiff, revisionNotice: '' }, '', 'restored_previous');
   }
 
@@ -660,12 +665,13 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
   }
 
   async function discardDraft(change) {
+    await shadow.stop(change.id);
     await rename(path.join(change.directory, 'draft.json'), path.join(change.directory, 'discarded.json'));
     await removeDraft(change);
     await journal.record('discarded', { draft: change.id, owner: change.owner, files: change.names });
   }
 
-  return async function handle(action, body, signal) {
+  async function handle(action, body, signal) {
     recovery ??= recoverDraft();
     await recovery;
     // A connected agent's requests carry its name and see its own draft.
@@ -742,6 +748,11 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       } finally { operation = ''; }
       return state();
     }
+    if (action === 'shadow' && body.action === 'status') {
+      const change = requireDraft(body.id, body.version);
+      if (ownerKey(change.owner) !== ownerKey(view)) throw new Error('A connected agent can only preview its own draft.');
+      return shadow.status(change);
+    }
     if (operation && !(action === 'discard' && operation === 'checking')) throw new Error('The workbench is busy.');
     if (action === 'check') { runChecks(body.id, body.version); return state(); }
     if (action === 'targeted') {
@@ -754,6 +765,25 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
         return await runner.runTargeted(change, { kind: body.kind, target: body.target, filter: body.filter }, signal);
       } finally {
         if (operation === 'testing') operation = '';
+      }
+    }
+    if (action === 'shadow') {
+      const change = requireDraft(body.id, body.version);
+      if (ownerKey(change.owner) !== ownerKey(view)) throw new Error('A connected agent can only preview its own draft.');
+      operation = 'shadow';
+      try {
+        if (body.action === 'start') {
+          await verifyReview(change);
+          return await shadow.start(change, signal);
+        }
+        if (body.action === 'call') {
+          await verifyReview(change);
+          return await shadow.call(change, { method: body.method, path: body.path, body: body.body, auth: body.auth }, signal);
+        }
+        if (body.action === 'stop') return await shadow.stop(change.id);
+        throw new Error('Unknown shadow action.');
+      } finally {
+        if (operation === 'shadow') operation = '';
       }
     }
     operation = action;
@@ -853,6 +883,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
           if (!message || message.length > 100 || /[\x00-\x1f\x7f]/.test(message)) throw new Error('Enter a one-line Git commit message of up to 100 characters.');
           await verifyReview(change);
           await runner.stop();
+          await shadow.stop(change.id);
           revision = await git.commit(change, message);
           files = change.names;
           forget(change);
@@ -894,5 +925,7 @@ export function createWorkbench(root, storage, { runner = createPreviewRunner(ro
       if (operation !== 'checking' && !diagnosticJob && (!['authoring', 'revising'].includes(operation) || !sourceJob)) operation = '';
     }
     return { ...await state(), commit: revision ?? '', warning, ...(live ? { live } : {}), ...(files ? { files } : {}) };
-  };
+  }
+  handle.close = () => shadow.stop();
+  return handle;
 }

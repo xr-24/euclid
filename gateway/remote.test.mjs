@@ -72,9 +72,10 @@ test('remote agents reach only the development tools, with their own credential 
   const offered = (await rpc(cloud.token, 'tools/list')).result.tools.map(item => item.name);
   assert.equal(offered.includes('run_checks'), false);
   assert.equal(offered.includes('run_targeted_test'), false);
+  assert.equal(offered.includes('preview_gateway'), false);
   assert.ok(offered.includes('submit_draft') && offered.includes('read_source'));
   const trustedTools = (await rpc(trusted.token, 'tools/list')).result.tools.map(item => item.name);
-  assert.ok(trustedTools.includes('run_checks') && trustedTools.includes('run_targeted_test'));
+  assert.ok(trustedTools.includes('run_checks') && trustedTools.includes('run_targeted_test') && trustedTools.includes('preview_gateway'));
 
   const submitted = await tool(cloud.token, 'submit_draft', { request: 'Add a note', files: [{ path: script, content: 'extends Node\n# cloud\n' }] });
   assert.equal(submitted.isError, false, submitted.message);
@@ -88,6 +89,8 @@ test('remote agents reach only the development tools, with their own credential 
   assert.equal(refused.error.code, -32602);
   const refusedTargeted = await rpc(cloud.token, 'tools/call', { name: 'run_targeted_test', arguments: { version: draft.version, kind: 'node', target: 'gateway/server.test.mjs' } });
   assert.equal(refusedTargeted.error.code, -32602);
+  const refusedPreview = await rpc(cloud.token, 'tools/call', { name: 'preview_gateway', arguments: { version: draft.version, action: 'status' } });
+  assert.equal(refusedPreview.error.code, -32602);
   assert.equal(checks, 0);
 
   // A revoked credential stops working at once. Every call is audited without its arguments.

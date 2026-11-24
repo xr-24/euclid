@@ -39,7 +39,7 @@ export function validateEvent(event) {
 export async function createGateway({ dataDir = path.join(root, '.local'), token,
   worldPath = path.join(root, 'world/data/world.json'), gridPlanner = planWorld,
   workbenchRoot = root, workbenchOptions, terminalOptions, relayOptions, speechOptions, developmentToken, workbenchToken: workbenchSecret,
-  reloadGateway = null, gatewayNotice = () => '' } = {}) {
+  reloadGateway = null, gatewayNotice = () => '', shadow = false } = {}) {
   await mkdir(dataDir, { recursive: true });
   const world = JSON.parse(await readFile(worldPath, 'utf8'));
   let saved = { agents: {}, seen: [] };
@@ -51,7 +51,9 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   const workbenchExpected = Buffer.from(workbenchToken);
   // What agents are reading, editing and running, for the world to draw above them.
   const activity = createActivityFeed();
-  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), { onGatewayChange: reloadGateway, gatewayNotice, activity, ...workbenchOptions });
+  const workbench = createWorkbench(workbenchRoot, path.join(dataDir, 'workbench'), {
+    onGatewayChange: shadow ? null : reloadGateway, gatewayNotice, activity, ...workbenchOptions,
+  });
   const observer = createToolObserver(activity, {
     readDraftFile: (agent, name) => workbench('file', { name, owner: agent }, AbortSignal.timeout(5000)).then(file => file?.text ?? ''),
   });
@@ -458,8 +460,8 @@ export async function createGateway({ dataDir = path.join(root, '.local'), token
   await remote.prime();
   // Started only by the gateway process itself, never by tests or the reload preflight.
   const relay = createRelayLink({ endpoint: remote, file: path.join(dataDir, 'relay.json'), ...relayOptions });
-  server.on('listening', () => workers.start());
-  server.on('close', () => { workers.stop(); terminals.closeAll(); speech.close(); relay.stop(); });
+  server.on('listening', () => { if (!shadow) workers.start(); });
+  server.on('close', () => { workers.stop(); terminals.closeAll(); speech.close(); relay.stop(); void workbench.close?.(); });
   return { server, remoteServer, remoteAudited: remote.audited, terminals, relay, token: secret, workbenchToken, developmentToken: developmentSecret };
 }
 
@@ -484,31 +486,51 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     }
     process.exit(0);
   }
-  const handoff = inheritedHandoff(process.env);
-  const dataDir = process.env.EUCLID_DATA_DIR || path.join(root, '.local');
-  const port = handoff?.port ?? Number(process.env.CONSTRUCT_PORT ?? 4317);
-  let reload;
-  const gateway = await createGateway({ dataDir, token: handoff?.token, workbenchToken: handoff?.workbench_token,
-    developmentToken: handoff?.development_token, reloadGateway: () => reload.start(), gatewayNotice: () => reload.notice() });
-  const credentials = { token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken };
-  reload = createHandoff({ entry: fileURLToPath(import.meta.url), cwd: root, port, credentials, server: gateway.server, logDirectory: dataDir });
-  // A replacement can start a moment before the gateway it replaces has released the port.
-  try { await listen(gateway.server, port, handoff ? 40 : 1); }
-  catch (error) { console.error(`Gateway: ${error.message}`); process.exit(1); }
-  gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
-  // A relay Euclid dials out to, when one is set in the Cloud Agents screen.
-  await gateway.relay.start();
-  // The outside endpoint for remote agents. A tunnel points here, never at the main port.
-  const remotePort = Number(process.env.EUCLID_REMOTE_PORT ?? 0);
-  if (Number.isInteger(remotePort) && remotePort > 0 && remotePort !== port) {
-    try {
-      await listen(gateway.remoteServer, remotePort, handoff ? 40 : 1);
-      console.log(`Remote agent endpoint on 127.0.0.1:${remotePort}/mcp. Point a tunnel at this port only.`);
-    } catch (error) { console.error(`Gateway: the remote endpoint could not start. ${error.message}`); }
+  const shadow = process.env.EUCLID_SHADOW_PREVIEW === '1';
+  if (shadow) {
+    const dataDir = process.env.EUCLID_DATA_DIR || await mkdtemp(path.join(os.tmpdir(), 'euclid-shadow-'));
+    const gateway = await createGateway({
+      dataDir, shadow: true, reloadGateway: null,
+      workbenchOptions: { runner: { playing: () => false, async stop() {} } },
+    });
+    await listen(gateway.server, 0);
+    const port = gateway.server.address().port;
+    const credentials = { token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken };
+    await writeFile(path.join(dataDir, 'gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, ...credentials }), { mode: 0o600 });
+    console.log(JSON.stringify({ shadow_ready: true, port }));
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      process.on(signal, () => {
+        gateway.server.closeAllConnections?.();
+        gateway.server.close(() => process.exit(0));
+      });
+    }
+  } else {
+    const handoff = inheritedHandoff(process.env);
+    const dataDir = process.env.EUCLID_DATA_DIR || path.join(root, '.local');
+    const port = handoff?.port ?? Number(process.env.CONSTRUCT_PORT ?? 4317);
+    let reload;
+    const gateway = await createGateway({ dataDir, token: handoff?.token, workbenchToken: handoff?.workbench_token,
+      developmentToken: handoff?.development_token, reloadGateway: () => reload.start(), gatewayNotice: () => reload.notice() });
+    const credentials = { token: gateway.token, workbench_token: gateway.workbenchToken, development_token: gateway.developmentToken };
+    reload = createHandoff({ entry: fileURLToPath(import.meta.url), cwd: root, port, credentials, server: gateway.server, logDirectory: dataDir });
+    // A replacement can start a moment before the gateway it replaces has released the port.
+    try { await listen(gateway.server, port, handoff ? 40 : 1); }
+    catch (error) { console.error(`Gateway: ${error.message}`); process.exit(1); }
+    gateway.server.on('error', error => { console.error(`Gateway: ${error.message}`); process.exitCode = 1; });
+    // A relay Euclid dials out to, when one is set in the Cloud Agents screen.
+    await gateway.relay.start();
+    // The outside endpoint for remote agents. A tunnel points here, never at the main port.
+    const remotePort = Number(process.env.EUCLID_REMOTE_PORT ?? 0);
+    if (Number.isInteger(remotePort) && remotePort > 0 && remotePort !== port) {
+      try {
+        await listen(gateway.remoteServer, remotePort, handoff ? 40 : 1);
+        console.log(`Remote agent endpoint on 127.0.0.1:${remotePort}/mcp. Point a tunnel at this port only.`);
+      } catch (error) { console.error(`Gateway: the remote endpoint could not start. ${error.message}`); }
+    }
+    await writeFile(path.join(dataDir, 'gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, ...credentials }), { mode: 0o600 });
+    // The launcher records the gateway it starts. A replacement records itself for stop-gateway.ps1.
+    if (handoff) await writeFile(path.join(dataDir, 'gateway.pid'), String(process.pid));
+    console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
+    for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { gateway.relay.stop(); gateway.server.close(); });
   }
-  await writeFile(path.join(dataDir, 'gateway.json'), JSON.stringify({ url: `http://127.0.0.1:${port}`, ...credentials }), { mode: 0o600 });
-  // The launcher records the gateway it starts. A replacement records itself for stop-gateway.ps1.
-  if (handoff) await writeFile(path.join(dataDir, 'gateway.pid'), String(process.pid));
-  console.log(`Euclid gateway ready on 127.0.0.1:${port}. Credentials saved locally; never commit .local/.`);
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { gateway.relay.stop(); gateway.server.close(); });
 }

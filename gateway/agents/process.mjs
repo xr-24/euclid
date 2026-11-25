@@ -8,6 +8,7 @@ const euclidSecrets = ['CONSTRUCT_GATEWAY_TOKEN', 'CONSTRUCT_GATEWAY_URL', 'EUCL
 export const vendorCredentials = {
   openai: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'CODEX_OPENAI_BASE_URL'],
   anthropic: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'],
+  google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_USE_VERTEXAI', 'GOOGLE_CLOUD_API_KEY'],
 };
 
 export function agentEnvironment(env, remove = []) {
@@ -41,7 +42,7 @@ export function run(file, args, options, input = '') {
 
 // Runs a long agent job and hands each JSON line of its output to onEvent.
 // Resolves with the exit code. Abort and timeout stop the whole process tree.
-export function streamEvents(file, args, { cwd, env, signal, timeout, timeoutMessage, input = '', onEvent }) {
+export function streamEvents(file, args, { cwd, env, signal, timeout, timeoutMessage, input = '', onEvent, onStderr }) {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -52,7 +53,8 @@ export function streamEvents(file, args, { cwd, env, signal, timeout, timeoutMes
       try { event = JSON.parse(line); } catch { return; }
       if (event && typeof event === 'object') onEvent(event);
     });
-    child.stderr.resume();
+    if (onStderr) child.stderr.on('data', chunk => onStderr(chunk.toString()));
+    else child.stderr.resume();
     function stop(error) {
       if (failure) return;
       failure = error;

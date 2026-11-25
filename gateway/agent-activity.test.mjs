@@ -122,6 +122,51 @@ test('a Codex stream shows shell reads, searches and file changes', async () => 
   }
 });
 
+test('Gemini and Antigravity streams show reads, edits, searches, commands and coalesced says', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'activity-'));
+  const workspace = path.join(root, 'work');
+  const original = path.join(root, 'base');
+  await mkdir(path.join(workspace, 'world'), { recursive: true });
+  await mkdir(path.join(original, 'world'), { recursive: true });
+  await writeFile(path.join(original, 'world', 'a.gd'), 'var x = 1\nvar y = 2\n');
+  await writeFile(path.join(workspace, 'world', 'a.gd'), 'var x = 1\nvar y = 3\n');
+  try {
+    for (const [actor, provider] of [['local-gemini', 'gemini'], ['local-antigravity', 'antigravity']]) {
+      const feed = createActivityFeed();
+      const tracker = createStreamTracker(feed, { actor, provider, workspace, original });
+      const file = path.join(workspace, 'world', 'a.gd');
+      tracker.handle({ type: 'thought', thought: 'Inspect a.gd first.' });
+      tracker.handle({ type: 'message', role: 'assistant', content: 'Reading ', delta: true });
+      tracker.handle({ type: 'message', role: 'assistant', content: 'now.', delta: true });
+      tracker.handle({ type: 'tool_use', tool_id: 'r1', tool_name: 'read_file', parameters: { file_path: file } });
+      tracker.handle({ type: 'tool_result', tool_id: 'r1', status: 'success', output: 'var x = 1\nvar y = 2\n' });
+      tracker.handle({ type: 'tool_use', tool_id: 's1', tool_name: 'grep_search', parameters: { query: 'var y' } });
+      tracker.handle({ type: 'tool_result', tool_id: 's1', status: 'success', output: `${file}:2:var y = 2\n` });
+      tracker.handle({ type: 'tool_use', tool_id: 'e1', tool_name: 'write_file', parameters: { file_path: file } });
+      tracker.handle({ type: 'tool_result', tool_id: 'e1', status: 'success', output: 'ok' });
+      tracker.handle({ type: 'tool_use', tool_id: 'c1', tool_name: 'run_shell_command', parameters: { command: 'node --version' } });
+      tracker.handle({ type: 'tool_result', tool_id: 'c1', status: 'success', output: 'v22.0.0\n' });
+      tracker.handle({ type: 'tool_use', tool_id: 'm1', tool_name: 'mcp__euclid__inbox', parameters: {} });
+      tracker.handle({ type: 'tool_result', tool_id: 'm1', status: 'success', output: '{}' });
+      tracker.handle({ type: 'message', role: 'assistant', content: 'All ', delta: true });
+      tracker.handle({ type: 'message', role: 'assistant', content: 'done.', delta: true });
+      tracker.handle({ type: 'result', status: 'success' });
+      await tracker.settled();
+      const events = feed.since(0).events;
+      assert.deepEqual(events.map(event => event.kind), ['think', 'say', 'read', 'search', 'edit', 'run', 'say']);
+      assert.equal(events[1].text, 'Reading now.');
+      assert.equal(events[2].path, 'world/a.gd');
+      assert.deepEqual(events[2].lines.map(line => line.text), ['var x = 1', 'var y = 2', '']);
+      assert.deepEqual(events[3].results, ['world/a.gd:2:var y = 2']);
+      assert.deepEqual(events[4].hunks[0].lines.filter(line => line.t !== ' ').map(line => line.t + line.text), ['-var y = 2', '+var y = 3']);
+      assert.equal(events[5].command, 'node --version');
+      assert.equal(events[6].text, 'All done.');
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('replies to the player on the task board reach the activity feed', async () => {
   const { createTaskBoard } = await import('./agent-tasks.mjs');
   const { mkdtemp, rm } = await import('node:fs/promises');

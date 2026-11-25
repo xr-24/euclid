@@ -96,6 +96,8 @@ test('each agent connects with its own credential and cannot act on another agen
   assert.deepEqual(directory.chat_agents, [
     { name: 'local-codex', label: 'Codex', kind: 'worker' },
     { name: 'local-claude', label: 'Claude', kind: 'worker' },
+    { name: 'local-gemini', label: 'Gemini', kind: 'worker' },
+    { name: 'local-antigravity', label: 'Antigravity', kind: 'worker' },
     { name: 'claude', label: 'claude', kind: 'inbox' },
     { name: 'grok', label: 'Cloud · grok', kind: 'inbox' },
   ]);

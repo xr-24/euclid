@@ -32,7 +32,7 @@ export function createClaudeAgent({ env = process.env,
 
   async function signedIn(signal) {
     const { file, args } = await launcher();
-    const childEnv = agentEnvironment(env, vendorCredentials.openai);
+    const childEnv = agentEnvironment(env, [...vendorCredentials.openai, ...vendorCredentials.google]);
     try {
       await run(file, [...args, 'auth', 'status'], { env: childEnv, signal, timeout: 10000 });
     } catch (error) {

@@ -2,7 +2,7 @@
 
 Euclid supplies the tools, isolation, review, and activation. The model that
 plans or writes is a local CLI behind an adapter in `gateway/agents/`. Codex is
-the default. Claude Code is the second adapter.
+the default. Claude Code, Gemini CLI, and Antigravity CLI are the other adapters.
 
 ## Choosing an agent
 
@@ -10,11 +10,13 @@ Set these in the environment that starts the gateway:
 
 | Variable | Effect |
 | --- | --- |
-| `EUCLID_AGENT` | `codex` (default) or `claude`, for every role |
+| `EUCLID_AGENT` | `codex` (default), `claude`, `gemini`, or `antigravity`, for every role |
 | `EUCLID_AGENT_PLAN` | Overrides the agent for one-shot structured proposals |
 | `EUCLID_AGENT_AUTHOR` | Overrides the agent that edits a source workspace |
-| `EUCLID_CODEX_BIN`, `EUCLID_CLAUDE_BIN` | Full path to that CLI when discovery fails |
+| `EUCLID_CODEX_BIN`, `EUCLID_CLAUDE_BIN`, `EUCLID_GEMINI_BIN`, `EUCLID_AGY_BIN` | Full path to that CLI when discovery fails |
 | `EUCLID_CLAUDE_MODEL` | Optional model alias or name passed to Claude Code |
+| `EUCLID_GEMINI_MODEL` | Optional model name passed to Gemini CLI (`-m`) |
+| `EUCLID_AGY_MODEL` | Optional model name passed to Antigravity CLI (`--model`) |
 
 The gateway reads the selection on each request. A gateway that is already
 running keeps the environment it started with, so run
@@ -39,15 +41,18 @@ Add an adapter by implementing those two functions and registering it in
 
 ## What each adapter runs
 
-| | Codex | Claude Code |
-| --- | --- | --- |
-| Sign-in | ChatGPT sign-in only; API keys are removed | Whatever `claude auth status` reports as signed in |
-| `plan` | `codex exec`, read-only sandbox, shell tool disabled | `claude -p --json-schema`, `--tools ""`, `dontAsk` |
-| `author` | `codex exec`, workspace-write sandbox, network off | `claude -p --restricted` with Read, Edit, Write, Glob and Grep, `acceptEdits` |
-| User configuration | Ignored | Ignored (`--safe-mode`, `--strict-mcp-config`) |
+| | Codex | Claude Code | Gemini CLI | Antigravity (`agy`) |
+| --- | --- | --- | --- | --- |
+| Sign-in | ChatGPT sign-in only; API keys are removed | Whatever `claude auth status` reports as signed in | Google subscription OAuth (`gemini`); API keys removed | Antigravity subscription sign-in; API keys removed |
+| `plan` | `codex exec`, read-only sandbox, shell tool disabled | `claude -p --json-schema`, `--tools ""`, `dontAsk` | `gemini -p`, `--output-format json`, `--approval-mode plan` | `agy -p`, `--output-format json`, `--mode plan` |
+| `author` | `codex exec`, workspace-write sandbox, network off | `claude -p --restricted` with Read, Edit, Write, Glob and Grep, `acceptEdits` | `gemini -p`, `--output-format stream-json`, `--approval-mode auto_edit` | `agy -p`, `--output-format stream-json`, `--mode accept-edits` |
+| User configuration | Ignored | Ignored (`--safe-mode`, `--strict-mcp-config`) | Isolated `.gemini/settings.json` for `plan` and `task` | Isolated `.gemini/settings.json` for `plan` and `task` |
 
 No agent process inherits the gateway credential, the Workbench capability, or
-the Sketchfab token. Each adapter also drops the other vendor's API keys.
+the Sketchfab token. Each adapter also drops vendor API keys (`OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
+`GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_CLOUD_API_KEY`, and related tokens) so runs
+stay on local subscription sign-in.
 
 The Claude adapter has no command execution, so it creates and edits files but
 cannot delete one. `--restricted` needs Claude Code v2.1.248 or later. Schemas
@@ -173,9 +178,9 @@ holds the Workbench capability and can issue itself a credential.
 Every agent's work shows in the world, above and around its projection.
 
 - **The feed.** The gateway turns what agents do into events
-  (`gateway/agent-activity.mjs`). It reads them from the Claude Code and Codex
-  event streams of local tasks and source drafts, and from the development
-  tool calls of connected agents. Event kinds are `read`, `search`, `edit`,
+  (`gateway/agent-activity.mjs`). It reads them from the Codex, Claude Code,
+  Gemini CLI, and Antigravity event streams of local tasks and source drafts,
+  and from the development tool calls of connected agents. Event kinds are `read`, `search`, `edit`,
   `write`, `delete`, `run`, `tool`, `think`, `say`, `start`, `done` and
   `error`. A read carries the lines read and an edit carries a diff. The world
   long-polls `POST /v1/activity/feed` (`{since, wait}`), which needs the

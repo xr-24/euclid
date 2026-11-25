@@ -15,6 +15,7 @@ const ActivityMotions = preload("res://scripts/agents/activity_motions.gd")
 const BinaryAvatar = preload("res://scripts/agents/binary_avatar.gd")
 const SceneAnimations = preload("res://scripts/animation/scene_animations.gd")
 const ActivityView = preload("res://scripts/agents/activity_view.gd")
+const AgentPresenceScript = preload("res://scripts/agents/agent_presence.gd")
 const SpeechPlayerScript = preload("res://scripts/agents/speech_player.gd")
 const TweakLayer = preload("res://scripts/extensions/tweak_layer.gd")
 const EnvironmentExport = preload("res://scripts/zones/environment_export.gd")
@@ -223,6 +224,7 @@ func _run() -> void:
 		{"name": "panel_swap", "run": _check_panel_swap},
 		{"name": "terminal_keys", "run": _check_terminal_keys},
 		{"name": "agents_panel", "run": _check_agents_panel},
+		{"name": "agent_presence", "run": _check_agent_presence},
 		{"name": "agent_activity", "run": _check_agent_activity},
 		{"name": "tweaks", "run": _check_tweaks},
 		{"name": "environment_export", "run": _check_environment_export},
@@ -2092,3 +2094,20 @@ func _check_live_hud() -> void:
 	hud.withdraw_prefix("load:", "load:c")
 	_check(hud.pending() == 1 and hud.asking("load:c"), "withdraw stale questions about older drafts")
 	hud.free()
+
+func _check_agent_presence() -> void:
+	_check(AgentPresenceScript.label("local-codex") == "Codex"
+		and AgentPresenceScript.label("local-claude") == "Claude"
+		and AgentPresenceScript.label("local-gemini") == "Gemini"
+		and AgentPresenceScript.label("local-antigravity") == "Antigravity"
+		and AgentPresenceScript.label("cloud-1") == "cloud-1",
+		"agent presence maps local agent ids to display labels")
+	_check(AgentPresenceScript.COLORS.has(AgentPresenceScript.GEMINI)
+		and AgentPresenceScript.COLORS.has(AgentPresenceScript.ANTIGRAVITY),
+		"agent presence defines colors for Gemini and Antigravity")
+	var pairs := []
+	for id in [AgentPresenceScript.CODEX, AgentPresenceScript.CLAUDE, AgentPresenceScript.GEMINI, AgentPresenceScript.ANTIGRAVITY]:
+		var pair: Array = AgentPresenceScript.COLORS[id]
+		if not pairs.has(pair):
+			pairs.append(pair)
+	_check(pairs.size() == 4, "all four local agent color pairs are distinct")

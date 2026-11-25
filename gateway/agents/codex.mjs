@@ -14,7 +14,7 @@ export function createCodexAgent({ env = process.env,
   launcher = async () => ({ file: await resolveCodexBinary(env), args: [] }) } = {}) {
   async function signedIn(signal) {
     const { file, args } = await launcher();
-    const childEnv = agentEnvironment(env, [...vendorCredentials.openai, ...vendorCredentials.anthropic]);
+    const childEnv = agentEnvironment(env, [...vendorCredentials.openai, ...vendorCredentials.anthropic, ...vendorCredentials.google]);
     let login;
     try {
       login = await run(file, [...args, 'login', 'status'], { env: childEnv, signal, timeout: 5000 });

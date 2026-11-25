@@ -404,6 +404,46 @@ export function createStreamTracker(feed, { actor, provider, workspace = '', ori
     }
   }
 
+  async function geminiTool(use, result) {
+    const input = use.input ?? {};
+    const name = use.name;
+    if (name.startsWith('mcp__')) return null; // The MCP observer reports these.
+    const rel = relative(workspace, input.file_path ?? input.path ?? input.target_file ?? input.notebook_path);
+    const output = typeof result?.output === 'string' ? result.output : text(result?.content);
+    const failed = Boolean(result?.is_error) || result?.status === 'error';
+    switch (name) {
+      case 'read_file': case 'Read': {
+        if (!rel) return null;
+        const first = Number(input.offset ?? input.start_line ?? 1) || 1;
+        const numberedLines = numbered(output);
+        const lines = numberedLines.length ? numberedLines : excerpt(output, first);
+        return record({ kind: 'read', path: rel, title: `Reading ${rel}`, lines, ok: !failed,
+          focus: input.offset ? [Number(input.offset), Number(input.offset) + Number(input.limit ?? LINES) - 1] : undefined });
+      }
+      case 'write_file': case 'replace': case 'edit_file': case 'Edit': case 'Write': case 'MultiEdit':
+        if (!rel) return null;
+        return failed ? record({ kind: 'error', path: rel, title: `Could not edit ${rel}`, text: output }) : changed(rel, 'edit');
+      case 'grep_search': case 'search_file_content': case 'Grep':
+        return record({ kind: 'search', title: `Searching for ${sentence(input.pattern ?? input.query, 60)}`,
+          results: splitLines(output).filter(Boolean).slice(0, 12).map(line => line.startsWith(workspace) ? relative(workspace, line) ?? '' : line) });
+      case 'glob': case 'find_files': case 'Glob':
+        return record({ kind: 'search', title: `Finding ${sentence(input.pattern, 60)}`,
+          results: splitLines(output).filter(Boolean).slice(0, 12).map(line => relative(workspace, line) ?? line) });
+      case 'run_shell_command': case 'Bash':
+        return record({ kind: 'run', title: sentence(input.description || 'Running a command', 120),
+          command: String(input.command ?? ''), output: splitLines(output).slice(-16), ok: !failed });
+      default:
+        return record({ kind: 'tool', tool: name, title: toolTitle(name, input), ok: !failed });
+    }
+  }
+
+  let sayBuffer = '';
+  function flushSay() {
+    const value = sayBuffer.trim();
+    sayBuffer = '';
+    if (value) record({ kind: 'say', title: 'Says', text: value });
+  }
+
   let queue = Promise.resolve();
   function handle(event) {
     // Events are processed in order; file reads for diffs must not overtake later edits.
@@ -429,9 +469,49 @@ export function createStreamTracker(feed, { actor, provider, workspace = '', ori
       }
     } else if (provider === 'codex' && typeof event.type === 'string' && event.type.startsWith('item.')) {
       await codexItem(event.type, event.item);
+    } else if (provider === 'gemini' || provider === 'antigravity') {
+      if (event.type === 'tool_use') {
+        flushSay();
+        const id = event.tool_id ?? event.id;
+        const name = event.tool_name ?? event.name;
+        if (id && name) pending.set(id, { name, input: event.parameters ?? event.input ?? {} });
+      } else if (event.type === 'tool_result') {
+        const id = event.tool_id ?? event.tool_use_id;
+        if (!pending.has(id)) return;
+        const use = pending.get(id);
+        pending.delete(id);
+        await geminiTool(use, event);
+      } else if (event.type === 'message' && event.role === 'assistant') {
+        const chunk = typeof event.content === 'string' ? event.content : text(event.content);
+        if (event.delta === true) {
+          if (chunk) sayBuffer += chunk;
+        } else {
+          flushSay();
+          if (chunk.trim()) record({ kind: 'say', title: 'Says', text: chunk.trim() });
+        }
+      } else if (event.type === 'thought' || event.thought) {
+        const thought = typeof event.thought === 'string' ? event.thought : text(event.content ?? event.text);
+        if (thought.trim()) record({ kind: 'think', title: 'Thinking', text: thought.trim() });
+      } else if (event.type === 'assistant' && Array.isArray(event.message?.content)) {
+        flushSay();
+        for (const block of event.message.content) {
+          if (block?.type === 'tool_use') pending.set(block.id, block);
+          else if (block?.type === 'thinking' && block.thinking) record({ kind: 'think', title: 'Thinking', text: block.thinking });
+          else if (block?.type === 'text' && block.text?.trim()) record({ kind: 'say', title: 'Says', text: block.text });
+        }
+      } else if (event.type === 'user' && Array.isArray(event.message?.content)) {
+        for (const block of event.message.content) {
+          if (block?.type !== 'tool_result' || !pending.has(block.tool_use_id)) continue;
+          const use = pending.get(block.tool_use_id);
+          pending.delete(block.tool_use_id);
+          await geminiTool(use, block);
+        }
+      } else if (event.type === 'result') {
+        flushSay();
+      }
     }
   }
-  return { handle, settled: () => queue };
+  return { handle, settled: () => queue.then(() => flushSay()) };
 }
 
 // What an agent tells the player through the task board, as a reply event: a message to the

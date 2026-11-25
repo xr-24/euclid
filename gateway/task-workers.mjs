@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import { createAntigravityAgent } from './agents/antigravity.mjs';
 import { createCodexAgent } from './agents/codex.mjs';
 import { createClaudeAgent } from './agents/claude.mjs';
+import { createGeminiAgent } from './agents/gemini.mjs';
 import { createStreamTracker } from './agent-activity.mjs';
 
 const withoutCredential = (content, key) => typeof content === 'string' ? content.replaceAll(key, '[redacted]') : '';
@@ -8,6 +10,8 @@ const withoutCredential = (content, key) => typeof content === 'string' ? conten
 const workers = {
   'local-codex': { label: 'Codex', provider: 'codex', create: createCodexAgent },
   'local-claude': { label: 'Claude', provider: 'claude', create: createClaudeAgent },
+  'local-gemini': { label: 'Gemini', provider: 'gemini', create: createGeminiAgent },
+  'local-antigravity': { label: 'Antigravity', provider: 'antigravity', create: createAntigravityAgent },
 };
 export const isLocalWorker = name => Object.hasOwn(workers, name);
 export const listLocalWorkers = () => Object.entries(workers)
